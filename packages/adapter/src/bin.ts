@@ -23,6 +23,7 @@ Output:
   --port <n>           WebSocket port (default ${DEFAULT_PORT}); deltas on ${DELTA_PATH}
   --serve <dir>        also serve a built renderer from <dir>
   --record <file>      append every delta to a .jsonl file
+  --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
   -h, --help`;
 
@@ -42,9 +43,12 @@ const { values } = parseArgs({
     serve: { type: 'string' },
     record: { type: 'string' },
     print: { type: 'boolean' },
+    pack: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
 });
+
+let clientPack: string | undefined = values.pack;
 
 if (values.help) {
   console.log(USAGE);
@@ -58,6 +62,8 @@ async function pickSource(): Promise<WorldSource> {
     return ReplaySource.fromFile(values.replay, { speed: Number(values.speed ?? 1), loop: true });
   }
   const cfg = await loadSourceConfig(values.config ?? 'bellwether.toml');
+  if (values.pack) cfg.pack = values.pack;
+  clientPack = cfg.pack ?? clientPack;
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.session) cfg.herdr.sessions = [values.session];
@@ -71,7 +77,7 @@ async function pickSource(): Promise<WorldSource> {
 }
 
 const source = await pickSource();
-const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve });
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: clientPack ? { pack: clientPack } : {} });
 server.attach(source);
 if (values.record) source.on('delta', recordTo(values.record));
 if (values.print) source.on('delta', (d) => process.stdout.write(JSON.stringify(d) + '\n'));

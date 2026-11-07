@@ -29,6 +29,16 @@ describe('source config', () => {
     expect((await loadSourceConfig(f, { BELLWETHER_SOURCE: 'live' })).source).toBe('live');
   });
 
+  it('reads the skin pack and lets BELLWETHER_PACK override it', async () => {
+    expect(parseSourceConfig('pack = "aesir"').pack).toBe('aesir');
+    expect(parseSourceConfig('source = "mock"').pack).toBeUndefined();
+    expect(() => parseSourceConfig('pack = "../x"')).toThrow(/theme folder name/);
+    const f = path.join(mkdtempSync(path.join(os.tmpdir(), 'bw-cfg-')), 'bellwether.toml');
+    writeFileSync(f, 'pack = "aesir"\n');
+    expect((await loadSourceConfig(f, {})).pack).toBe('aesir');
+    expect((await loadSourceConfig(f, { BELLWETHER_PACK: 'wayfarers' })).pack).toBe('wayfarers');
+  });
+
   it('creates the matching source', () => {
     expect(createSource({ source: 'mock', herdr: {} })).toBeInstanceOf(MockSource);
     expect(createSource({ source: 'live', herdr: { sessions: ['x'] } })).toBeInstanceOf(HerdrSource);

@@ -40,9 +40,20 @@ Page options (query string):
 | Option | Effect |
 |---|---|
 | `?transparent` | No backdrop or chip. Use this for an OBS browser source. |
+| `?pack=aesir` | Skin pack: `neutral` (Workshop Crew, default), `aesir`, `wayfarers`, or a private folder under `themes/`. Overrides `pack` in `bellwether.toml`. |
 | `?scale=4` | Pixel scale, 1 to 6 (default 3). |
 | `?source=mock` | Skip the adapter and run the mock in the browser. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
+
+Characters come from the skin pack's 24x32 sprite sheets: each role has its own sheet,
+members walk while working, raise a hand when blocked, wave when done, talk while a
+speech bubble is up, and blink when idle. The beacon's status light and each cloak are
+tinted through the sheet's masks, and bubbles and party nameplates use the pack's UI
+pieces. A pack without `art.json` falls back to procedural figures from `theme.json`.
+
+Pick a pack with `pack = "aesir"` in `bellwether.toml`, `--pack aesir` or
+`BELLWETHER_PACK=aesir` on the adapter (it serves the choice as `/config.json`), or
+`?pack=` in the URL. Unknown names fall back to `neutral`.
 
 To watch your real Herdr agents instead, run the adapter against the live socket:
 
@@ -53,7 +64,7 @@ node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist
 
 Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
 `--session <name>` or `--all`, `--socket <path>`, `--record <file.jsonl>`, `--print`,
-`--port`, `--serve <dir>`. `source = "live"` in `bellwether.toml` or
+`--port`, `--serve <dir>`, `--pack <name>`. `source = "live"` in `bellwether.toml` or
 `BELLWETHER_SOURCE=live` sets the default.
 
 Checks, the same ones CI runs:

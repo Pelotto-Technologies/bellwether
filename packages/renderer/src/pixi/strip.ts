@@ -1,12 +1,21 @@
 import type { Member, Party, Role } from '@bellwether/adapter/core';
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
+import { chooseAnim, frameIndex, frameNames } from '../anim.js';
 import type { FeedState } from '../feed.js';
 import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, SPEED, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
+import type { LoadedArt } from './pack.js';
 
 interface MemberView {
   sprite: Sprite;
+  /** Sprite-sheet mode: a mirrored figure holding the frame, its cloak mask and its status light. */
+  figure: Container;
+  cloak: Sprite;
+  tip: Sprite;
+  tipGlow: Sprite;
+  bubbleSkin?: NineSliceSprite;
+  bubbleTail?: Sprite;
   glow: Graphics;
   bubble: Container;
   bubbleText: Text;
@@ -17,9 +26,16 @@ interface MemberView {
 interface PartyView {
   root: Container;
   label: Text;
+  plate?: NineSliceSprite;
+  icon?: Sprite;
   members: Map<string, MemberView>;
   walker: Walker;
 }
+
+/** Rows of the 16px ground tile that show above the window's bottom edge, in art pixels. */
+const GROUND_SHOW = 8;
+/** How far a character's feet sink into the ground, in art pixels. */
+const FEET_SINK = 3;
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 
@@ -36,8 +52,35 @@ export class StripScene {
     private theme: Theme,
     private feed: FeedState,
     private scale: number,
+    private art: LoadedArt | null = null,
   ) {
     app.stage.addChild(this.ground, this.layer);
+    this.ground.eventMode = 'none';
+  }
+
+  private groundTiles: Sprite[] = [];
+  private groundWidth = 0;
+
+  /** Rebuilds the ground strip from the pack's tiles. Only the top rows show; the rest sits below the window. */
+  private layoutGround(width: number, height: number) {
+    const a = this.art!;
+    const s = this.scale;
+    const tile = 16 * s;
+    if (width !== this.groundWidth || this.groundTiles.length === 0) {
+      for (const t of this.groundTiles) t.destroy();
+      this.groundTiles = [];
+      const names = a.art.ground.tiles;
+      for (let i = 0; i * tile < width; i++) {
+        const tex = a.ground.textures[names[Math.floor(hash01(`g${i}`) * names.length)]!]!;
+        const sp = new Sprite(tex);
+        sp.scale.set(s);
+        sp.x = i * tile;
+        this.ground.addChild(sp);
+        this.groundTiles.push(sp);
+      }
+      this.groundWidth = width;
+    }
+    for (const t of this.groundTiles) t.y = height - GROUND_SHOW * s;
   }
 
   private frame(role: Role, frame: FrameName, beacon: boolean) {
@@ -61,14 +104,34 @@ export class StripScene {
 
   private makeMember(party: PartyView, paneId: string): MemberView {
     const sprite = new Sprite();
-    sprite.anchor.set(0.5, 1);
+    const figure = new Container();
+    const cloak = new Sprite();
+    const tip = new Sprite();
+    const tipGlow = new Sprite();
+    tipGlow.blendMode = 'add';
+    const a = this.art?.art;
+    for (const sp of [sprite, cloak, tip, tipGlow]) sp.anchor.set(a?.character.anchor.x ?? 0.5, a?.character.anchor.y ?? 1);
+    figure.addChild(sprite, cloak, tip, tipGlow);
     const glow = new Graphics();
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24 } });
     const bubble = new Container();
-    bubble.addChild(bubbleBg, bubbleText);
-    party.root.addChild(sprite, glow, bubble);
-    const view = { sprite, glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
+    const view: MemberView = { sprite, figure, cloak, tip, tipGlow, glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
+    if (this.art) {
+      const ui = this.art.art.ui;
+      const sl = ui.bubble.slice;
+      view.bubbleSkin = new NineSliceSprite({ texture: this.art.ui.textures[ui.bubble.frame]!, leftWidth: sl, topHeight: sl, rightWidth: sl, bottomHeight: sl });
+      view.bubbleSkin.scale.set(this.scale);
+      if (ui.bubble.tail) {
+        view.bubbleTail = new Sprite(this.art.ui.textures[ui.bubble.tail]!);
+        view.bubbleTail.anchor.set(0.5, 0);
+        view.bubbleTail.scale.set(this.scale);
+      }
+      bubble.addChild(view.bubbleSkin, ...(view.bubbleTail ? [view.bubbleTail] : []), bubbleText);
+    } else {
+      bubble.addChild(bubbleBg, bubbleText);
+    }
+    party.root.addChild(this.art ? figure : sprite, glow, bubble);
     party.members.set(paneId, view);
     return view;
   }
@@ -77,10 +140,24 @@ export class StripScene {
     const root = new Container();
     const label = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0xffffff, stroke: { color: 0x000000, width: 3 } } });
     label.anchor.set(0.5, 1);
+    let plate: NineSliceSprite | undefined;
+    if (this.art) {
+      const np = this.art.art.ui.nameplate;
+      plate = new NineSliceSprite({ texture: this.art.ui.textures[np.frame]!, leftWidth: np.slice, topHeight: np.slice, rightWidth: np.slice, bottomHeight: np.slice });
+      plate.scale.set(this.scale);
+      label.style = { fontFamily: 'monospace', fontSize: 12, fill: 0xffffff };
+      root.addChild(plate);
+    }
+    let icon: Sprite | undefined;
+    if (this.art) {
+      icon = new Sprite();
+      icon.scale.set(this.scale);
+      root.addChild(icon);
+    }
     root.addChild(label);
     this.layer.addChild(root);
     const start = lane.start + hash01(party.id) * Math.max(0, lane.end - lane.start - 60);
-    const view: PartyView = { root, label, members: new Map(), walker: { x: start, dir: hash01(party.id + '!') > 0.5 ? 1 : -1 } };
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), members: new Map(), walker: { x: start, dir: hash01(party.id + '!') > 0.5 ? 1 : -1 } };
     this.parties.set(party.id, view);
     return view;
   }
@@ -89,9 +166,18 @@ export class StripScene {
     this.t += dt;
     const { width, height } = this.app.screen;
     const s = this.scale;
-    const groundH = 3 * s;
-    const groundY = height - groundH;
-    this.ground.clear().rect(0, groundY, width, groundH).fill(hexNum(this.theme.ground));
+    const art = this.art?.art;
+    const figW = art ? art.character.w : SPRITE_W;
+    const figH = art ? art.character.h : SPRITE_H;
+    let groundY: number;
+    if (art) {
+      this.layoutGround(width, height);
+      groundY = height - (GROUND_SHOW - FEET_SINK) * s;
+    } else {
+      const groundH = 3 * s;
+      groundY = height - groundH;
+      this.ground.clear().rect(0, groundY, width, groundH).fill(hexNum(this.theme.ground));
+    }
 
     const world = this.feed.world;
     const lanes = layoutLanes(Object.keys(world.parties), width);
@@ -103,19 +189,21 @@ export class StripScene {
       }
     }
 
-    const spacing = (SPRITE_W + 3) * s;
+    // Art characters have transparent margins; pack them a little tighter than their box.
+    const spacing = (art ? figW * 0.7 : SPRITE_W + 3) * s;
     for (const party of Object.values(world.parties)) {
       const lane = lanes.get(party.id)!;
       const view = this.parties.get(party.id) ?? this.makeParty(party, lane);
       const members = Object.values(party.members).sort((a, b) => a.paneId.localeCompare(b.paneId));
-      const span = Math.max(0, members.length - 1) * spacing + SPRITE_W * s;
+      const span = Math.max(0, members.length - 1) * spacing + figW * s;
       view.walker = stepWalker(view.walker, party.status, lane, span, dt);
       const moving = SPEED[party.status] > 0;
       const beaconPane = (members.find((m) => m.role === this.theme.beacon) ?? members[0])?.paneId;
 
       for (const [paneId, mv] of view.members) {
         if (!party.members[paneId]) {
-          mv.sprite.destroy();
+          if (art) mv.figure.destroy({ children: true });
+          else mv.sprite.destroy();
           mv.glow.destroy();
           mv.bubble.destroy({ children: true });
           view.members.delete(paneId);
@@ -124,14 +212,86 @@ export class StripScene {
 
       members.forEach((m, i) => {
         const mv = view.members.get(m.paneId) ?? this.makeMember(view, m.paneId);
-        const cx = memberX(view.walker.x, i, spacing) + (SPRITE_W * s) / 2;
-        this.drawMember(mv, m, party, m.paneId === beaconPane, cx, groundY, moving, now);
+        const cx = memberX(view.walker.x, i, spacing) + (figW * s) / 2;
+        if (art) this.drawArtMember(mv, m, party, m.paneId === beaconPane, cx, groundY, moving, now);
+        else this.drawMember(mv, m, party, m.paneId === beaconPane, cx, groundY, moving, now);
       });
 
       const center = view.walker.x + span / 2;
-      view.label.text = party.branch ? `${party.label} · ${party.branch}` : party.label;
-      view.label.style.fill = hexNum(this.theme.palette[party.status]);
-      view.label.position.set(center, groundY - SPRITE_H * s - 4);
+      const text = party.branch ? `${party.label} · ${party.branch}` : party.label;
+      view.label.text = text;
+      if (view.plate) {
+        // Nameplate sits above the heads; the status icon colour rides on the label tint.
+        const padX = 6 * s;
+        const padY = 3 * s;
+        const iconW = view.icon ? 9 * s + 3 * s : 0;
+        const w = view.label.width + padX * 2 + iconW;
+        const h = view.label.height + padY * 2;
+        view.plate.width = w / s;
+        view.plate.height = h / s;
+        const top = groundY - figH * s - 6 - h;
+        view.plate.position.set(center - w / 2, top);
+        view.label.style.fill = 0xffffff;
+        view.label.anchor.set(0, 0.5);
+        view.label.position.set(center - w / 2 + padX + iconW, top + h / 2);
+        if (view.icon) {
+          view.icon.texture = this.art!.ui.textures[art!.ui.statusIcons[party.status]] ?? Texture.EMPTY;
+          view.icon.position.set(center - w / 2 + padX, top + h / 2 - (9 * s) / 2);
+        }
+      } else {
+        view.label.style.fill = hexNum(this.theme.palette[party.status]);
+        view.label.position.set(center, groundY - figH * s - 4);
+      }
+    }
+  }
+
+  /** Sprite-sheet member: pick the animation, tint the cloak and the status light from their masks. */
+  private drawArtMember(mv: MemberView, m: Member, party: Party, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
+    const loaded = this.art!;
+    const s = this.scale;
+    const { art } = loaded;
+    const sheet = loaded.sheets[m.role];
+    const text = this.feed.say(party.id, m.paneId, now);
+    const memberMoving = moving && m.status !== 'blocked';
+    const anim = chooseAnim({ moving: memberMoving, status: m.status, talking: !!text }, this.t, mv.phase);
+    const idx = frameIndex(art.character.counts[anim], art.character.fps[anim], this.t, mv.phase);
+    const names = frameNames(anim, idx);
+    const dir = this.parties.get(party.id)!.walker.dir;
+    const y = groundY + bob(m.status, this.t, mv.phase);
+
+    mv.sprite.texture = sheet.textures[names.base]!;
+    mv.cloak.texture = sheet.textures[names.cloak] ?? Texture.EMPTY;
+    mv.cloak.tint = hexNum(art.roles[m.role].cloak);
+    mv.tip.visible = mv.tipGlow.visible = isBeacon;
+    if (isBeacon) {
+      const color = hexNum(this.theme.palette[party.status]);
+      const alpha = beaconAlpha(party.status, this.t);
+      const tex = sheet.textures[names.tip] ?? Texture.EMPTY;
+      mv.tip.texture = mv.tipGlow.texture = tex;
+      mv.tip.tint = mv.tipGlow.tint = color;
+      mv.tip.alpha = alpha;
+      mv.tipGlow.alpha = alpha * 0.5;
+    }
+    mv.figure.scale.set(dir * s, s);
+    mv.figure.position.set(cx, y);
+    mv.figure.alpha = m.status === 'idle' || m.status === 'unknown' ? 0.85 : 1;
+
+    mv.bubble.visible = !!text;
+    if (text) {
+      const ui = art.ui.bubble;
+      const sk = mv.bubbleSkin!;
+      if (mv.bubbleText.text !== text) mv.bubbleText.text = text;
+      const padX = 5 * s;
+      const padY = 3 * s;
+      const w = mv.bubbleText.width + padX * 2;
+      const h = mv.bubbleText.height + padY * 2;
+      sk.width = w / s;
+      sk.height = h / s;
+      mv.bubbleText.position.set(padX, padY);
+      if (mv.bubbleTail) mv.bubbleTail.position.set(w / 2, h - s);
+      const maxX = this.app.screen.width - w - 4;
+      const above = art.character.h * s + (ui.tail ? 6 * s : 0) + (this.parties.get(party.id)!.plate ? 14 * s : 6);
+      mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - w / 2)), y - above - h);
     }
   }
 

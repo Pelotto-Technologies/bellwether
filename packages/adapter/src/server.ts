@@ -14,6 +14,8 @@ export interface DeltaServerOptions {
   host?: string;
   /** Optional directory to serve over HTTP (the built renderer), so one process runs the overlay. */
   staticDir?: string;
+  /** Served as `/config.json` so the renderer can pick the configured skin pack. */
+  clientConfig?: Record<string, unknown>;
 }
 
 const MIME: Record<string, string> = {
@@ -37,6 +39,11 @@ export class DeltaServer {
 
   constructor(private opts: DeltaServerOptions = {}) {
     this.http = createServer((req, res) => {
+      if ((req.url ?? '').split('?')[0] === '/config.json' && this.opts.clientConfig) {
+        res.writeHead(200, { 'content-type': MIME['.json']!, 'cache-control': 'no-store' });
+        res.end(JSON.stringify(this.opts.clientConfig));
+        return;
+      }
       const dir = this.opts.staticDir;
       if (!dir) {
         res.writeHead(404).end();

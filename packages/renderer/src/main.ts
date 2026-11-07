@@ -1,8 +1,9 @@
 import { Application } from 'pixi.js';
-import neutral from '../../../themes/neutral/theme.json';
 import { connectFeed, FeedState } from './feed.js';
+import { availablePacks, packData } from './packs.js';
+import { loadArt } from './pixi/pack.js';
 import { StripScene } from './pixi/strip.js';
-import { parseTheme } from './theme.js';
+import { pickPack } from './select.js';
 
 const params = new URLSearchParams(location.search);
 const transparent = params.has('transparent');
@@ -18,14 +19,31 @@ function deltaUrl(): string | null {
   return sameOrigin ? `ws://${location.host}/deltas` : 'ws://127.0.0.1:7341/deltas';
 }
 
+/** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
+async function configuredPack(): Promise<string | undefined> {
+  try {
+    const res = await fetch('./config.json', { cache: 'no-store' });
+    if (!res.ok) return undefined;
+    const cfg = (await res.json()) as { pack?: unknown };
+    return typeof cfg.pack === 'string' ? cfg.pack : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function main() {
-  const theme = parseTheme(neutral);
+  const available = availablePacks();
+  const requested = params.get('pack');
+  if (requested && !available.includes(requested)) console.warn(`bellwether: unknown pack "${requested}", have ${available.join(', ')}`);
+  const pack = packData(pickPack(available, requested, await configuredPack()));
+  const theme = pack.theme;
+  const art = await loadArt(pack);
   const app = new Application();
   await app.init({ backgroundAlpha: 0, resizeTo: window, antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1 });
   document.body.appendChild(app.canvas);
 
   const feed = new FeedState(theme.sayTtlMs);
-  const scene = new StripScene(app, theme, feed, scale);
+  const scene = new StripScene(app, theme, feed, scale, art);
   const chip = document.getElementById('chip');
 
   connectFeed(

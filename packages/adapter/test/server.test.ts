@@ -22,6 +22,14 @@ function collect(ws: WebSocket, n: number): Promise<Delta[]> {
 }
 
 describe('DeltaServer', () => {
+  it('serves the client config as /config.json', async () => {
+    server = new DeltaServer({ port: 0, clientConfig: { pack: 'aesir' } });
+    const port = await server.listen();
+    const res = await fetch(`http://127.0.0.1:${port}/config.json`);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(await res.json()).toEqual({ pack: 'aesir' });
+  });
+
   it('sends a late client the current world, then live deltas', async () => {
     server = new DeltaServer({ port: 0 });
     const port = await server.listen();

@@ -8,6 +8,8 @@ export type SourceKind = 'mock' | 'live';
 
 export interface SourceConfig {
   source: SourceKind;
+  /** Skin pack the overlay shows (a folder name under themes/). The renderer falls back to neutral if it is unknown. */
+  pack?: string;
   herdr: {
     /** `"all"` discovers running sessions; a list names them; omitted uses HERDR_SESSION or default. */
     sessions?: 'all' | string[];
@@ -22,6 +24,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  *
  * ```toml
  * source = "live"            # or "mock"
+ * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, or a private theme folder
  * [herdr]
  * sessions = "all"           # or ["default", "overlay-dev"]
  * # socket = "/path/to/herdr.sock"
@@ -40,7 +43,10 @@ export function parseSourceConfig(text: string): SourceConfig {
     else throw new Error('bellwether.toml: herdr.sessions must be "all", a name, or a list of names');
   }
   if (typeof h.socket === 'string') herdr.socket = h.socket;
-  return { source, herdr };
+  if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(raw.pack))) {
+    throw new Error('bellwether.toml: pack must be a theme folder name');
+  }
+  return { source, ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */
@@ -53,6 +59,7 @@ export async function loadSourceConfig(file = 'bellwether.toml', env: NodeJS.Pro
   }
   const override = env.BELLWETHER_SOURCE;
   if (override === 'mock' || override === 'live') cfg.source = override;
+  if (env.BELLWETHER_PACK && /^[a-z0-9][a-z0-9_-]*$/i.test(env.BELLWETHER_PACK)) cfg.pack = env.BELLWETHER_PACK;
   return cfg;
 }
 
