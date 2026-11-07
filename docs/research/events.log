@@ -1,0 +1,5 @@
+pipes: ['C:\\Users\\dev\\AppData\\Roaming\\herdr\\sessions\\overlay-dev\\herdr.sock']
+19:47:59 {"id":"sub_1","result":{"type":"subscription_started"}}
+19:48:12 {"data":{"agent":"claude","agent_status":"working","pane_id":"w1:p3","workspace_id":"w1"},"event":"pane.agent_status_changed"}
+19:48:16 {"data":{"agent":"claude","agent_status":"idle","pane_id":"w1:p3","workspace_id":"w1"},"event":"pane.agent_status_changed"}
+19:49:38 {"data":{"pane_id":"w1:p3","type":"pane_closed","workspace_id":"w1"},"event":"pane_closed"}
