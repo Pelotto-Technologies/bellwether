@@ -7,6 +7,8 @@ import { applyDelta, emptyWorld, MockSource, type Delta, type World } from '@bel
 export class FeedState {
   world: World = emptyWorld();
   private sayUntil = new Map<string, number>();
+  /** Set by the page: asks the adapter to focus a pane in Herdr (double-click a member). */
+  onFocus: ((paneId: string) => void) | undefined;
 
   constructor(private sayTtlMs: number) {}
 
@@ -32,6 +34,8 @@ export type FeedMode = { kind: 'ws'; url: string } | { kind: 'mock'; reason: str
 export interface FeedHandle {
   mode: FeedMode;
   stop(): void;
+  /** Sends a client message to the adapter, when connected. */
+  send?(msg: unknown): void;
 }
 
 /**
@@ -66,6 +70,9 @@ export function connectFeed(
     handle.stop = () => {
       closed = true;
       ws.close();
+    };
+    handle.send = (msg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
     };
     ws.onmessage = (ev) => {
       if (!gotMessage) {

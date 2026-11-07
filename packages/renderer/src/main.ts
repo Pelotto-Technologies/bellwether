@@ -77,7 +77,10 @@ async function main() {
   };
   const replay = params.get('replay');
   if (replay) replayFeed(replay, Number(params.get('speed') ?? 1), onDelta, onMode);
-  else connectFeed(deltaUrl(), onDelta, onMode);
+  else {
+    const handle = connectFeed(deltaUrl(), onDelta, onMode);
+    feed.onFocus = (paneId) => handle.send?.({ type: 'focus', paneId });
+  }
 
   app.ticker.add((ticker) => scene.update(ticker.deltaMS / 1000, performance.now()));
 }

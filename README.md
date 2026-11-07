@@ -111,6 +111,8 @@ Checks, the same ones CI runs:
 pnpm typecheck && pnpm test && pnpm build
 ```
 
+Double-click a member in strip mode (browser or OBS interact window) to jump the Herdr TUI to that pane. The overlay window is click-through, so this is for the browser view; `--actions` also enables `prompt` and `sendKeys` messages from clients.
+
 ## CLI and replay
 
 ```sh
@@ -131,7 +133,7 @@ recording. Never publish an unscrubbed recording.
 packages/adapter    world model, mock source, WebSocket server, recorder/replayer; Herdr client next
 packages/renderer   PixiJS strip and map modes and the theme loader (web page)
 packages/shell      Electron overlay window + tray
-packages/cli        bellwether install | uninstall (run | record | replay planned)
+packages/cli        bellwether install | uninstall | run | record | replay | scrub
 themes/neutral      ships with the repo
 themes/<private>    your own skins, gitignored
 docs/               plan and research artifacts

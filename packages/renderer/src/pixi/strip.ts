@@ -4,6 +4,7 @@ import type { FeedState } from '../feed.js';
 import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, SPEED, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
+import { DoubleTap } from '../doubletap.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
@@ -43,6 +44,8 @@ export class StripScene {
   private ground = new Graphics();
   private layer = new Container();
   private t = 0;
+
+  private doubleTap = new DoubleTap();
 
   constructor(
     private app: Application,
@@ -122,7 +125,13 @@ export class StripScene {
     } else {
       bubble.addChild(bubbleBg, bubbleText);
     }
-    party.root.addChild(figure ? figure.container : sprite, glow, bubble);
+    const body = figure ? figure.container : sprite;
+    body.eventMode = 'static';
+    body.cursor = 'pointer';
+    body.on('pointertap', () => {
+      if (this.doubleTap.tap(paneId, performance.now())) this.feed.onFocus?.(paneId);
+    });
+    party.root.addChild(body, glow, bubble);
     party.members.set(paneId, view);
     return view;
   }
