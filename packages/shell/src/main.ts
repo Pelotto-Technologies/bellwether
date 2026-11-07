@@ -7,6 +7,7 @@ import { adapterArgs } from './adapter-args.js';
 import { configPath, loadConfig, saveConfig, type ShellConfig } from './config.js';
 import { adapterPaths, missingBuilds } from './paths.js';
 import { applyAction, buildMenuModel, type MenuAction, type MenuItem } from './tray-menu.js';
+import { errorPage, waitForReady } from './ready.js';
 import { rendererUrl } from './url.js';
 
 let cfg: ShellConfig;
@@ -37,8 +38,17 @@ async function reachable(url: string): Promise<boolean> {
 }
 
 function stopAdapter(): void {
-  adapter?.kill();
+  const child = adapter;
   adapter = undefined;
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    // kill() on Windows does not reliably take the child tree down; force it.
+    try {
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    } catch {
+      child.kill();
+    }
+  } else child.kill();
 }
 
 async function startAdapter(): Promise<void> {
@@ -51,7 +61,7 @@ async function startAdapter(): Promise<void> {
     return;
   }
   const { command, args } = adapterArgs(cfg, paths.bin, paths.rendererDir);
-  adapter = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
+  adapter = spawn(command, args, { stdio: ['pipe', 'inherit', 'inherit'], windowsHide: true });
   adapter.once('exit', () => {
     adapter = undefined;
   });
@@ -94,6 +104,15 @@ function createWindow(): void {
   });
   placeWindow();
   win.once('ready-to-show', () => win?.showInactive());
+  // A failed load leaves a blank white page in the transparent window: retry, and show
+  // a visible message meanwhile instead of a bare white bar.
+  win.webContents.on('did-fail-load', (_e, _code, _desc, failedUrl, isMainFrame) => {
+    if (!isMainFrame || failedUrl.startsWith('data:')) return;
+    void win?.loadURL(errorPage(failedUrl));
+    setTimeout(() => {
+      if (win && !win.isDestroyed()) void win.loadURL(rendererUrl(cfg));
+    }, 2000);
+  });
   void win.loadURL(rendererUrl(cfg));
 }
 
@@ -143,9 +162,12 @@ if (!app.requestSingleInstanceLock()) {
     /* tray app: stay alive */
   });
   app.on('before-quit', stopAdapter);
+  process.on('exit', stopAdapter);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(sig, () => app.quit());
   app.whenReady().then(async () => {
     cfg = await loadConfig(configPath(app.getPath('userData')));
     await Promise.all([startAdapter(), refreshSessions()]);
+    await waitForReady(() => reachable(cfg.url));
     createWindow();
     tray = new Tray(trayIcon());
     tray.setToolTip('Bellwether');

@@ -50,6 +50,7 @@ const { values, positionals } = parseArgs({
     actions: { type: 'boolean' },
     'scrub-file': { type: 'string' },
     print: { type: 'boolean' },
+    'exit-with-parent': { type: 'boolean' },
     pack: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -121,3 +122,10 @@ const shutdown = async () => {
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+// Launched by the desktop shell with a stdin pipe: when the parent dies for any reason
+// (Ctrl+C, crash, killed terminal) the pipe closes and we exit instead of orphaning the port.
+if (values['exit-with-parent']) {
+  process.stdin.on('end', shutdown);
+  process.stdin.on('close', shutdown);
+  process.stdin.resume();
+}

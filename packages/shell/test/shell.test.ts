@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { adapterArgs } from '../src/adapter-args.js';
 import { type DisplayInfo, pickDisplay, stripBounds, windowBounds } from '../src/bounds.js';
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
+import { errorPage, waitForReady } from '../src/ready.js';
 import { adapterPaths } from '../src/paths.js';
 import { applyAction, buildMenuModel } from '../src/tray-menu.js';
 import { rendererUrl } from '../src/url.js';
@@ -78,7 +79,7 @@ describe('adapterArgs', () => {
   it('reads all sessions by default', () => {
     expect(adapterArgs({ port: 7341 }, '/a/bin.js', '/r')).toEqual({
       command: 'node',
-      args: ['/a/bin.js', '--live', '--port', '7341', '--serve', '/r', '--all'],
+      args: ['/a/bin.js', '--live', '--port', '7341', '--serve', '/r', '--exit-with-parent', '--all'],
     });
   });
   it('passes a chosen session instead of --all', () => {
@@ -133,5 +134,22 @@ describe('tray menu', () => {
     expect('session' in applyAction(s.cfg, { type: 'pick-session', session: undefined }).cfg).toBe(false);
     expect(applyAction({ ...DEFAULT_CONFIG, spawnAdapter: false }, { type: 'pick-session', session: 'x' }).restartAdapter).toBe(false);
     expect(applyAction(DEFAULT_CONFIG, { type: 'pick-display', id: 3 }).cfg.displayId).toBe(3);
+  });
+});
+
+describe('ready', () => {
+  it('resolves once the probe succeeds, sleeping between tries', async () => {
+    let n = 0;
+    const sleeps: number[] = [];
+    const ok = await waitForReady(async () => ++n >= 3, { delayMs: 10, sleep: async (ms) => void sleeps.push(ms) });
+    expect(ok).toBe(true);
+    expect(sleeps).toEqual([10, 10]);
+  });
+  it('gives up after the configured tries', async () => {
+    const ok = await waitForReady(async () => false, { tries: 3, sleep: async () => {} });
+    expect(ok).toBe(false);
+  });
+  it('builds a visible error page', () => {
+    expect(decodeURIComponent(errorPage('http://x/<b>'))).toContain('cannot reach http://x/b');
   });
 });
