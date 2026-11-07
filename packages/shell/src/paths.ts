@@ -17,7 +17,7 @@ export function adapterPaths(root: string = repoRoot(), env: NodeJS.ProcessEnv =
   const adapterDist = join(root, 'packages', 'adapter', 'dist');
   return {
     bin: env.BELLWETHER_ADAPTER_BIN ?? join(adapterDist, 'bin.js'),
-    index: join(adapterDist, 'index.js'),
+    index: env.BELLWETHER_ADAPTER_BIN ? join(dirname(env.BELLWETHER_ADAPTER_BIN), 'index.js') : join(adapterDist, 'index.js'),
     rendererDir: env.BELLWETHER_RENDERER_DIR ?? join(root, 'packages', 'renderer', 'dist'),
   };
 }

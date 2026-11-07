@@ -32,7 +32,8 @@ npm install -g @pelotto-tech/bellwether
 
 bellwether agents      # which coding agents were found
 bellwether install     # tag panes with roles (Claude Code and Copilot CLI)
-bellwether run         # serve the overlay from live Herdr
+bellwether run         # serve the overlay from live Herdr (browser / OBS)
+bellwether overlay     # or: the desktop overlay with a tray menu
 ```
 
 Open <http://127.0.0.1:7341/>. That is the whole loop: start your agents in Herdr, and
@@ -54,7 +55,7 @@ environment, or let the agent follow the installed skill pack and tag itself. Ro
 |---|---|
 | A browser tab | Open `http://127.0.0.1:7341/` |
 | A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
-| A desktop overlay | `pnpm shell` from a checkout (Electron, transparent, always on top, click-through). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
+| A desktop overlay | `bellwether overlay` (Electron, transparent, always on top, click-through). The first run installs Electron into `~/.bellwether/electron` (about 100 MB, once). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
 
 Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or a dot
 on the minimap) to zoom into a party and read each member's role, agent, status and
@@ -199,7 +200,7 @@ Double-click a member in strip mode (browser or OBS interact window) to jump the
 
 ## CLI and replay
 
-Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter and overlay page; the Electron tray shell (`pnpm shell`) runs from a checkout.
+Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter, overlay page and desktop shell (`bellwether overlay`); Electron itself is fetched on first use. `pnpm shell` does the same from a checkout.
 
 From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
 (it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):
