@@ -7,5 +7,12 @@ themes/*
 !themes/neutral/
 !themes/aesir/
 !themes/wayfarers/
+!themes/wayfarers/
 !docs/demo/*.jsonl
 blog/
+
+# staged by tools/stage-runtime.mjs for npm pack
+packages/cli/runtime/
+packages/cli/LICENSE
+packages/cli/README.md
+packages/cli/NOTICE

@@ -10,7 +10,7 @@ Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubb
 Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
 ...), not characters.
 
-**Status:** MVP. Strip and map modes run on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`; the Electron shell is in `packages/shell`. The plan is in [docs/PLAN.md](docs/PLAN.md).
+**Status:** v0.1 MVP. Strip and map modes run on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`; the Electron shell is in `packages/shell`. The plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Run it
 
@@ -115,6 +115,8 @@ pnpm typecheck && pnpm test && pnpm build
 Double-click a member in strip mode (browser or OBS interact window) to jump the Herdr TUI to that pane. The overlay window is click-through, so this is for the browser view; `--actions` also enables `prompt` and `sendKeys` messages from clients.
 
 ## CLI and replay
+
+Once published, install the CLI with `npm install -g @pelotto-technologies/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter and overlay page; the Electron tray shell (`pnpm shell`) runs from a checkout.
 
 From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
 (it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):

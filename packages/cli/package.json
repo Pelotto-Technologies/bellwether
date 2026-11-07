@@ -1,16 +1,52 @@
 {
-  "name": "@bellwether/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@pelotto-technologies/bellwether",
+  "version": "0.1.0",
+  "description": "Pixel stream overlay for Herdr agent workspaces: CLI, adapter and overlay page in one package",
   "license": "Apache-2.0",
   "type": "module",
-  "bin": { "bellwether": "dist/main.js" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pelotto-Technologies/bellwether.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/Pelotto-Technologies/bellwether#readme",
+  "bugs": "https://github.com/Pelotto-Technologies/bellwether/issues",
+  "keywords": [
+    "herdr",
+    "overlay",
+    "pixel",
+    "agents",
+    "claude-code",
+    "copilot"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "bellwether": "dist/main.js"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "runtime",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "stage-runtime": "node ../../tools/stage-runtime.mjs",
+    "prepack": "node ../../tools/stage-runtime.mjs"
+  },
+  "dependencies": {
+    "smol-toml": "^1.9.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
