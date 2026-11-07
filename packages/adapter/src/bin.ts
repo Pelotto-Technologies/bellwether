@@ -1,28 +1,90 @@
 #!/usr/bin/env node
-// Prints deltas from the configured source as JSON lines.
-// usage: bellwether-adapter [--live|--mock] [--session <name>|--all] [--socket <path>] [--config bellwether.toml]
+import { parseArgs } from 'node:util';
 import { createSource, loadSourceConfig } from './config.js';
-import type { Delta } from './types.js';
+import { MockSource } from './mock.js';
+import { recordTo, ReplaySource } from './recording.js';
+import { DEFAULT_PORT, DELTA_PATH, DeltaServer } from './server.js';
+import type { WorldSource } from './source.js';
 
-function arg(name: string): string | undefined {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : undefined;
+const USAGE = `bellwether-adapter: stream Herdr world deltas over WebSocket
+
+Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock):
+  --live               read the live Herdr TUI socket API
+  --mock               generate mock agents
+  --replay <file>      replay a recorded .jsonl (loops)
+  --session <name>     live: one named session      --all   live: every running session
+  --socket <path>      live: explicit socket/pipe path
+  --config <file>      config file (default bellwether.toml)
+  --seed <n>           mock seed (default 1)
+  --interval <ms>      mock delta interval (default 1500)
+  --speed <n>          replay speed multiplier (default 1)
+
+Output:
+  --port <n>           WebSocket port (default ${DEFAULT_PORT}); deltas on ${DELTA_PATH}
+  --serve <dir>        also serve a built renderer from <dir>
+  --record <file>      append every delta to a .jsonl file
+  --print              print every delta to stdout as JSON lines
+  -h, --help`;
+
+const { values } = parseArgs({
+  options: {
+    live: { type: 'boolean' },
+    mock: { type: 'boolean' },
+    replay: { type: 'string' },
+    session: { type: 'string' },
+    all: { type: 'boolean' },
+    socket: { type: 'string' },
+    config: { type: 'string' },
+    seed: { type: 'string' },
+    interval: { type: 'string' },
+    speed: { type: 'string' },
+    port: { type: 'string' },
+    serve: { type: 'string' },
+    record: { type: 'string' },
+    print: { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' },
+  },
+});
+
+if (values.help) {
+  console.log(USAGE);
+  process.exit(0);
 }
-const has = (f: string) => process.argv.includes(f);
 
-const cfg = await loadSourceConfig(arg('--config') ?? 'bellwether.toml');
-if (has('--live')) cfg.source = 'live';
-if (has('--mock')) cfg.source = 'mock';
-const session = arg('--session');
-if (session) cfg.herdr.sessions = [session];
-if (has('--all')) cfg.herdr.sessions = 'all';
-const socket = arg('--socket');
-if (socket) cfg.herdr.socket = socket;
+const log = (m: string) => process.stderr.write(m + '\n');
 
-const source = createSource(cfg, { log: (m) => process.stderr.write(m + '\n') });
-source.on('delta', (d: Delta) => process.stdout.write(JSON.stringify(d) + '\n'));
-process.stderr.write(`bellwether-adapter: source=${cfg.source}\n`);
+async function pickSource(): Promise<WorldSource> {
+  if (values.replay) {
+    return ReplaySource.fromFile(values.replay, { speed: Number(values.speed ?? 1), loop: true });
+  }
+  const cfg = await loadSourceConfig(values.config ?? 'bellwether.toml');
+  if (values.live) cfg.source = 'live';
+  if (values.mock) cfg.source = 'mock';
+  if (values.session) cfg.herdr.sessions = [values.session];
+  if (values.all) cfg.herdr.sessions = 'all';
+  if (values.socket) cfg.herdr.socket = values.socket;
+  log(`bellwether-adapter: source=${cfg.source}`);
+  return createSource(cfg, {
+    log,
+    mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500) }),
+  });
+}
+
+const source = await pickSource();
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve });
+server.attach(source);
+if (values.record) source.on('delta', recordTo(values.record));
+if (values.print) source.on('delta', (d) => process.stdout.write(JSON.stringify(d) + '\n'));
+
+const port = await server.listen();
 await source.start();
-const stop = () => void source.stop().then(() => process.exit(0));
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
+log(`bellwether-adapter: deltas on ws://127.0.0.1:${port}${DELTA_PATH}`);
+if (values.serve) log(`bellwether-adapter: overlay at http://127.0.0.1:${port}/`);
+
+const shutdown = async () => {
+  await source.stop();
+  await server.close();
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

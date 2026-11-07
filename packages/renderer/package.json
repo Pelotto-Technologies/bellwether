@@ -1,0 +1,20 @@
+{
+  "name": "@bellwether/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PixiJS strip overlay that renders Bellwether world deltas",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

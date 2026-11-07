@@ -29,7 +29,7 @@ export function memberFromPane(pane: PaneInfo | AgentInfo): Member | undefined {
   const m: Member = {
     paneId: pane.pane_id,
     agent: pane.agent,
-    role: resolveRole({ token: tokens.role, agentName: name, title: pane.title }),
+    role: resolveRole({ tokens, agentName: name, title: pane.title }),
     status: toStatus(pane.agent_status),
     lastChange: seq ?? pane.revision ?? 0,
   };

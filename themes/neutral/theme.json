@@ -1,0 +1,27 @@
+{
+  "name": "neutral",
+  "description": "Default public theme. Simple procedural pixel folk, one look per role.",
+  "beacon": "coordinator",
+  "palette": {
+    "working": "#3ddc84",
+    "done": "#ffd23f",
+    "blocked": "#ff4d4d",
+    "idle": "#d8d8d8",
+    "unknown": "#7a7a7a"
+  },
+  "outline": "#1b1b24",
+  "skin": "#f1c27d",
+  "ground": "#3b4a3a",
+  "roles": {
+    "orchestrator": { "body": "#7b5cd6", "accent": "#e8d26a", "hat": "point", "prop": "staff" },
+    "coordinator": { "body": "#4a7bd1", "accent": "#f2f2f2", "hat": "cap", "prop": "lantern" },
+    "architect": { "body": "#3a8f8a", "accent": "#d9e8e6", "hat": "hood", "prop": "staff" },
+    "implementer": { "body": "#c4683a", "accent": "#5b3a29", "hat": "helm", "prop": "hammer" },
+    "reviewer": { "body": "#5f9e3c", "accent": "#e5f0d8", "hat": "hood", "prop": "none" },
+    "researcher": { "body": "#8a6d3b", "accent": "#2f3b2f", "hat": "cap", "prop": "book" },
+    "writer": { "body": "#b14f74", "accent": "#f6e3ea", "hat": "none", "prop": "book" },
+    "ops": { "body": "#5d6b7a", "accent": "#f0a030", "hat": "helm", "prop": "hammer" },
+    "generic": { "body": "#8c8c8c", "accent": "#cfcfcf", "hat": "none", "prop": "none" }
+  },
+  "sayTtlMs": 6000
+}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bellwether</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+      body.backdrop { background: linear-gradient(#141826, #232a3d); }
+      #chip {
+        position: fixed; top: 8px; left: 8px; padding: 2px 8px; border-radius: 4px;
+        font: 12px ui-monospace, monospace; color: #cfd6e6; background: rgba(0,0,0,.45);
+      }
+      body.transparent #chip { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="chip">connecting…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

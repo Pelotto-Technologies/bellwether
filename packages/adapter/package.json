@@ -1,25 +1,36 @@
 {
   "name": "@bellwether/adapter",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "Herdr world model, delta stream, mock and live sources, WebSocket server",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    }
+  },
   "bin": {
-    "bellwether-adapter": "dist/bin.js"
+    "bellwether-adapter": "./dist/bin.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "@types/node": "^20.17.0",
-    "ajv": "^8.20.0",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.9"
+    "test": "vitest run",
+    "dev": "tsc -p tsconfig.build.json && node dist/bin.js --mock"
   },
   "dependencies": {
-    "smol-toml": "^1.9.1"
+    "smol-toml": "^1.9.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "ajv": "^8.20.0"
   }
 }

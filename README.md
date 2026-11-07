@@ -10,15 +10,65 @@ Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubb
 Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
 ...), not characters.
 
-**Status:** early. The installer (`packages/cli`) exists; the rest is planned. The plan is in [docs/PLAN.md](docs/PLAN.md).
+**Status:** MVP. Strip mode runs on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`. The Electron shell and map mode are next. The plan is in [docs/PLAN.md](docs/PLAN.md).
 
-## Layout (planned)
+## Run it
+
+Needs Node 20+ and pnpm (`corepack enable` gives you the pinned version).
+
+```sh
+pnpm install
+pnpm mock        # build, then serve mock agents + the overlay on one port
+```
+
+Open <http://127.0.0.1:7341/>. Parties of pixel agents walk along the bottom of the
+window; the party label and the beacon's light show the rolled-up status (green
+working, yellow done, red pulsing blocked, white idle, grey unknown). Blocked members
+stop and hop, and speech bubbles show `say` lines.
+
+For development with hot reload:
+
+```sh
+pnpm dev         # adapter mock server on :7341 and Vite on :5173
+```
+
+Open <http://127.0.0.1:5173/>. If the adapter is not reachable the page falls back to an
+in-browser mock and says so in the corner chip.
+
+Page options (query string):
+
+| Option | Effect |
+|---|---|
+| `?transparent` | No backdrop or chip. Use this for an OBS browser source. |
+| `?scale=4` | Pixel scale, 1 to 6 (default 3). |
+| `?source=mock` | Skip the adapter and run the mock in the browser. |
+| `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
+
+To watch your real Herdr agents instead, run the adapter against the live socket:
+
+```sh
+pnpm build
+node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist
+```
+
+Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
+`--session <name>` or `--all`, `--socket <path>`, `--record <file.jsonl>`, `--print`,
+`--port`, `--serve <dir>`. `source = "live"` in `bellwether.toml` or
+`BELLWETHER_SOURCE=live` sets the default.
+
+Checks, the same ones CI runs:
+
+```sh
+pnpm typecheck && pnpm test && pnpm build
+```
+
+## Layout
 
 ```
-packages/adapter    Herdr client, world model, WebSocket + recorder/replayer (TypeScript)
-packages/renderer   PixiJS scene: strip mode, map mode, theme loader (web page)
-packages/shell      Electron overlay window + tray
-packages/cli        bellwether install | uninstall | run | record | replay
+packages/adapter    world model, mock source, WebSocket server, recorder/replayer; Herdr client next
+packages/renderer   PixiJS strip mode and theme loader (web page); map mode later
+packages/shell      Electron overlay window + tray (planned)
+packages/cli        bellwether install | uninstall (run | record | replay planned)
 themes/neutral      ships with the repo
 themes/<private>    your own skins, gitignored
 docs/               plan and research artifacts

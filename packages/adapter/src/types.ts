@@ -1,29 +1,52 @@
-// World model and deltas (docs/PLAN.md §2, generic vocabulary).
-export type Status = 'working' | 'done' | 'blocked' | 'idle' | 'unknown';
+/**
+ * The world model the adapter emits. Mirrors docs/PLAN.md §2 with the generic
+ * vocabulary: a Herdr workspace is a `Party`, a pane with an agent is a `Member`.
+ */
+
+export const STATUSES = ['working', 'done', 'blocked', 'idle', 'unknown'] as const;
+export type Status = (typeof STATUSES)[number];
+
+export const ROLES = [
+  'orchestrator',
+  'coordinator',
+  'architect',
+  'implementer',
+  'reviewer',
+  'researcher',
+  'writer',
+  'ops',
+  'generic',
+] as const;
+export type Role = (typeof ROLES)[number];
 
 export interface World {
+  /** 'local' or a saved-machine label. */
   machine: string;
   parties: Record<string, Party>;
 }
 
 /** One Herdr workspace. */
 export interface Party {
+  /** Herdr workspace_id. */
   id: string;
   label: string;
+  /** Herdr session the workspace lives in ('default' or a named session). */
   session?: string;
   repo?: string;
   branch?: string;
   isWorktree: boolean;
+  /** Rollup of member statuses; see `rollup()`. */
   status: Status;
   members: Record<string, Member>;
   tokens: Record<string, string>;
 }
 
-/** One pane with an agent. */
+/** One pane running an agent. */
 export interface Member {
   paneId: string;
+  /** Herdr's agent field: 'claude', 'copilot', 'codex', ... Never branched on outside the installer. */
   agent: string;
-  role?: string;
+  role: Role;
   status: Status;
   title?: string;
   say?: string;
@@ -36,3 +59,11 @@ export type Delta =
   | { t: number; kind: 'party'; party: Party }
   | { t: number; kind: 'removed'; partyId: string; paneId?: string }
   | { t: number; kind: 'say'; partyId: string; paneId: string; text: string };
+
+export function isStatus(value: unknown): value is Status {
+  return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
+}
+
+export function isRole(value: unknown): value is Role {
+  return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
+}
