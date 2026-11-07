@@ -31,9 +31,9 @@ export function adapterArgs(cmd: RunCommand, rest: string[], serveDir?: string):
   }
 }
 
-/** Finds the built adapter bin and renderer dist next to this package in the workspace or a release bundle. */
+/** Finds the built adapter bin and renderer dist inside the published package (runtime/), or next to this package in the workspace or a release bundle. */
 export function locateRuntime(here = dirname(fileURLToPath(import.meta.url))): { adapterBin: string; rendererDist?: string } {
-  const candidates = [join(here, '..', '..', 'adapter', 'dist', 'bin.js'), join(here, '..', '..', '..', 'adapter', 'dist', 'bin.js')];
+  const candidates = [join(here, '..', 'runtime', 'adapter', 'dist', 'bin.js'), join(here, '..', '..', 'adapter', 'dist', 'bin.js'), join(here, '..', '..', '..', 'adapter', 'dist', 'bin.js')];
   const adapterBin = candidates.find(existsSync);
   if (!adapterBin) throw new Error('adapter is not built; run pnpm build');
   const dist = join(dirname(dirname(dirname(adapterBin))), 'renderer', 'dist');

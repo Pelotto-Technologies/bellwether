@@ -45,3 +45,35 @@ jobs:
             bellwether-${{ github.ref_name }}.tar.gz
             bellwether-${{ github.ref_name }}.zip
           generate_release_notes: true
+
+  npm:
+    # Publishes @pelotto-technologies/bellwether. Needs the NPM_TOKEN repository secret
+    # (an npm automation token with publish rights to the @pelotto-technologies scope).
+    # Skipped, not failed, while the secret is unset.
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: pnpm build
+      - name: Check tag matches package version
+        run: test "v$(node -p "require('./packages/cli/package.json').version")" = "${GITHUB_REF_NAME}"
+      - name: Publish
+        if: ${{ env.NPM_TOKEN != '' }}
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --no-git-checks --provenance
