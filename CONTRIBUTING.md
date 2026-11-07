@@ -38,3 +38,10 @@ referenced from core code, prompts or tests. New public art must be original. Se
 ## License
 
 By contributing you agree your work is licensed under Apache-2.0, as in `LICENSE`.
+
+## Repository protection
+
+Only maintainers can push. Everyone else: open issues, fork, and send pull requests.
+`main` requires a pull request and passing CI; release tags (`v*`) cannot be moved or
+deleted. The rulesets live in `.github/rulesets/` (importable under Settings, Rules).
+Report vulnerabilities per `SECURITY.md`.

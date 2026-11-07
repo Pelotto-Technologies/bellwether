@@ -1,0 +1,8 @@
+# Everything needs the maintainer's review; CI, release and security files are called out
+# explicitly so they stay protected if the default ever changes.
+*                       @bpelotto
+/.github/               @bpelotto
+/.github/workflows/     @bpelotto
+/SECURITY.md            @bpelotto
+/LICENSE                @bpelotto
+/NOTICE                 @bpelotto
