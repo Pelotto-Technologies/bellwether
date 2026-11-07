@@ -12,8 +12,8 @@ Pushing a tag that starts with `v` runs `.github/workflows/release.yml`:
    (`softprops/action-gh-release@v2`).
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 The archives hold built output only. To run the adapter from one, install its runtime
