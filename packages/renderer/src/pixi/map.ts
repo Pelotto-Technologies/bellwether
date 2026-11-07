@@ -11,12 +11,17 @@ import { isMoving, spawnWanderer, stepWanderer, type Wanderer } from '../map/wan
 import { SPEED, beaconAlpha, bob, hash01, walkFrame } from '../sim.js';
 import { FRAME_NAMES, SPRITE_H, SPRITE_W, buildFrame, paletteFor, rasterize, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
+import { Figure } from './figure.js';
+import type { LoadedArt } from './pack.js';
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 const CAMP_RADIUS = 22;
+/** Sprite-sheet characters are drawn smaller on the map so a camp still fits among the tiles. */
+const FIGURE_SCALE = 0.75;
 
 interface MemberView {
   sprite: Sprite;
+  figure?: Figure;
   bubble: Container;
   text: Text;
   bg: Graphics;
@@ -59,6 +64,7 @@ export class MapScene {
     private theme: Theme,
     private feed: FeedState,
     private art: MapArt,
+    private figures: LoadedArt | null = null,
   ) {
     this.world.addChild(this.terrainLayer, this.buildingLayer, this.actorLayer);
     app.stage.addChild(this.world, this.overlay);
@@ -271,7 +277,8 @@ export class MapScene {
     const members = Object.values(party.members).sort((a, b) => a.paneId.localeCompare(b.paneId));
     for (const [paneId, mv] of view.members) {
       if (!party.members[paneId]) {
-        mv.sprite.destroy();
+        if (mv.figure) mv.figure.destroy();
+        else mv.sprite.destroy();
         mv.bubble.destroy({ children: true });
         view.members.delete(paneId);
       }
@@ -282,13 +289,14 @@ export class MapScene {
       if (!mv) {
         const sprite = new Sprite();
         sprite.anchor.set(0.5, 1);
+        const figure = this.figures ? new Figure(this.figures, this.theme) : undefined;
         const bg = new Graphics();
         const text = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 8, fill: 0x1b1b24 }, resolution: 4 });
         const bubble = new Container();
         bubble.addChild(bg, text);
-        this.actorLayer.addChild(sprite, bubble);
+        this.actorLayer.addChild(figure ? figure.container : sprite, bubble);
         const home2 = { x: home.x, y: home.y + 6 };
-        mv = { sprite, bubble, text, bg, phase: hash01(m.paneId) * 10, w: spawnWanderer(`${party.id}/${m.paneId}`, home2, CAMP_RADIUS) };
+        mv = { sprite, ...(figure ? { figure } : {}), bubble, text, bg, phase: hash01(m.paneId) * 10, w: spawnWanderer(`${party.id}/${m.paneId}`, home2, CAMP_RADIUS) };
         view.members.set(m.paneId, mv);
       }
       this.stepMember(mv, party, m, home, m.paneId === beaconPane, now);
@@ -306,11 +314,16 @@ export class MapScene {
     }
     mv.w = stepWanderer(mv.w, `${party.id}/${m.paneId}`, m.status, { x: home.x, y: home.y + 6 }, CAMP_RADIUS, this.dt, meet);
     const moving = isMoving(mv.w) && SPEED[m.status] > 0;
-    const frame = FRAME_NAMES[walkFrame(moving, this.t, mv.phase)]!;
-    mv.sprite.texture = this.frameTexture(m.role, frame, beacon);
-    mv.sprite.scale.x = mv.w.dir;
-    mv.sprite.position.set(mv.w.x, mv.w.y + bob(m.status, this.t, mv.phase) * 0.5);
-    mv.sprite.tint = m.status === 'blocked' ? 0xffd0d0 : 0xffffff;
+    const figH = mv.figure ? this.figures!.art.character.h * FIGURE_SCALE : SPRITE_H;
+    if (mv.figure) {
+      mv.figure.update({ member: m, partyStatus: party.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking: !!say, t: this.t, phase: mv.phase }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y + bob(m.status, this.t, mv.phase) * 0.5);
+    } else {
+      const frame = FRAME_NAMES[walkFrame(moving, this.t, mv.phase)]!;
+      mv.sprite.texture = this.frameTexture(m.role, frame, beacon);
+      mv.sprite.scale.x = mv.w.dir;
+      mv.sprite.position.set(mv.w.x, mv.w.y + bob(m.status, this.t, mv.phase) * 0.5);
+      mv.sprite.tint = m.status === 'blocked' ? 0xffd0d0 : 0xffffff;
+    }
 
     mv.bubble.visible = !!say;
     if (say) {
@@ -322,7 +335,7 @@ export class MapScene {
         mv.text.position.set(3, 2);
       }
       mv.bubble.scale.set(this.textScale);
-      mv.bubble.position.set(mv.w.x - (mv.bg.width * this.textScale) / 2, mv.w.y - SPRITE_H - mv.bg.height * this.textScale - 2);
+      mv.bubble.position.set(mv.w.x - (mv.bg.width * this.textScale) / 2, mv.w.y - figH - mv.bg.height * this.textScale - 2);
     }
   }
 

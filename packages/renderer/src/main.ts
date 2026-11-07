@@ -42,7 +42,7 @@ async function main() {
   const packName = pickPack(available, requested, await configuredPack());
   const pack = packData(packName);
   const theme = pack.theme;
-  const art = mode === 'map' ? null : await loadArt(pack);
+  const art = await loadArt(pack);
   const app = new Application();
   await app.init({ backgroundAlpha: 0, resizeTo: window, antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1 });
   document.body.appendChild(app.canvas);
@@ -50,7 +50,7 @@ async function main() {
   const feed = new FeedState(theme.sayTtlMs);
   const scene =
     mode === 'map'
-      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'))
+      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
       : new StripScene(app, theme, feed, scale, art);
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'm' && e.key !== 'M') return;

@@ -1,19 +1,16 @@
 import type { Member, Party, Role } from '@bellwether/adapter/core';
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
-import { chooseAnim, frameIndex, frameNames } from '../anim.js';
 import type { FeedState } from '../feed.js';
 import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, SPEED, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
+import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
 interface MemberView {
   sprite: Sprite;
-  /** Sprite-sheet mode: a mirrored figure holding the frame, its cloak mask and its status light. */
-  figure: Container;
-  cloak: Sprite;
-  tip: Sprite;
-  tipGlow: Sprite;
+  /** Sprite-sheet mode: the shared figure (frame, cloak mask and status light). */
+  figure?: Figure;
   bubbleSkin?: NineSliceSprite;
   bubbleTail?: Sprite;
   glow: Graphics;
@@ -104,19 +101,13 @@ export class StripScene {
 
   private makeMember(party: PartyView, paneId: string): MemberView {
     const sprite = new Sprite();
-    const figure = new Container();
-    const cloak = new Sprite();
-    const tip = new Sprite();
-    const tipGlow = new Sprite();
-    tipGlow.blendMode = 'add';
-    const a = this.art?.art;
-    for (const sp of [sprite, cloak, tip, tipGlow]) sp.anchor.set(a?.character.anchor.x ?? 0.5, a?.character.anchor.y ?? 1);
-    figure.addChild(sprite, cloak, tip, tipGlow);
+    sprite.anchor.set(0.5, 1);
+    const figure = this.art ? new Figure(this.art, this.theme) : undefined;
     const glow = new Graphics();
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24 } });
     const bubble = new Container();
-    const view: MemberView = { sprite, figure, cloak, tip, tipGlow, glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
+    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
     if (this.art) {
       const ui = this.art.art.ui;
       const sl = ui.bubble.slice;
@@ -131,7 +122,7 @@ export class StripScene {
     } else {
       bubble.addChild(bubbleBg, bubbleText);
     }
-    party.root.addChild(this.art ? figure : sprite, glow, bubble);
+    party.root.addChild(figure ? figure.container : sprite, glow, bubble);
     party.members.set(paneId, view);
     return view;
   }
@@ -202,7 +193,7 @@ export class StripScene {
 
       for (const [paneId, mv] of view.members) {
         if (!party.members[paneId]) {
-          if (art) mv.figure.destroy({ children: true });
+          if (mv.figure) mv.figure.destroy();
           else mv.sprite.destroy();
           mv.glow.destroy();
           mv.bubble.destroy({ children: true });
@@ -250,31 +241,10 @@ export class StripScene {
     const loaded = this.art!;
     const s = this.scale;
     const { art } = loaded;
-    const sheet = loaded.sheets[m.role];
     const text = this.feed.say(party.id, m.paneId, now);
-    const memberMoving = moving && m.status !== 'blocked';
-    const anim = chooseAnim({ moving: memberMoving, status: m.status, talking: !!text }, this.t, mv.phase);
-    const idx = frameIndex(art.character.counts[anim], art.character.fps[anim], this.t, mv.phase);
-    const names = frameNames(anim, idx);
     const dir = this.parties.get(party.id)!.walker.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
-
-    mv.sprite.texture = sheet.textures[names.base]!;
-    mv.cloak.texture = sheet.textures[names.cloak] ?? Texture.EMPTY;
-    mv.cloak.tint = hexNum(art.roles[m.role].cloak);
-    mv.tip.visible = mv.tipGlow.visible = isBeacon;
-    if (isBeacon) {
-      const color = hexNum(this.theme.palette[party.status]);
-      const alpha = beaconAlpha(party.status, this.t);
-      const tex = sheet.textures[names.tip] ?? Texture.EMPTY;
-      mv.tip.texture = mv.tipGlow.texture = tex;
-      mv.tip.tint = mv.tipGlow.tint = color;
-      mv.tip.alpha = alpha;
-      mv.tipGlow.alpha = alpha * 0.5;
-    }
-    mv.figure.scale.set(dir * s, s);
-    mv.figure.position.set(cx, y);
-    mv.figure.alpha = m.status === 'idle' || m.status === 'unknown' ? 0.85 : 1;
+    mv.figure!.update({ member: m, partyStatus: party.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase }, dir, s, cx, y);
 
     mv.bubble.visible = !!text;
     if (text) {
