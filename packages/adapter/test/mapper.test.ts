@@ -9,8 +9,8 @@ const ctx = { session: 'default' };
 describe('partiesFromSnapshot', () => {
   const parties = partiesFromSnapshot(loadSnapshot(), ctx);
 
-  it('makes one party per workspace, keyed by session', () => {
-    expect(Object.keys(parties).sort()).toEqual(['default/w1', 'default/w2', 'default/w3']);
+  it('makes one party per workspace with agents, keyed by session', () => {
+    expect(Object.keys(parties).sort()).toEqual(['default/w1', 'default/w2']);
   });
 
   it('maps worktree provenance and tokens', () => {
@@ -20,7 +20,7 @@ describe('partiesFromSnapshot', () => {
 
   it('only panes with an agent become members', () => {
     expect(Object.keys(parties['default/w1']!.members)).toEqual(['w1:p3']);
-    expect(parties['default/w3']!.members).toEqual({});
+    expect(parties['default/w3']).toBeUndefined();
   });
 
   it('reads role and say from tokens and state_change_seq from agents', () => {
@@ -34,9 +34,8 @@ describe('partiesFromSnapshot', () => {
     expect(m).toMatchObject({ agent: 'copilot', role: 'reviewer', status: 'blocked' });
   });
 
-  it('rolls up worst member status, using the workspace status when empty', () => {
+  it('rolls up worst member status', () => {
     expect(parties['default/w2']!.status).toBe('blocked');
-    expect(parties['default/w3']!.status).toBe('unknown');
   });
 
   it('applies learned worktree branches', () => {
@@ -96,7 +95,8 @@ describe('diffParties', () => {
     snap.panes = snap.panes.filter((p) => p.pane_id !== 'w1:p3' && p.workspace_id !== 'w2');
     const ds = diffParties(base, partiesFromSnapshot(snap, ctx), 1);
     expect(ds).toContainEqual({ t: 1, kind: 'removed', partyId: 'default/w2' });
-    expect(ds).toContainEqual({ t: 1, kind: 'removed', partyId: 'default/w1', paneId: 'w1:p3' });
+    // w1's only agent is gone, so the workspace drops out as well.
+    expect(ds).toContainEqual({ t: 1, kind: 'removed', partyId: 'default/w1' });
   });
 
   it('reports new members, say lines and party header changes', () => {

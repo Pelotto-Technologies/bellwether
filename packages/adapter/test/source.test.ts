@@ -33,7 +33,7 @@ describe('HerdrSessionSource against a mock pipe server', () => {
     expect(deltas[0]!.kind).toBe('snapshot');
   });
 
-  it('replays the recorded capture into member and party deltas, then removes the closed pane', async () => {
+  it('replays the recorded capture into member and party deltas, then removes the workspace once its last agent closes', async () => {
     await start();
     await until(() => herdr.statusSubPanes().length === 1);
     deltas.length = 0;
@@ -51,7 +51,7 @@ describe('HerdrSessionSource against a mock pipe server', () => {
     herdr.snapshot.agents = herdr.snapshot.agents.filter((p) => p.pane_id !== 'w1:p3');
     herdr.push(closed!);
     await until(() => deltas.some((d) => d.kind === 'removed'));
-    expect(deltas.find((d) => d.kind === 'removed')).toMatchObject({ partyId: 'default/w1', paneId: 'w1:p3' });
+    expect(deltas.find((d) => d.kind === 'removed')).toMatchObject({ partyId: 'default/w1' });
     await until(() => herdr.statusSubPanes().some((p) => p.length === 3));
     expect(herdr.statusSubPanes()).toEqual([['w1:p1', 'w2:p1', 'w3:p1']]);
   });
@@ -128,7 +128,7 @@ describe('HerdrSource', () => {
     await until(() => got.filter((d) => d.kind === 'snapshot').length === 2);
     const last = got.filter((d) => d.kind === 'snapshot').at(-1)!;
     expect(last.kind === 'snapshot' && Object.keys(last.world.parties).sort()).toEqual([
-      'default/w1', 'default/w2', 'default/w3', 'overlay-dev/w1', 'overlay-dev/w2', 'overlay-dev/w3',
+      'default/w1', 'default/w2', 'overlay-dev/w1', 'overlay-dev/w2',
     ]);
     expect(last.kind === 'snapshot' && last.world.machine).toBe('test');
     await multi.stop();
