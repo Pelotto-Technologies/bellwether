@@ -115,6 +115,17 @@ Double-click a member in strip mode (browser or OBS interact window) to jump the
 
 ## CLI and replay
 
+From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
+(it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):
+
+```sh
+pnpm bellwether run
+pnpm bellwether install
+```
+
+Everywhere below, `bellwether <cmd>` means `pnpm bellwether <cmd>` unless you have linked it
+globally with `pnpm build && cd packages/cli && pnpm link --global`.
+
 ```sh
 bellwether run                       # live Herdr, overlay at http://127.0.0.1:7341/
 bellwether record session.jsonl --scrub

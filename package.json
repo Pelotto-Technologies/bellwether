@@ -15,6 +15,7 @@
     "dev": "pnpm --filter @bellwether/adapter build && pnpm -r --parallel dev",
     "shell": "pnpm --filter @bellwether/adapter --filter @bellwether/renderer build && pnpm --filter @bellwether/shell start",
     "mock": "pnpm --filter @bellwether/adapter build && pnpm --filter @bellwether/renderer build && node packages/adapter/dist/bin.js --mock --serve packages/renderer/dist",
+    "bellwether": "node tools/bellwether.mjs",
     "blog": "pnpm --filter @bellwether/renderer build && node tools/blog-build.mjs"
   },
   "devDependencies": {
