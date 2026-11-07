@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          name="bellwether-${TAG}"
+          out="stage/${name}"
+          mkdir -p "$out/packages/adapter" "$out/packages/renderer" "$out/packages/cli" "$out/themes"
+          cp -r packages/adapter/dist packages/adapter/package.json "$out/packages/adapter/"
+          cp -r packages/renderer/dist "$out/packages/renderer/"
+          cp -r packages/cli/dist packages/cli/package.json "$out/packages/cli/"
+          # Public packs only. Never copy the themes folder wholesale.
+          for pack in neutral aesir wayfarers; do
+            cp -r "themes/${pack}" "$out/themes/${pack}"
+          done
+          cp LICENSE README.md "$out/"
+          tar -C stage -czf "${name}.tar.gz" "${name}"
+          (cd stage && zip -qr "../${name}.zip" "${name}")
+          ls -l "${name}.tar.gz" "${name}.zip"
+          find "$out/themes" -mindepth 1 -maxdepth 1 -printf '%f\n'
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bellwether-${{ github.ref_name }}.tar.gz
+            bellwether-${{ github.ref_name }}.zip
+          generate_release_notes: true
