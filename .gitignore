@@ -6,7 +6,7 @@ out/
 *.tsbuildinfo
 
 # local runtime
-overlay.toml
+bellwether.toml
 *.jsonl
 !docs/research/**/*.jsonl
 .env

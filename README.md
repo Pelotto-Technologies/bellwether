@@ -1,4 +1,4 @@
-# herdr-overlay
+# Bellwether
 
 A Stream-Avatars-style pixel overlay for [Herdr](https://herdr.dev). Each Herdr
 worktree workspace becomes a party of pixel characters that walk along the bottom of
@@ -18,7 +18,7 @@ Theme packs are swappable; the core knows roles (architect, implementer, reviewe
 packages/adapter    Herdr client, world model, WebSocket + recorder/replayer (TypeScript)
 packages/renderer   PixiJS scene: strip mode, map mode, theme loader (web page)
 packages/shell      Electron overlay window + tray
-packages/cli        overlay install | uninstall | run | record | replay
+packages/cli        bellwether install | uninstall | run | record | replay
 themes/neutral      ships with the repo
 themes/<private>    your own skins, gitignored
 docs/               plan and research artifacts

@@ -1,4 +1,4 @@
-# herdr-overlay
+# Bellwether
 
 Pixel overlay for Herdr. Read `docs/PLAN.md` before doing anything; it holds the
 verified protocol facts, the architecture, the phases and the open decisions.
@@ -16,7 +16,7 @@ verified protocol facts, the architecture, the phases and the open decisions.
   targets.
 - Protocol knowledge lives in `packages/adapter` only. The renderer consumes `Delta`s
   and never talks to Herdr.
-- Recordings (`*.jsonl`) and `overlay.toml` are local and gitignored. Published replays
+- Recordings (`*.jsonl`) and `bellwether.toml` are local and gitignored. Published replays
   are scrubbed.
 - Behavior changes come with tests. The adapter is tested against fixtures in
   `docs/research/` and a mock pipe server, never against a live Herdr.
