@@ -116,7 +116,7 @@ Double-click a member in strip mode (browser or OBS interact window) to jump the
 
 ## CLI and replay
 
-Once published, install the CLI with `npm install -g @pelotto-technologies/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter and overlay page; the Electron tray shell (`pnpm shell`) runs from a checkout.
+Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter and overlay page; the Electron tray shell (`pnpm shell`) runs from a checkout.
 
 From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
 (it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):
