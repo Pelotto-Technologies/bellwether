@@ -48,5 +48,5 @@ pnpm build && cd packages/cli && npm pack --dry-run
 
 - **Signing.** Release archives are unsigned. Signing (for example Sigstore/cosign
   attestations, GPG, or Windows and macOS code signing for an Electron build) needs
-  keys or certificates owned by the project. npm provenance is enabled on publish.
+  keys or certificates owned by the project. npm provenance is added automatically once the repository is public (npm rejects it for private repos).
 - **Electron installers.** The shell runs from source (`pnpm shell`); no installer is built.
