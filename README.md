@@ -86,6 +86,8 @@ Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
 `--port`, `--serve <dir>`, `--pack <name>`. `source = "live"` in `bellwether.toml` or
 `BELLWETHER_SOURCE=live` sets the default.
 
+Guides: [using the page in OBS](docs/obs.md), [writing a skin pack](docs/themes.md).
+
 Checks, the same ones CI runs:
 
 ```sh
