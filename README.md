@@ -1,18 +1,101 @@
 # Bellwether
 
-A Stream-Avatars-style pixel overlay for [Herdr](https://herdr.dev). Each Herdr
-worktree workspace becomes a party of pixel characters that walk along the bottom of
-your screen. One of them carries a light that shows the party's status (working,
-done, blocked). A map mode shows every party as a glow on a pixel map; zoom into one to
-see its members and what they are doing.
+**A pixel-art overlay for [Herdr](https://herdr.dev). See your AI coding agents as a party of tiny characters.**
 
-Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubbed.
-Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
-...), not characters.
+Each Herdr worktree workspace becomes a party of pixel characters walking along the
+bottom of your screen. One of them carries a beacon whose light shows the party's status:
+green for working, yellow for done, pulsing red for blocked. Switch to map mode and every
+repo is a settlement on a pixel world, with a glow where its party is camped. Think
+Stream Avatars, but the cast is your agents (Claude Code, GitHub Copilot CLI, and anything
+else Herdr recognizes).
 
-**Status:** v0.1 MVP. Strip and map modes run on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`; the Electron shell is in `packages/shell`. The plan is in [docs/PLAN.md](docs/PLAN.md).
+![Strip mode, Aesir pack](docs/images/aesir-strip.png)
 
-## Run it
+Use it as a click-through always-on-top desktop overlay, or as a browser page for OBS.
+Skins are swappable theme packs; the core only knows roles (`architect`, `implementer`,
+`reviewer`, ...), never characters.
+
+| Pack | Strip | Map |
+|---|---|---|
+| **Workshop Crew** (`neutral`, default) | ![](docs/images/neutral-strip.png) | ![](docs/images/neutral-map.png) |
+| **Aesir** (`aesir`) | ![](docs/images/aesir-strip.png) | ![](docs/images/aesir-map.png) |
+| **Wayfarers** (`wayfarers`) | ![](docs/images/wayfarers-strip.png) | ![](docs/images/wayfarers-map.png) |
+
+Screenshots come from the built-in mock agents (`pnpm mock`).
+
+## Quickstart
+
+You need Node 20+ and [Herdr](https://herdr.dev) running with at least one agent.
+
+```sh
+npm install -g @pelotto-tech/bellwether
+
+bellwether agents      # which coding agents were found
+bellwether install     # tag panes with roles (Claude Code and Copilot CLI)
+bellwether run         # serve the overlay from live Herdr
+```
+
+Open <http://127.0.0.1:7341/>. That is the whole loop: start your agents in Herdr, and
+a party appears per workspace.
+
+Want to look before you connect anything? From a checkout, `pnpm install && pnpm mock`
+serves fake agents on the same port.
+
+### Give panes a role
+
+Roles decide which character a pane gets. Start a pane with `HERDR_ROLE=reviewer` in its
+environment, or let the agent follow the installed skill pack and tag itself. Roles:
+`orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`, `researcher`,
+`writer`, `ops`, `generic`. Untagged panes show as `generic`.
+
+### Pick your surface
+
+| You want | Do this |
+|---|---|
+| A browser tab | Open `http://127.0.0.1:7341/` |
+| A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
+| A desktop overlay | `pnpm shell` from a checkout (Electron, transparent, always on top, click-through). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
+
+Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or a dot
+on the minimap) to zoom into a party and read each member's role, agent, status and
+latest line. Esc zooms back out.
+
+### Configure with `bellwether.toml`
+
+Create `bellwether.toml` in the directory you run from (it is gitignored):
+
+```toml
+source = "live"          # "live" for real Herdr, "mock" for fake agents
+pack = "aesir"           # neutral | aesir | wayfarers
+scrub = false            # true hashes repo/branch names in recordings
+
+[herdr]
+sessions = "all"         # or ["default", "overlay-dev"]
+# socket = "..."         # explicit socket or pipe path
+```
+
+Everything also has a flag or environment variable: `--pack aesir` or
+`BELLWETHER_PACK=aesir`, `--session <name>` or `--all`, `BELLWETHER_SOURCE=live`,
+`--port`. Run the adapter with `--help` for the full list. In the page URL, `?pack=`,
+`?scale=` (1 to 6) and `?mode=map` override the config.
+
+### Record and share a replay
+
+```sh
+bellwether record session.jsonl --scrub   # hashes repo, branch and labels
+bellwether replay session.jsonl --speed 4
+```
+
+Never publish a recording without `--scrub`.
+
+More: [writing a skin pack](docs/themes.md), [OBS guide](docs/obs.md),
+[architecture and plan](docs/PLAN.md).
+
+---
+
+# Reference
+
+## Run from source
 
 Needs Node 20+ and pnpm (`corepack enable` gives you the pinned version).
 

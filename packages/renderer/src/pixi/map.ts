@@ -148,8 +148,10 @@ export class MapScene {
         base.roundPixels = true;
         this.terrainLayer.addChild(base);
         if (terrain.ground[i] === 'water') this.waterSprites.push({ sprite: base, a: this.art.tile(groundTileName(terrain, x, y, 0)), b: this.art.tile(groundTileName(terrain, x, y, 1)) });
-        const s = terrain.scenery[i];
-        if (s) {
+        const raw = terrain.scenery[i];
+        // Snow packs ship a runestone where other packs have a stump.
+        const s = raw === 'stump' && !this.art.hasTile('stump') ? 'runestone' : raw;
+        if (s && this.art.hasTile(s)) {
           const o = new Sprite(this.art.tile(s));
           o.position.set(x * TILE, y * TILE);
           this.terrainLayer.addChild(o);
