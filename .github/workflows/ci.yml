@@ -25,6 +25,9 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        env:
+          # typecheck/test/build never launch Electron, so skip its binary download
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

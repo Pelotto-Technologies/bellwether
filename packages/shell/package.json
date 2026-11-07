@@ -1,0 +1,17 @@
+{
+  "name": "@bellwether/shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Electron overlay window and tray for the Bellwether strip",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "start": "tsc -p tsconfig.json && electron dist/main.js"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}

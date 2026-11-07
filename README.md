@@ -10,7 +10,7 @@ Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubb
 Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
 ...), not characters.
 
-**Status:** MVP. Strip mode runs on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`. Map mode is in; the Electron shell is next. The plan is in [docs/PLAN.md](docs/PLAN.md).
+**Status:** MVP. Strip and map modes run on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`; the Electron shell is in `packages/shell`. The plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Run it
 
@@ -86,6 +86,23 @@ Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
 `--port`, `--serve <dir>`, `--pack <name>`. `source = "live"` in `bellwether.toml` or
 `BELLWETHER_SOURCE=live` sets the default.
 
+## Overlay on your desktop
+
+`packages/shell` wraps the strip in a transparent, frameless, always-on-top,
+click-through Electron window the width of one monitor, pinned to its bottom edge.
+
+```sh
+pnpm install     # downloads the Electron binary (CI skips it with ELECTRON_SKIP_BINARY_DOWNLOAD=1)
+pnpm shell       # builds adapter and renderer, then launches the overlay
+```
+
+The shell attaches to an adapter already serving `http://127.0.0.1:7341/` or, if none
+answers, spawns `packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist`.
+The tray icon menu has: switch strip/map (reloads with `?mode=map`), pick monitor, pick
+Herdr session (restarts a spawned adapter with `--session`), and quit. Choices persist in
+`shell.json` in Electron's userData folder. Set `BELLWETHER_ADAPTER_BIN` or
+`BELLWETHER_RENDERER_DIR` to point at other builds.
+
 Guides: [using the page in OBS](docs/obs.md), [writing a skin pack](docs/themes.md).
 
 Checks, the same ones CI runs:
@@ -113,7 +130,7 @@ recording. Never publish an unscrubbed recording.
 ```
 packages/adapter    world model, mock source, WebSocket server, recorder/replayer; Herdr client next
 packages/renderer   PixiJS strip and map modes and the theme loader (web page)
-packages/shell      Electron overlay window + tray (planned)
+packages/shell      Electron overlay window + tray
 packages/cli        bellwether install | uninstall (run | record | replay planned)
 themes/neutral      ships with the repo
 themes/<private>    your own skins, gitignored
