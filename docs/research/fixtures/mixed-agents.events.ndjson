@@ -1,0 +1,7 @@
+{"id":"sub_1","result":{"type":"subscription_started"}}
+{"data":{"agent":"claude","agent_status":"working","pane_id":"w1:p3","workspace_id":"w1"},"event":"pane.agent_status_changed"}
+{"data":{"agent":"copilot","agent_status":"working","pane_id":"w2:p1","workspace_id":"w2"},"event":"pane.agent_status_changed"}
+{"data":{"agent":"copilot","agent_status":"blocked","pane_id":"w2:p1","workspace_id":"w2"},"event":"pane.agent_status_changed"}
+{"data":{"agent":"claude","agent_status":"idle","pane_id":"w1:p3","workspace_id":"w1"},"event":"pane.agent_status_changed"}
+{"data":{"agent":"copilot","agent_status":"working","pane_id":"w2:p1","workspace_id":"w2"},"event":"pane.agent_status_changed"}
+{"data":{"agent":"copilot","agent_status":"done","pane_id":"w2:p1","workspace_id":"w2"},"event":"pane.agent_status_changed"}

@@ -10,7 +10,7 @@ Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubb
 Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
 ...), not characters.
 
-**Status:** planned, not yet built. The plan is in [docs/PLAN.md](docs/PLAN.md).
+**Status:** early. The installer (`packages/cli`) exists; the rest is planned. The plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout (planned)
 
@@ -33,7 +33,49 @@ scripts, and a captured `working` → `idle` event log from a real agent pane.
 ## Supported agents
 
 Claude Code and GitHub Copilot CLI are first-class targets for the installer. The
-adapter itself is agent-agnostic: anything Herdr recognizes shows up.
+adapter itself is agent-agnostic: it reads Herdr's `agent` field (`claude`, `copilot`,
+`codex`, ...) and draws every agent the same way, so anything Herdr recognizes shows up.
+Only the installer (`packages/cli`) knows agents apart.
+
+### Setup
+
+1. Let Herdr detect each agent and resume its sessions:
+
+   ```sh
+   herdr integration install claude
+   herdr integration install copilot
+   ```
+
+2. Install Bellwether's role tagging for every agent it finds:
+
+   ```sh
+   bellwether agents       # what is on PATH and which config dirs exist
+   bellwether install      # all present agents
+   bellwether install --agent copilot   # or just one
+   ```
+
+   For each agent whose config dir exists, this writes:
+
+   | | Claude Code | GitHub Copilot CLI |
+   |---|---|---|
+   | Config dir | `~/.claude` or `$CLAUDE_CONFIG_DIR` | `~/.copilot` or `$COPILOT_HOME` |
+   | Skill pack | `skills/bellwether/SKILL.md` | `skills/bellwether/SKILL.md` |
+   | Role hook | `hooks/bellwether-role.sh` (+ `.ps1`) | `hooks/bellwether-role.sh` (+ `.ps1`) |
+   | `settings.json` | `SessionStart` group with a `command` hook | flat `SessionStart` entry with `bash` and `powershell` |
+
+   Herdr's own entries and anything you added stay untouched. Running it twice changes
+   nothing. A missing config dir is skipped, not created: start the agent once first.
+
+3. Give panes a role. Either split a pane with `HERDR_ROLE=<role>` in its environment
+   (the hook tags it on session start), or let the agent follow the skill pack and tag
+   itself. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`,
+   `researcher`, `writer`, `ops`, `generic`.
+
+`bellwether uninstall` removes only what `install` wrote.
+
+Older Copilot CLI builds without skills support ignore the skill pack; the hook still
+works. Paste the contents of `SKILL.md` into `AGENTS.md` or
+`.github/copilot-instructions.md` if you want the instructions there.
 
 ## License
 
