@@ -1,15 +1,51 @@
 name: Release
 
+# Releasing = merging a PR that bumps packages/cli/package.json "version".
+# On every push to main, `plan` compares v<version> against existing tags and, if the
+# tag is new, `release` builds, creates the tag and GitHub Release, and `npm` publishes.
+# Everything runs in this one workflow because releases created with GITHUB_TOKEN do not
+# trigger other workflows.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      new_tag: ${{ steps.v.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/cli/package.json').version")
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} exists; nothing to release."
+            echo "new_tag=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_tag=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: plan
+    if: needs.plan.outputs.new_tag == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,7 +57,7 @@ jobs:
       - run: pnpm check
       - name: Package
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.plan.outputs.tag }}
         run: |
           set -euo pipefail
           name="bellwether-${TAG}"
@@ -41,9 +77,11 @@ jobs:
           find "$out/themes" -mindepth 1 -maxdepth 1 -printf '%f\n'
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.plan.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: |
-            bellwether-${{ github.ref_name }}.tar.gz
-            bellwether-${{ github.ref_name }}.zip
+            bellwether-${{ needs.plan.outputs.tag }}.tar.gz
+            bellwether-${{ needs.plan.outputs.tag }}.zip
           generate_release_notes: true
 
   npm:
@@ -51,7 +89,8 @@ jobs:
     # (an npm automation token with publish rights to the @pelotto-tech scope).
     # Skipped, not failed, while the secret is unset. Provenance is only requested once
     # the repository is public; npm rejects provenance from private repositories.
-    needs: release
+    # Skipped if the version is already on npm, so a re-run or a manual publish is safe.
+    needs: [plan, release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,10 +109,16 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: pnpm build
-      - name: Check tag matches package version
-        run: test "v$(node -p "require('./packages/cli/package.json').version")" = "${GITHUB_REF_NAME}"
+      - name: Already on npm?
+        id: published
+        run: |
+          if npm view "@pelotto-tech/bellwether@${{ needs.plan.outputs.version }}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish
-        if: ${{ env.NPM_TOKEN != '' }}
+        if: ${{ env.NPM_TOKEN != '' && steps.published.outputs.already != 'true' }}
         working-directory: packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

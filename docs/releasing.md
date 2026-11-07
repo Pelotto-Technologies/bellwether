@@ -1,20 +1,24 @@
 # Releasing
 
-Pushing a tag that starts with `v` runs `.github/workflows/release.yml`:
+**To release, merge a PR that bumps `version` in `packages/cli/package.json`.** On every
+push to `main`, `.github/workflows/release.yml` reads that version and checks whether tag
+`v<version>` exists. If it does not, the workflow:
 
-1. `pnpm install --frozen-lockfile` and `pnpm check` (typecheck, test, build) on Ubuntu.
-2. Packs `bellwether-<tag>.tar.gz` and `.zip` containing the static renderer
+1. Runs `pnpm install --frozen-lockfile` and `pnpm check` (typecheck, test, build) on Ubuntu.
+2. Packs `bellwether-v<version>.tar.gz` and `.zip` containing the static renderer
    (`packages/renderer/dist`), the adapter and CLI `dist` folders with their
    `package.json`, `LICENSE`, `README.md`, and the public packs `themes/neutral`,
    `themes/aesir` and `themes/wayfarers`. Private theme folders are never included: the
    workflow copies those three by name.
-3. Creates a GitHub Release for the tag with the generated notes and both archives
-   (`softprops/action-gh-release@v2`).
+3. Creates the tag on the merge commit and a GitHub Release with the generated notes and
+   both archives (`softprops/action-gh-release@v2`).
+4. Publishes to npm (below), in the same workflow, because releases created with
+   `GITHUB_TOKEN` do not trigger other workflows.
 
-```sh
-git tag v0.1.1
-git push origin v0.1.1
-```
+Pushes that do not change the version find the tag and do nothing. No manual tagging is
+needed. Repository requirement: Actions must be allowed to write contents (the workflow
+requests `contents: write` per job; if the org or repo caps the default token at read-only,
+set Settings, Actions, General, Workflow permissions to "Read and write").
 
 The archives hold built output only. To run the adapter from one, install its runtime
 dependencies (`pnpm install --prod` inside `packages/adapter`) and serve the renderer:
@@ -23,7 +27,8 @@ dependencies (`pnpm install --prod` inside `packages/adapter`) and serve the ren
 ## npm
 
 The `npm` job in the same workflow publishes `@pelotto-tech/bellwether` (the
-`packages/cli` package) after the GitHub Release succeeds. The package is
+`packages/cli` package) after the GitHub Release succeeds, and skips the publish if that
+version is already on npm. The package is
 self-contained: `prepack` (`tools/stage-runtime.mjs`) copies the built adapter and
 renderer into `runtime/`, and `ws` and `smol-toml` are its dependencies. The renderer
 bundles whatever theme folders exist, so always publish from CI on a clean checkout, never
@@ -35,8 +40,6 @@ One-time setup:
 2. Create an automation token with publish rights and add it as the `NPM_TOKEN`
    repository secret (Settings, Secrets and variables, Actions). Until it is set the
    publish step is skipped.
-3. Bump `packages/cli/package.json` `version` to match the tag (the job fails if
-   `v<version>` differs from the tag), then tag and push as above.
 
 Check what would ship without publishing:
 
