@@ -10,6 +10,8 @@ export interface SourceConfig {
   source: SourceKind;
   /** Skin pack the overlay shows (a folder name under themes/). The renderer falls back to neutral if it is unknown. */
   pack?: string;
+  /** Scrub recordings at record time (`scrub = true`). */
+  scrub?: boolean;
   herdr: {
     /** `"all"` discovers running sessions; a list names them; omitted uses HERDR_SESSION or default. */
     sessions?: 'all' | string[];
@@ -25,6 +27,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * ```toml
  * source = "live"            # or "mock"
  * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, or a private theme folder
+ * scrub = true               # hash labels and strip say text in recordings
  * [herdr]
  * sessions = "all"           # or ["default", "overlay-dev"]
  * # socket = "/path/to/herdr.sock"
@@ -46,7 +49,8 @@ export function parseSourceConfig(text: string): SourceConfig {
   if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(raw.pack))) {
     throw new Error('bellwether.toml: pack must be a theme folder name');
   }
-  return { source, ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
+  if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
+  return { source, ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */

@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { createSource, loadSourceConfig } from './config.js';
 import { MockSource } from './mock.js';
 import { recordTo, ReplaySource } from './recording.js';
+import { scrubDelta, scrubFile } from './scrub.js';
 import { DEFAULT_PORT, DELTA_PATH, DeltaServer } from './server.js';
 import type { WorldSource } from './source.js';
 
@@ -23,11 +24,13 @@ Output:
   --port <n>           WebSocket port (default ${DEFAULT_PORT}); deltas on ${DELTA_PATH}
   --serve <dir>        also serve a built renderer from <dir>
   --record <file>      append every delta to a .jsonl file
+  --scrub              with --record: hash repo/branch/workspace labels, strip say text and titles
+  --scrub-file <in> <out>  scrub an existing .jsonl recording and exit
   --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
   -h, --help`;
 
-const { values } = parseArgs({
+const { values, positionals } = parseArgs({
   options: {
     live: { type: 'boolean' },
     mock: { type: 'boolean' },
@@ -42,16 +45,31 @@ const { values } = parseArgs({
     port: { type: 'string' },
     serve: { type: 'string' },
     record: { type: 'string' },
+    scrub: { type: 'boolean' },
+    'scrub-file': { type: 'string' },
     print: { type: 'boolean' },
     pack: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
+  allowPositionals: true,
 });
 
+let scrubConfig = false;
 let clientPack: string | undefined = values.pack;
 
 if (values.help) {
   console.log(USAGE);
+  process.exit(0);
+}
+
+if (values['scrub-file']) {
+  const out = positionals[0];
+  if (!out) {
+    process.stderr.write('usage: --scrub-file <in.jsonl> <out.jsonl>\n');
+    process.exit(1);
+  }
+  const n = scrubFile(values['scrub-file'], out);
+  process.stderr.write(`bellwether-adapter: scrubbed ${n} deltas into ${out}\n`);
   process.exit(0);
 }
 
@@ -64,6 +82,7 @@ async function pickSource(): Promise<WorldSource> {
   const cfg = await loadSourceConfig(values.config ?? 'bellwether.toml');
   if (values.pack) cfg.pack = values.pack;
   clientPack = cfg.pack ?? clientPack;
+  scrubConfig = cfg.scrub ?? false;
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.session) cfg.herdr.sessions = [values.session];
@@ -79,7 +98,11 @@ async function pickSource(): Promise<WorldSource> {
 const source = await pickSource();
 const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: clientPack ? { pack: clientPack } : {} });
 server.attach(source);
-if (values.record) source.on('delta', recordTo(values.record));
+if (values.record) {
+  const rec = recordTo(values.record);
+  const scrubOn = values.scrub || scrubConfig;
+  source.on('delta', scrubOn ? (d) => rec(scrubDelta(d)) : rec);
+}
 if (values.print) source.on('delta', (d) => process.stdout.write(JSON.stringify(d) + '\n'));
 
 const port = await server.listen();

@@ -82,7 +82,7 @@ node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist
 ```
 
 Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
-`--session <name>` or `--all`, `--socket <path>`, `--record <file.jsonl>`, `--print`,
+`--session <name>` or `--all`, `--socket <path>`, `--record <file.jsonl>` (add `--scrub`, or `scrub = true` in `bellwether.toml`, to hash repo, branch and workspace labels and strip `say` text and pane titles), `--scrub-file <in.jsonl> <out.jsonl>`, `--print`,
 `--port`, `--serve <dir>`, `--pack <name>`. `source = "live"` in `bellwether.toml` or
 `BELLWETHER_SOURCE=live` sets the default.
 
