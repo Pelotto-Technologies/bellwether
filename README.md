@@ -44,10 +44,22 @@ serves fake agents on the same port.
 
 ### Give panes a role
 
-Roles decide which character a pane gets. Start a pane with `HERDR_ROLE=reviewer` in its
-environment, or let the agent follow the installed skill pack and tag itself. Roles:
-`orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`, `researcher`,
-`writer`, `ops`, `generic`. Untagged panes show as `generic`.
+Roles decide which character a pane gets. A pane with no role shows as the `generic`
+villager. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`,
+`researcher`, `writer`, `ops`, `generic`. Three ways to set one, checked in this order:
+
+1. **Tag the pane.** The agent runs
+   `herdr pane report-metadata "$HERDR_PANE_ID" --source bellwether --token role=reviewer`.
+2. **`HERDR_ROLE`.** Start the pane with `HERDR_ROLE=architect` in its environment. The
+   hook from `bellwether install` tags it on session start.
+3. **Names.** `herdr agent rename` to something containing a role word (`reviewer-2`), or
+   a pane title with one. Needs no install.
+
+To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md` /
+`.github/copilot-instructions.md` for Copilot):
+
+> When `HERDR_ENV=1`, use the `bellwether` skill at session start: tag your pane with
+> your role. Orchestrators tag each pane they spawn with that member's role.
 
 ### Pick your surface
 
