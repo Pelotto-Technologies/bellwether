@@ -42,6 +42,6 @@ By contributing you agree your work is licensed under Apache-2.0, as in `LICENSE
 ## Repository protection
 
 Only maintainers can push. Everyone else: open issues, fork, and send pull requests.
-`main` requires a pull request and passing CI; release tags (`v*`) cannot be moved or
+`main` requires a pull request, passing CI and maintainer (code owner) approval; release tags (`v*`) cannot be moved or
 deleted. The rulesets live in `.github/rulesets/` (importable under Settings, Rules).
 Report vulnerabilities per `SECURITY.md`.
