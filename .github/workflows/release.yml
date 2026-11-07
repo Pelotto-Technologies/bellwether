@@ -49,7 +49,8 @@ jobs:
   npm:
     # Publishes @pelotto-tech/bellwether. Needs the NPM_TOKEN repository secret
     # (an npm automation token with publish rights to the @pelotto-tech scope).
-    # Skipped, not failed, while the secret is unset.
+    # Skipped, not failed, while the secret is unset. Provenance is only requested once
+    # the repository is public; npm rejects provenance from private repositories.
     needs: release
     runs-on: ubuntu-latest
     permissions:
@@ -76,4 +77,4 @@ jobs:
         working-directory: packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --access public --no-git-checks --provenance
+        run: pnpm publish --access public --no-git-checks ${{ github.event.repository.private == false && '--provenance' || '' }}
