@@ -2,6 +2,7 @@
 import { AGENT_TARGETS, findTarget, type AgentTarget } from './agents/index.js';
 import { spawnSync } from 'node:child_process';
 import { adapterArgs, locateRuntime, RUN_COMMANDS, type RunCommand } from './run.js';
+import { launchOverlay } from './overlay.js';
 import { detect, install, systemContext, uninstall, type Outcome } from './install.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
@@ -10,6 +11,7 @@ commands:
   agents      show which coding agents are present
   install     write the skill pack and SessionStart role hook for each present agent
   uninstall   remove only what install wrote
+  overlay     open the desktop overlay (click-through, always on top, tray menu)
   run         serve the overlay from live Herdr (adapter flags pass through)
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
@@ -44,6 +46,7 @@ function main(argv: string[]): number {
     const args = adapterArgs(cmd as RunCommand, rest, cmd === 'scrub' ? undefined : rt.rendererDist);
     return spawnSync(process.execPath, [rt.adapterBin, ...args], { stdio: 'inherit' }).status ?? 1;
   }
+  if (cmd === 'overlay') return launchOverlay(rest);
   const ctx = systemContext();
   const targets = selectTargets(rest);
   switch (cmd) {

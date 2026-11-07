@@ -32,7 +32,8 @@ npm install -g @pelotto-tech/bellwether
 
 bellwether agents      # which coding agents were found
 bellwether install     # tag panes with roles (Claude Code and Copilot CLI)
-bellwether run         # serve the overlay from live Herdr
+bellwether run         # serve the overlay from live Herdr (browser / OBS)
+bellwether overlay     # or: the desktop overlay with a tray menu
 ```
 
 Open <http://127.0.0.1:7341/>. That is the whole loop: start your agents in Herdr, and
@@ -43,10 +44,22 @@ serves fake agents on the same port.
 
 ### Give panes a role
 
-Roles decide which character a pane gets. Start a pane with `HERDR_ROLE=reviewer` in its
-environment, or let the agent follow the installed skill pack and tag itself. Roles:
-`orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`, `researcher`,
-`writer`, `ops`, `generic`. Untagged panes show as `generic`.
+Roles decide which character a pane gets. A pane with no role shows as the `generic`
+villager. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`,
+`researcher`, `writer`, `ops`, `generic`. Three ways to set one, checked in this order:
+
+1. **Tag the pane.** The agent runs
+   `herdr pane report-metadata "$HERDR_PANE_ID" --source bellwether --token role=reviewer`.
+2. **`HERDR_ROLE`.** Start the pane with `HERDR_ROLE=architect` in its environment. The
+   hook from `bellwether install` tags it on session start.
+3. **Names.** `herdr agent rename` to something containing a role word (`reviewer-2`), or
+   a pane title with one. Needs no install.
+
+To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md` /
+`.github/copilot-instructions.md` for Copilot):
+
+> When `HERDR_ENV=1`, use the `bellwether` skill at session start: tag your pane with
+> your role. Orchestrators tag each pane they spawn with that member's role.
 
 ### Pick your surface
 
@@ -54,7 +67,7 @@ environment, or let the agent follow the installed skill pack and tag itself. Ro
 |---|---|
 | A browser tab | Open `http://127.0.0.1:7341/` |
 | A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
-| A desktop overlay | `pnpm shell` from a checkout (Electron, transparent, always on top, click-through). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
+| A desktop overlay | `bellwether overlay` (Electron, transparent, always on top, click-through). The first run installs Electron into `~/.bellwether/electron` (about 100 MB, once). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
 
 Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or a dot
 on the minimap) to zoom into a party and read each member's role, agent, status and
@@ -199,7 +212,7 @@ Double-click a member in strip mode (browser or OBS interact window) to jump the
 
 ## CLI and replay
 
-Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter and overlay page; the Electron tray shell (`pnpm shell`) runs from a checkout.
+Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter, overlay page and desktop shell (`bellwether overlay`); Electron itself is fetched on first use. `pnpm shell` does the same from a checkout.
 
 From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
 (it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):
