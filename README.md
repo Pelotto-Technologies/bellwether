@@ -94,6 +94,20 @@ Checks, the same ones CI runs:
 pnpm typecheck && pnpm test && pnpm build
 ```
 
+## CLI and replay
+
+```sh
+bellwether run                       # live Herdr, overlay at http://127.0.0.1:7341/
+bellwether record session.jsonl --scrub
+bellwether replay session.jsonl --speed 4
+bellwether scrub in.jsonl out.jsonl  # hash repo/branch/labels, drop speech text
+```
+
+`pnpm blog` builds a static, adapter-free bundle in `blog/`: the renderer plus the
+scrubbed demo recording in `docs/demo/`. Host it anywhere and embed
+`embed.html?pack=aesir&scale=3`, or point `?replay=<url>&speed=2` at your own scrubbed
+recording. Never publish an unscrubbed recording.
+
 ## Layout
 
 ```

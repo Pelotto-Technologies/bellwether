@@ -25,3 +25,32 @@ describe('FeedState', () => {
     expect(feed.say(party.id, member.paneId, 20)).toBeUndefined();
   });
 });
+
+import { vi } from 'vitest';
+import { parseDeltas, playDeltas } from '../src/feed.js';
+
+describe('replay', () => {
+  const lines = [
+    { t: 0, kind: 'snapshot', world: { machine: 'm', parties: {} } },
+    { t: 100, kind: 'removed', partyId: 'a' },
+  ];
+  it('parses jsonl and skips torn lines', () => {
+    const text = lines.map((l) => JSON.stringify(l)).join('\n') + '\n{"t":';
+    expect(parseDeltas(text)).toHaveLength(2);
+  });
+  it('plays with timing scaled by speed and loops', () => {
+    vi.useFakeTimers();
+    const seen: number[] = [];
+    const stop = playDeltas(lines as never, (d) => seen.push(d.t), { speed: 2 });
+    expect(seen).toEqual([0]);
+    vi.advanceTimersByTime(50);
+    expect(seen).toEqual([0, 100]);
+    vi.advanceTimersByTime(600);
+    expect(seen.length).toBeGreaterThan(2);
+    stop();
+    const n = seen.length;
+    vi.advanceTimersByTime(5000);
+    expect(seen.length).toBe(n);
+    vi.useRealTimers();
+  });
+});

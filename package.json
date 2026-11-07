@@ -13,7 +13,8 @@
     "test": "pnpm -r test",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "dev": "pnpm --filter @bellwether/adapter build && pnpm -r --parallel dev",
-    "mock": "pnpm --filter @bellwether/adapter build && pnpm --filter @bellwether/renderer build && node packages/adapter/dist/bin.js --mock --serve packages/renderer/dist"
+    "mock": "pnpm --filter @bellwether/adapter build && pnpm --filter @bellwether/renderer build && node packages/adapter/dist/bin.js --mock --serve packages/renderer/dist",
+    "blog": "pnpm --filter @bellwether/renderer build && node tools/blog-build.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

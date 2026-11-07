@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
-import { connectFeed, FeedState } from './feed.js';
+import type { Delta } from '@bellwether/adapter/core';
+import { connectFeed, FeedState, replayFeed, type FeedMode } from './feed.js';
 import { inferHandoff } from './map/chatter.js';
 import { hasMapArt, loadMapArt } from './map/assets.js';
 import { availablePacks, packData } from './packs.js';
@@ -60,22 +61,23 @@ async function main() {
   });
   const chip = document.getElementById('chip');
 
-  connectFeed(
-    deltaUrl(),
-    (d) => {
-      const before = d.kind === 'member' ? feed.world.parties[d.partyId] : undefined;
-      feed.apply(d, performance.now());
-      // Inferred chatter: a hand-off reads as the finished member saying something.
-      if (d.kind === 'member' && before) {
-        const after = feed.world.parties[d.partyId];
-        const hand = after && inferHandoff(before, after, d.member);
-        if (hand) feed.apply({ t: d.t, kind: 'say', partyId: d.partyId, paneId: hand.from.paneId, text: hand.text }, performance.now());
-      }
-    },
-    (mode) => {
-      if (chip) chip.textContent = mode.kind === 'ws' ? `adapter · ${mode.url}` : `mock · ${mode.reason}`;
-    },
-  );
+  const onDelta = (d: Delta) => {
+    const before = d.kind === 'member' ? feed.world.parties[d.partyId] : undefined;
+    feed.apply(d, performance.now());
+    // Inferred chatter: a hand-off reads as the finished member saying something.
+    if (d.kind === 'member' && before) {
+      const after = feed.world.parties[d.partyId];
+      const hand = after && inferHandoff(before, after, d.member);
+      if (hand) feed.apply({ t: d.t, kind: 'say', partyId: d.partyId, paneId: hand.from.paneId, text: hand.text }, performance.now());
+    }
+  };
+  const onMode = (mode: FeedMode) => {
+    if (!chip) return;
+    chip.textContent = mode.kind === 'ws' ? `adapter · ${mode.url}` : mode.kind === 'replay' ? `replay · ${mode.url}` : `mock · ${mode.reason}`;
+  };
+  const replay = params.get('replay');
+  if (replay) replayFeed(replay, Number(params.get('speed') ?? 1), onDelta, onMode);
+  else connectFeed(deltaUrl(), onDelta, onMode);
 
   app.ticker.add((ticker) => scene.update(ticker.deltaMS / 1000, performance.now()));
 }

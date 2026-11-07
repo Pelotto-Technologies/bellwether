@@ -27,7 +27,7 @@ export class FeedState {
   }
 }
 
-export type FeedMode = { kind: 'ws'; url: string } | { kind: 'mock'; reason: string };
+export type FeedMode = { kind: 'ws'; url: string } | { kind: 'mock'; reason: string } | { kind: 'replay'; url: string };
 
 export interface FeedHandle {
   mode: FeedMode;
@@ -82,5 +82,79 @@ export function connectFeed(
     };
   };
   open();
+  return handle;
+}
+
+/** Parses a recorded `.jsonl` delta stream, skipping blank and malformed lines. */
+export function parseDeltas(text: string): Delta[] {
+  const out: Delta[] = [];
+  for (const line of text.split('\n')) {
+    const l = line.trim();
+    if (!l) continue;
+    try {
+      out.push(JSON.parse(l) as Delta);
+    } catch {
+      // ignore a torn final line
+    }
+  }
+  return out;
+}
+
+/**
+ * Plays recorded deltas with their original timing scaled by `speed`, looping
+ * forever. Used by the static blog build: no adapter, no Herdr.
+ */
+export function playDeltas(
+  deltas: Delta[],
+  onDelta: (d: Delta) => void,
+  opts: { speed?: number; loop?: boolean } = {},
+): () => void {
+  const speed = opts.speed && opts.speed > 0 ? opts.speed : 1;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  const step = (i: number) => {
+    if (stopped) return;
+    const d = deltas[i];
+    if (!d) {
+      if (opts.loop !== false && deltas.length > 0) step(0);
+      return;
+    }
+    onDelta(d);
+    const next = deltas[i + 1];
+    const gap = next ? Math.max(0, next.t - d.t) / speed : 1000 / speed;
+    timer = setTimeout(() => step(i + 1), gap);
+  };
+  step(0);
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+}
+
+/** Fetches a recording and replays it. The first delta is normally a snapshot, so loops reset cleanly. */
+export function replayFeed(
+  url: string,
+  speed: number,
+  onDelta: (d: Delta) => void,
+  onMode: (m: FeedMode) => void,
+): FeedHandle {
+  const handle: FeedHandle = { mode: { kind: 'replay', url }, stop: () => {} };
+  let cancelled = false;
+  handle.stop = () => {
+    cancelled = true;
+  };
+  void fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    })
+    .then((text) => {
+      if (cancelled) return;
+      onMode(handle.mode);
+      handle.stop = playDeltas(parseDeltas(text), onDelta, { speed });
+    })
+    .catch(() => {
+      if (!cancelled) onMode({ kind: 'mock', reason: `could not load ${url}` });
+    });
   return handle;
 }
