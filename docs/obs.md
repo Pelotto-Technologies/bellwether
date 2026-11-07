@@ -43,7 +43,7 @@ flags. `source = "live"` in `bellwether.toml` sets the default source.
 | `?scale=<1-6>` | Pixel scale, default 3. Characters are 24x32, so scale 3 is 72x96 pixels. Integer values keep the pixels sharp. |
 | `?source=mock` | Skip the adapter; run mock agents inside the page. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
-| `?mode=...` | Reserved for strip/map selection. Not implemented yet: only strip mode exists, so this option does nothing today. |
+| `?mode=map` | Start in map mode instead of the strip. The default is the strip; press `m` to toggle. Map mode is not click-through, so the strip is usually what you want in OBS. |
 
 Options combine: `http://127.0.0.1:7341/?transparent&pack=aesir&scale=4`.
 

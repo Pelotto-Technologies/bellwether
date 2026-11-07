@@ -176,4 +176,8 @@ works. Paste the contents of `SKILL.md` into `AGENTS.md` or
 
 ## License
 
-Not chosen yet. Herdr is Apache 2.0.
+Apache License 2.0, the same as Herdr. Copyright 2026 Pelotto Technologies. See
+[LICENSE](LICENSE). The public skin packs (`neutral`, `aesir`, `wayfarers`) are original
+art under the same license.
+
+Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

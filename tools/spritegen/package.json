@@ -1,6 +1,7 @@
 {
   "name": "@bellwether/spritegen",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Generates the public theme packs' pixel art from code.",
   "scripts": {

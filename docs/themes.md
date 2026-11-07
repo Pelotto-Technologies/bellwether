@@ -66,8 +66,9 @@ pack folder.
 - `ui`: `sheet`, `bubble` and `nameplate` (`{frame, slice[, tail]}`, 9-slice margin in
   pixels), `minimapFrame`, `statusIcons` (frame per status, default `status_<status>`).
 - `map`: `tileset`, `props`, frame names for `settlement`, `camp`, `campfire`,
-  `signpost`, `mount`, `banner`, `glow`, `pin`, and `minimap` colours. Map mode is not
-  implemented in the renderer yet, so the parser does not validate these fields today.
+  `signpost`, `mount`, `banner`, `glow`, `pin`, and `minimap` colours. These are used by map mode
+  (`packages/renderer/src/map/` and `src/pixi/map.ts`); `art.ts` does not validate
+  them, so check them in a build.
 
 ## Sprite sheets
 

@@ -2,6 +2,7 @@
   "name": "@bellwether/renderer",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "PixiJS strip overlay that renders Bellwether world deltas",
   "scripts": {

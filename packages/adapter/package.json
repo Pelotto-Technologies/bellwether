@@ -2,6 +2,7 @@
   "name": "@bellwether/adapter",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Herdr world model, delta stream, mock and live sources, WebSocket server",
   "main": "./dist/index.js",
