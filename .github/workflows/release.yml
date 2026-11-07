@@ -47,8 +47,8 @@ jobs:
           generate_release_notes: true
 
   npm:
-    # Publishes @pelotto-technologies/bellwether. Needs the NPM_TOKEN repository secret
-    # (an npm automation token with publish rights to the @pelotto-technologies scope).
+    # Publishes @pelotto-tech/bellwether. Needs the NPM_TOKEN repository secret
+    # (an npm automation token with publish rights to the @pelotto-tech scope).
     # Skipped, not failed, while the secret is unset.
     needs: release
     runs-on: ubuntu-latest

@@ -22,7 +22,7 @@ dependencies (`pnpm install --prod` inside `packages/adapter`) and serve the ren
 
 ## npm
 
-The `npm` job in the same workflow publishes `@pelotto-technologies/bellwether` (the
+The `npm` job in the same workflow publishes `@pelotto-tech/bellwether` (the
 `packages/cli` package) after the GitHub Release succeeds. The package is
 self-contained: `prepack` (`tools/stage-runtime.mjs`) copies the built adapter and
 renderer into `runtime/`, and `ws` and `smol-toml` are its dependencies. The renderer
@@ -31,7 +31,7 @@ from a machine with private packs.
 
 One-time setup:
 
-1. Reserve the `@pelotto-technologies` scope on npm and log in (`npm login`).
+1. Reserve the `@pelotto-tech` scope on npm and log in (`npm login`).
 2. Create an automation token with publish rights and add it as the `NPM_TOKEN`
    repository secret (Settings, Secrets and variables, Actions). Until it is set the
    publish step is skipped.
