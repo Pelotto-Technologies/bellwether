@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import os from 'node:os';
+import type { Action } from '../actions.js';
 import type { WorldSource } from '../source.js';
 import type { Delta, Party, World } from '../types.js';
 import { type Connector, HerdrConnection, HerdrError } from './connection.js';
@@ -196,12 +197,29 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
     }
   }
 
-  private async snapshot(): Promise<SessionSnapshot> {
+  private async rpcConn(): Promise<HerdrConnection> {
     if (!this.rpc || this.rpc.isClosed) {
       this.rpc = await HerdrConnection.open(this.opts.target.connectPath, this.opts.connector);
       this.rpc.on('error', () => {});
     }
-    const res = await this.rpc.request('session.snapshot');
+    return this.rpc;
+  }
+
+  /** Actions for this session, mapped to Herdr's request/response API. */
+  readonly actions: Action = {
+    focus: async (paneId) => void (await (await this.rpcConn()).request('pane.focus', { pane_id: paneId })),
+    prompt: async (paneId, text) => void (await (await this.rpcConn()).request('agent.prompt', { target: paneId, text })),
+    sendKeys: async (paneId, keys) => void (await (await this.rpcConn()).request('agent.send_keys', { target: paneId, keys })),
+  };
+
+  /** Whether this session currently has a member in `paneId`. */
+  hasPane(paneId: string): boolean {
+    return Object.values(this.parties).some((p) => paneId in p.members);
+  }
+
+  private async snapshot(): Promise<SessionSnapshot> {
+    const rpc = await this.rpcConn();
+    const res = await rpc.request('session.snapshot');
     if (res.type !== 'session_snapshot') throw new HerdrError('unexpected', `snapshot answered ${res.type}`);
     return res.snapshot as SessionSnapshot;
   }
@@ -307,6 +325,22 @@ export class HerdrSource extends EventEmitter implements WorldSource {
   async stop(): Promise<void> {
     await Promise.all(this.children.map((c) => c.stop()));
     this.children = [];
+  }
+
+  /**
+   * Routes to the session that owns the pane. Pane ids are session-local, so with
+   * several sessions the first one holding the id wins.
+   */
+  readonly actions: Action = {
+    focus: async (paneId) => this.route(paneId).focus(paneId),
+    prompt: async (paneId, text) => this.route(paneId).prompt(paneId, text),
+    sendKeys: async (paneId, keys) => this.route(paneId).sendKeys(paneId, keys),
+  };
+
+  private route(paneId: string): Action {
+    const child = this.children.find((c) => c.hasPane(paneId));
+    if (!child) throw new Error(`no pane ${paneId} in any session`);
+    return child.actions;
   }
 
   world(): World {

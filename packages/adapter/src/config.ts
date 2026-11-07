@@ -12,6 +12,8 @@ export interface SourceConfig {
   pack?: string;
   /** Scrub recordings at record time (`scrub = true`). */
   scrub?: boolean;
+  /** Let the overlay send prompts and keys to agents (`actions = true`). Focus is always allowed. */
+  actions?: boolean;
   herdr: {
     /** `"all"` discovers running sessions; a list names them; omitted uses HERDR_SESSION or default. */
     sessions?: 'all' | string[];
@@ -28,6 +30,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * source = "live"            # or "mock"
  * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, or a private theme folder
  * scrub = true               # hash labels and strip say text in recordings
+ * actions = true             # let the overlay prompt and send keys to agents (focus is always on)
  * [herdr]
  * sessions = "all"           # or ["default", "overlay-dev"]
  * # socket = "/path/to/herdr.sock"
@@ -50,7 +53,8 @@ export function parseSourceConfig(text: string): SourceConfig {
     throw new Error('bellwether.toml: pack must be a theme folder name');
   }
   if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
-  return { source, ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
+  if (raw.actions !== undefined && typeof raw.actions !== 'boolean') throw new Error('bellwether.toml: actions must be true or false');
+  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */

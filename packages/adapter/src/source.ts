@@ -1,3 +1,4 @@
+import { type Action, NOOP_ACTION } from './actions.js';
 import type { Delta } from './types.js';
 
 export type DeltaListener = (delta: Delta) => void;
@@ -7,11 +8,14 @@ export interface WorldSource {
   start(): Promise<void>;
   stop(): Promise<void>;
   on(event: 'delta', fn: DeltaListener): void;
+  /** Actions back to the world. Mock and replay sources no-op. */
+  readonly actions: Action;
 }
 
 /** Small base class so sources share listener bookkeeping without Node's EventEmitter. */
 export abstract class BaseSource implements WorldSource {
   private listeners: DeltaListener[] = [];
+  readonly actions: Action = NOOP_ACTION;
 
   on(_event: 'delta', fn: DeltaListener): void {
     this.listeners.push(fn);

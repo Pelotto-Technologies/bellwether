@@ -114,6 +114,7 @@ export class MockHerdr {
       this.subs.push({ sock, id: req.id, types, panes });
       return void reply({ result: { type: 'subscription_started' } });
     }
+    if (/^(pane|agent)\.(focus|prompt|send_keys)$/.test(req.method)) return void reply({ result: { type: 'ok' } });
     reply({ error: { code: 'unknown_method', message: req.method } });
   }
 }

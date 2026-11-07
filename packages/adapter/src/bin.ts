@@ -26,6 +26,7 @@ Output:
   --record <file>      append every delta to a .jsonl file
   --scrub              with --record: hash repo/branch/workspace labels, strip say text and titles
   --scrub-file <in> <out>  scrub an existing .jsonl recording and exit
+  --actions            let the overlay send prompts and keys to agents (focus is always allowed)
   --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
   -h, --help`;
@@ -46,6 +47,7 @@ const { values, positionals } = parseArgs({
     serve: { type: 'string' },
     record: { type: 'string' },
     scrub: { type: 'boolean' },
+    actions: { type: 'boolean' },
     'scrub-file': { type: 'string' },
     print: { type: 'boolean' },
     pack: { type: 'string' },
@@ -55,6 +57,7 @@ const { values, positionals } = parseArgs({
 });
 
 let scrubConfig = false;
+let actionsConfig = false;
 let clientPack: string | undefined = values.pack;
 
 if (values.help) {
@@ -83,6 +86,7 @@ async function pickSource(): Promise<WorldSource> {
   if (values.pack) cfg.pack = values.pack;
   clientPack = cfg.pack ?? clientPack;
   scrubConfig = cfg.scrub ?? false;
+  actionsConfig = cfg.actions ?? false;
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.session) cfg.herdr.sessions = [values.session];
@@ -96,7 +100,7 @@ async function pickSource(): Promise<WorldSource> {
 }
 
 const source = await pickSource();
-const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: clientPack ? { pack: clientPack } : {} });
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: clientPack ? { pack: clientPack } : {}, actions: values.actions || actionsConfig, log });
 server.attach(source);
 if (values.record) {
   const rec = recordTo(values.record);

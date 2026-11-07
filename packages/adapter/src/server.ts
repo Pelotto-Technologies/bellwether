@@ -2,6 +2,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
+import type { Action } from './actions.js';
 import type { WorldSource } from './source.js';
 import type { Delta, World } from './types.js';
 import { applyDelta, emptyWorld, snapshotDelta } from './world.js';
@@ -16,7 +17,16 @@ export interface DeltaServerOptions {
   staticDir?: string;
   /** Served as `/config.json` so the renderer can pick the configured skin pack. */
   clientConfig?: Record<string, unknown>;
+  /** Also accept `prompt` and `sendKeys` client messages. Off by default; `focus` is always accepted. */
+  actions?: boolean;
+  log?: (msg: string) => void;
 }
+
+/** Client to server messages on the delta socket. */
+export type ClientMessage =
+  | { type: 'focus'; paneId: string }
+  | { type: 'prompt'; paneId: string; text: string }
+  | { type: 'sendKeys'; paneId: string; keys: string[] };
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -36,6 +46,7 @@ export class DeltaServer {
   private http: Server;
   private wss: WebSocketServer;
   private clients = new Set<WebSocket>();
+  private action?: Action;
 
   constructor(private opts: DeltaServerOptions = {}) {
     this.http = createServer((req, res) => {
@@ -70,6 +81,7 @@ export class DeltaServer {
     this.wss.on('connection', (ws) => {
       this.clients.add(ws);
       ws.on('close', () => this.clients.delete(ws));
+      ws.on('message', (data) => this.onClientMessage(String(data)));
       ws.send(JSON.stringify(snapshotDelta(this.world)));
     });
   }
@@ -79,7 +91,27 @@ export class DeltaServer {
   }
 
   attach(source: WorldSource): void {
+    this.action = source.actions;
     source.on('delta', (d) => this.publish(d));
+  }
+
+  private onClientMessage(raw: string): void {
+    const action = this.action;
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (!action || typeof msg.paneId !== 'string' || !msg.paneId) return;
+    let run: Promise<void> | undefined;
+    if (msg.type === 'focus') run = action.focus(msg.paneId);
+    else if (this.opts.actions && msg.type === 'prompt' && typeof msg.text === 'string') run = action.prompt(msg.paneId, msg.text);
+    else if (this.opts.actions && msg.type === 'sendKeys' && Array.isArray(msg.keys) && msg.keys.every((k) => typeof k === 'string')) {
+      run = action.sendKeys(msg.paneId, msg.keys as string[]);
+    }
+    // Rejections (pane gone, Herdr down) are logged, never sent to the client.
+    Promise.resolve(run).catch((err: Error) => this.opts.log?.(`action ${String(msg.type)} failed: ${err.message}`));
   }
 
   publish(delta: Delta): void {
