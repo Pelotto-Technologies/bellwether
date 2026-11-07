@@ -8,9 +8,9 @@ verified protocol facts, the architecture, the phases and the open decisions.
 - The core is generic and publishable. Role vocabulary is `orchestrator`,
   `coordinator`, `architect`, `implementer`, `reviewer`, `researcher`, `writer`,
   `ops`, `generic`. Character names belong in theme packs only. `themes/neutral` is
-  public; every other theme is private and gitignored. Never commit a private theme or
-  reference its characters in core code, prompts or tests. `docs/PLAN.md` names the
-  author's private skin as a worked example; scrub that before the repo goes public.
+  public, as are `themes/aesir` and `themes/wayfarers`; every other theme is private and
+  gitignored. Never commit a private theme or reference its characters in core code,
+  prompts, tests or docs.
 - Agent-agnostic adapter. Branch on Herdr's `agent` field only inside `packages/cli`
   (the installer). Claude Code and GitHub Copilot CLI are both first-class installer
   targets.
