@@ -1,0 +1,28 @@
+{
+  "name": "aesir",
+  "description": "Aesir: gods and folk of the northern sagas, with rune-lit staves and a fjord-side map.",
+  "beacon": "architect",
+  "palette": {
+    "working": "#6ee08a",
+    "done": "#ffd25a",
+    "blocked": "#ff5a4d",
+    "idle": "#dfe8f0",
+    "unknown": "#8c94a0"
+  },
+  "outline": "#140f17",
+  "skin": "#eec3a0",
+  "ground": "#4e5a44",
+  "roles": {
+    "orchestrator": { "body": "#2a3a6a", "accent": "#d9a83a", "hat": "point", "prop": "staff" },
+    "coordinator": { "body": "#9a2f2f", "accent": "#b9c2cc", "hat": "helm", "prop": "none" },
+    "architect": { "body": "#4a5a52", "accent": "#a8f0ff", "hat": "hood", "prop": "staff" },
+    "implementer": { "body": "#4a6a8a", "accent": "#c4502a", "hat": "none", "prop": "hammer" },
+    "reviewer": { "body": "#f2ede0", "accent": "#e8c86a", "hat": "none", "prop": "staff" },
+    "researcher": { "body": "#2c4a6e", "accent": "#ececf2", "hat": "none", "prop": "book" },
+    "writer": { "body": "#3e7a5a", "accent": "#c46a3a", "hat": "none", "prop": "book" },
+    "ops": { "body": "#2e5a6a", "accent": "#5aa898", "hat": "none", "prop": "staff" },
+    "generic": { "body": "#8a7a5e", "accent": "#a87a4a", "hat": "none", "prop": "lantern" }
+  },
+  "art": "art.json",
+  "sayTtlMs": 6000
+}

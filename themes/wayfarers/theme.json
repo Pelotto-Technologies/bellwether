@@ -1,0 +1,28 @@
+{
+  "name": "wayfarers",
+  "description": "Wayfarers: an original fantasy quest party setting out from a hill country of burrow houses.",
+  "beacon": "architect",
+  "palette": {
+    "working": "#62d670",
+    "done": "#ffd44f",
+    "blocked": "#ff5248",
+    "idle": "#ede8dc",
+    "unknown": "#958f9e"
+  },
+  "outline": "#1a1410",
+  "skin": "#f2c49c",
+  "ground": "#4e6a3a",
+  "roles": {
+    "orchestrator": { "body": "#3a5aa8", "accent": "#e8eef8", "hat": "none", "prop": "staff" },
+    "coordinator": { "body": "#7a5a3a", "accent": "#e8dcc0", "hat": "none", "prop": "lantern" },
+    "architect": { "body": "#5a3a6a", "accent": "#2e4a6a", "hat": "point", "prop": "staff" },
+    "implementer": { "body": "#7a3a2a", "accent": "#c4c8d0", "hat": "helm", "prop": "hammer" },
+    "reviewer": { "body": "#b8582a", "accent": "#c8902a", "hat": "none", "prop": "none" },
+    "researcher": { "body": "#3e4a3a", "accent": "#8a3a22", "hat": "hood", "prop": "none" },
+    "writer": { "body": "#7a2e3a", "accent": "#efe6d0", "hat": "none", "prop": "book" },
+    "ops": { "body": "#4a7a3a", "accent": "#c8a868", "hat": "none", "prop": "lantern" },
+    "generic": { "body": "#9ab06a", "accent": "#c48a4a", "hat": "none", "prop": "none" }
+  },
+  "art": "art.json",
+  "sayTtlMs": 6000
+}

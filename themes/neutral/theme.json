@@ -1,6 +1,6 @@
 {
   "name": "neutral",
-  "description": "Default public theme. Simple procedural pixel folk, one look per role.",
+  "description": "Default public theme: the Workshop Crew, a friendly generic crew of builders, scribes and surveyors.",
   "beacon": "coordinator",
   "palette": {
     "working": "#3ddc84",
@@ -13,15 +13,16 @@
   "skin": "#f1c27d",
   "ground": "#3b4a3a",
   "roles": {
-    "orchestrator": { "body": "#7b5cd6", "accent": "#e8d26a", "hat": "point", "prop": "staff" },
-    "coordinator": { "body": "#4a7bd1", "accent": "#f2f2f2", "hat": "cap", "prop": "lantern" },
-    "architect": { "body": "#3a8f8a", "accent": "#d9e8e6", "hat": "hood", "prop": "staff" },
-    "implementer": { "body": "#c4683a", "accent": "#5b3a29", "hat": "helm", "prop": "hammer" },
-    "reviewer": { "body": "#5f9e3c", "accent": "#e5f0d8", "hat": "hood", "prop": "none" },
-    "researcher": { "body": "#8a6d3b", "accent": "#2f3b2f", "hat": "cap", "prop": "book" },
-    "writer": { "body": "#b14f74", "accent": "#f6e3ea", "hat": "none", "prop": "book" },
-    "ops": { "body": "#5d6b7a", "accent": "#f0a030", "hat": "helm", "prop": "hammer" },
-    "generic": { "body": "#8c8c8c", "accent": "#cfcfcf", "hat": "none", "prop": "none" }
+    "orchestrator": { "body": "#7a46b8", "accent": "#e8b84a", "hat": "point", "prop": "staff" },
+    "coordinator": { "body": "#3e9e5c", "accent": "#f3efe6", "hat": "cap", "prop": "book" },
+    "architect": { "body": "#2a8f8a", "accent": "#2f5fa8", "hat": "cap", "prop": "staff" },
+    "implementer": { "body": "#f08a34", "accent": "#3b5ea8", "hat": "none", "prop": "hammer" },
+    "reviewer": { "body": "#8c2f45", "accent": "#7a7484", "hat": "none", "prop": "lantern" },
+    "researcher": { "body": "#7d8f4e", "accent": "#c8a46a", "hat": "cap", "prop": "lantern" },
+    "writer": { "body": "#5a7fc4", "accent": "#f2c14e", "hat": "none", "prop": "book" },
+    "ops": { "body": "#ff8a2a", "accent": "#f5c542", "hat": "helm", "prop": "hammer" },
+    "generic": { "body": "#9aa5b5", "accent": "#8a5a3a", "hat": "none", "prop": "none" }
   },
+  "art": "art.json",
   "sayTtlMs": 6000
 }

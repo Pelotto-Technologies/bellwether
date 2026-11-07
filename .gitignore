@@ -5,3 +5,5 @@ bellwether.toml
 themes/*
 !themes/README.md
 !themes/neutral/
+!themes/aesir/
+!themes/wayfarers/

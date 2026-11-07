@@ -1,0 +1,431 @@
+<title>Bellwether Skin Packs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  /* Layout: one dark "desktop at night" column; sections stack, character cards wrap in a grid. */
+  :root {
+    --bg: #15131c;
+    --panel: #1f1c29;
+    --line: #34304a;
+    --fg: #ece8f4;
+    --muted: #a49eb8;
+    --accent: #ffd447;
+    --display: "Pixelify Sans", "Courier New", monospace;
+    --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body { font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 28px; }
+  h1, h2 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+  h1 { font-size: clamp(28px, 5vw, 40px); }
+  h2 { font-size: 22px; }
+  p { margin: 0; max-width: 68ch; color: var(--muted); }
+  header { display: grid; gap: 10px; }
+  .eyebrow { font-family: var(--display); color: var(--accent); text-transform: uppercase; letter-spacing: .12em; font-size: 13px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .group > span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 2px; }
+  button { font: 600 13px var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 6px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  button:hover { border-color: var(--muted); }
+  button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; box-shadow: 0 0 0 1px #0006; }
+  section { display: grid; gap: 14px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 10px 10px; display: grid; justify-items: center; gap: 6px; min-width: 0; }
+  .card canvas { width: 96px; height: 128px; image-rendering: pixelated; }
+  .card b { font-family: var(--display); font-size: 17px; font-weight: 500; }
+  .card small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .card .beacon { color: var(--accent); }
+  .stage { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #0d0c12; }
+  .stage canvas { display: block; width: 100%; image-rendering: pixelated; }
+  .sheets { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .sheets figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: grid; gap: 6px; max-width: 100%; overflow-x: auto; }
+  .sheets img { image-rendering: pixelated; max-width: none; background: repeating-conic-gradient(#2a2638 0 25%, #221f2e 0 50%) 0 0 / 16px 16px; }
+  figcaption { font-size: 12px; color: var(--muted); }
+  .notes { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; }
+  .notes li { color: var(--muted); }
+  .notes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  @media (prefers-reduced-motion: reduce) { .stage canvas, .card canvas { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Bellwether · art review</div>
+    <h1>Three skin packs, nine roles each</h1>
+    <p>Every frame here is drawn from code in <code>tools/spritegen</code> and rendered at 24×32. Pick a pack, an animation and a status to see how the status light and cloak recolour work. Everything is original art.</p>
+  </header>
+
+  <div class="bar" role="toolbar" aria-label="Preview controls">
+    <div class="group" id="packs"><span>Pack</span></div>
+    <div class="group" id="anims"><span>Animation</span></div>
+    <div class="group" id="statuses"><span>Status</span></div>
+    <div class="group" id="cloaks"><span>Cloak</span></div>
+  </div>
+
+  <section>
+    <h2>Cast</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section>
+    <h2>Strip mode</h2>
+    <p>The overlay along the bottom of a monitor. Each member shows its own status; blocked members stop and wave, and the beacon raises its staff.</p>
+    <div class="stage"><canvas id="strip" height="120"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Map mode</h2>
+    <p>One settlement per repo, a camp per worktree with a status glow, and the minimap in the corner. Paths and water are 16-tile autotiles.</p>
+    <div class="stage"><canvas id="map"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Sheets</h2>
+    <div class="sheets" id="sheets"></div>
+  </section>
+
+  <div class="notes">
+    <h2>What ships</h2>
+    <ul>
+      <li>Per role: a sheet with 12 frames (walk ×4, idle ×2, wave ×2, talk ×2, raise, blink) plus a status-light mask row and a cloak mask row.</li>
+      <li>Strip ground, map tileset (grass, flowers, trees, rocks, 16 path and 16 water autotiles with a 2-frame shimmer).</li>
+      <li>Props: settlement, camp, 4-frame campfire, signpost, mount with walk cycle, tintable banner, glow and minimap pins.</li>
+      <li>UI: speech bubble and tail, nameplate, minimap frame (all 9-slice), and five status icons.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const ANIMS = ['walk', 'idle', 'wave', 'talk', 'raise', 'blink'];
+const FPS = { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1 };
+const STATUSES = ['working', 'done', 'blocked', 'idle', 'unknown'];
+const PACK_LABEL = { neutral: 'Workshop Crew', aesir: 'Aesir', wayfarers: 'Wayfarers' };
+const ROLE_ORDER = ['orchestrator', 'coordinator', 'architect', 'implementer', 'reviewer', 'researcher', 'writer', 'ops', 'generic'];
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const state = { pack: 'neutral', anim: 'walk', status: 'working', cloak: null };
+const loaded = {};
+
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+
+async function loadPack(name) {
+  if (loaded[name]) return loaded[name];
+  const d = DATA[name];
+  const roles = {};
+  for (const r of ROLE_ORDER) roles[r] = { ...d.roles[r], image: await loadImg(d.roles[r].img) };
+  loaded[name] = {
+    ...d, roles,
+    groundImg: await loadImg(d.ground.img), tilesImg: await loadImg(d.tileset.img),
+    propsImg: await loadImg(d.props.img), uiImg: await loadImg(d.ui.img), tinted: {},
+  };
+  return loaded[name];
+}
+
+// Tint the mask rows (row 1 = light, row 2 = cloak) of a role sheet once per colour.
+function tintRow(P, role, row, color) {
+  const key = `${role}|${row}|${color}`;
+  if (P.tinted[key]) return P.tinted[key];
+  const img = P.roles[role].image;
+  const c = document.createElement('canvas'); c.width = img.width; c.height = 32;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, row * 32, img.width, 32, 0, 0, img.width, 32);
+  x.globalCompositeOperation = 'multiply'; x.fillStyle = color; x.fillRect(0, 0, c.width, 32);
+  x.globalCompositeOperation = 'destination-in'; x.drawImage(img, 0, row * 32, img.width, 32, 0, 0, img.width, 32);
+  return (P.tinted[key] = c);
+}
+
+function frameIndex(P, role, name) { return P.roles[role].frames[name].frame.x / 24; }
+
+function drawChar(ctx, P, role, frameName, dx, dy, s, { status, cloak, flip = false, t = 0 }) {
+  const img = P.roles[role].image, i = frameIndex(P, role, frameName);
+  ctx.save();
+  if (flip) { ctx.translate(dx + 24 * s, dy); ctx.scale(-1, 1); dx = 0; dy = 0; }
+  ctx.drawImage(img, i * 24, 0, 24, 32, dx, dy, 24 * s, 32 * s);
+  if (cloak) ctx.drawImage(tintRow(P, role, 2, cloak), i * 24, 0, 24, 32, dx, dy, 24 * s, 32 * s);
+  if (status) {
+    const pulse = status === 'blocked' ? 0.55 + 0.45 * Math.abs(Math.sin(t * 5)) : 1;
+    ctx.globalAlpha = pulse;
+    ctx.drawImage(tintRow(P, role, 1, P.art.status[status]), i * 24, 0, 24, 32, dx, dy, 24 * s, 32 * s);
+  }
+  ctx.restore();
+}
+
+function sprite(ctx, img, frames, name, dx, dy, s = 1) {
+  const f = frames[name].frame;
+  ctx.drawImage(img, f.x, f.y, f.w, f.h, dx, dy, f.w * s, f.h * s);
+}
+
+function nine(ctx, img, frames, name, slice, dx, dy, w, h, s) {
+  const f = frames[name].frame, k = slice;
+  const sx = [0, k, f.w - k], sw = [k, f.w - 2 * k, k];
+  const tx = [0, k * s, w - k * s], tw = [k * s, w - 2 * k * s, k * s];
+  const ty = [0, k * s, h - k * s], th = [k * s, h - 2 * k * s, k * s];
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++)
+    ctx.drawImage(img, f.x + sx[i], f.y + sx[j] * f.h / f.w, sw[i], (j === 1 ? f.h - 2 * k : k), dx + tx[i], dy + ty[j], tw[i], th[j]);
+}
+
+// ---------- controls ----------
+function buttons(id, items, get, set, swatch) {
+  const g = document.getElementById(id);
+  g.querySelectorAll('button').forEach((b) => b.remove());
+  for (const it of items) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = `${id}-${it.value ?? 'none'}`;
+    if (swatch && it.color) { const s = document.createElement('i'); s.className = 'sw'; s.style.background = it.color; b.append(s); }
+    b.append(it.label);
+    b.setAttribute('aria-pressed', String(get() === it.value));
+    b.onclick = () => { set(it.value); render(); };
+    g.append(b);
+  }
+}
+
+async function render() {
+  const P = await loadPack(state.pack);
+  buttons('packs', Object.keys(DATA).map((k) => ({ value: k, label: PACK_LABEL[k] ?? k })), () => state.pack, (v) => { state.pack = v; state.cloak = null; });
+  buttons('anims', ANIMS.map((a) => ({ value: a, label: a })), () => state.anim, (v) => (state.anim = v));
+  buttons('statuses', STATUSES.map((s) => ({ value: s, label: s, color: P.art.status[s] })), () => state.status, (v) => (state.status = v), true);
+  const cloakOpts = [{ value: null, label: 'default' }, ...['#c43b3b', '#3b6ec4', '#3ba05a', '#d9a020', '#8a4ac4'].map((c) => ({ value: c, label: '', color: c }))];
+  buttons('cloaks', cloakOpts, () => state.cloak, (v) => (state.cloak = v), true);
+  buildCards(P);
+  buildSheets(P);
+  buildMap(P);
+  resetStrip(P);
+}
+
+// ---------- cast ----------
+let cardCtx = [];
+function buildCards(P) {
+  const root = document.getElementById('cards');
+  root.innerHTML = '';
+  cardCtx = ROLE_ORDER.map((role) => {
+    const card = document.createElement('div'); card.className = 'card';
+    const c = document.createElement('canvas'); c.width = 24; c.height = 32;
+    const b = document.createElement('b'); b.textContent = P.roles[role].displayName;
+    const sm = document.createElement('small'); sm.textContent = role;
+    if (role === P.art.beacon) { sm.textContent = `${role} · beacon`; sm.className = 'beacon'; }
+    card.append(c, b, sm);
+    root.append(card);
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+    return { role, x };
+  });
+}
+
+// ---------- sheets ----------
+function buildSheets(P) {
+  const root = document.getElementById('sheets');
+  root.innerHTML = '';
+  const add = (src, cap, scale) => {
+    const f = document.createElement('figure');
+    const i = new Image(); i.src = src; i.alt = cap; i.onload = () => { i.width = i.naturalWidth * scale; };
+    const fc = document.createElement('figcaption'); fc.textContent = cap;
+    f.append(i, fc); root.append(f);
+  };
+  add(P.roles.architect.img, `${P.roles.architect.displayName}: colour, light mask, cloak mask`, 2);
+  add(P.tileset.img, 'map/tileset.png', 2);
+  add(P.props.img, 'map/props.png', 2);
+  add(P.ui.img, 'ui/ui.png', 2);
+  add(P.ground.img, 'sprites/ground.png', 2);
+}
+
+// ---------- strip ----------
+let walkers = [];
+const LINES = ['Tests pass on my end', 'Need a decision here', 'Branch is pushed', 'Reading the plan', 'On it'];
+function resetStrip(P) {
+  const statuses = ['working', 'working', 'blocked', 'done', 'idle', 'working', 'unknown', 'working', 'idle'];
+  walkers = ROLE_ORDER.map((role, i) => ({
+    role, x: 20 + i * 44, dir: i % 2 ? -1 : 1, speed: 14 + (i * 7) % 12, mode: 'walk', modeT: 2 + (i % 4), status: statuses[i], say: null, sayT: 0,
+  }));
+}
+
+function stepStrip(dt, W) {
+  for (const w of walkers) {
+    w.modeT -= dt; w.sayT -= dt;
+    if (w.status === 'blocked') { w.mode = 'wave'; }
+    else if (w.modeT <= 0) {
+      const r = Math.random();
+      w.mode = r < 0.55 ? 'walk' : r < 0.8 ? 'idle' : 'talk';
+      w.modeT = 2 + Math.random() * 4;
+      if (w.mode === 'talk') { w.say = LINES[(Math.random() * LINES.length) | 0]; w.sayT = 3; }
+      if (Math.random() < 0.3) w.dir *= -1;
+    }
+    if (w.mode === 'walk') {
+      w.x += w.dir * w.speed * dt;
+      if (w.x < 4) { w.x = 4; w.dir = 1; }
+      if (w.x > W - 28) { w.x = W - 28; w.dir = -1; }
+    }
+  }
+}
+
+function drawStrip(P, t) {
+  const c = document.getElementById('strip');
+  const s = 3;
+  const cssW = c.clientWidth || 800;
+  const W = Math.floor(cssW / s);
+  if (c.width !== W) { c.width = W; c.height = 60; }
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.clearRect(0, 0, c.width, c.height);
+  const g = P.ground.frames;
+  for (let i = 0; i * 16 < W; i++) sprite(x, P.groundImg, g, `ground_${(i * 7) % 4}`, i * 16, 44);
+  sprite(x, P.propsImg, P.props.frames, `campfire_${Math.floor(t * 8) % 4}`, Math.floor(W * 0.62), 31);
+  sprite(x, P.propsImg, P.props.frames, 'signpost', 6, 30);
+  const beacon = P.art.beacon ?? 'architect';
+  for (const w of walkers) {
+    let anim = w.mode;
+    if (w.role === beacon && w.status === 'blocked') anim = 'raise';
+    const frames = P.art.character.frames.filter((f) => f.startsWith(anim + '_'));
+    const fr = frames[Math.floor(t * FPS[anim]) % frames.length];
+    drawChar(x, P, w.role, fr, Math.round(w.x), 14, 1, { status: w.status, cloak: state.cloak, flip: w.dir < 0, t });
+    if (w.say && w.sayT > 0) drawBubble(x, P, w.say, Math.round(w.x) + 6, 2);
+    const ic = `status_${w.status}`;
+    sprite(x, P.uiImg, P.ui.frames, ic, Math.round(w.x) + 7, 47);
+  }
+}
+
+function drawBubble(x, P, text, ax, ay) {
+  x.font = '500 8px "Pixelify Sans", monospace';
+  const tw = Math.ceil(x.measureText(text).width);
+  const w = Math.max(24, tw + 10), h = 13;
+  const bx = Math.max(0, ax - 4), by = Math.max(0, ay - 1);
+  nineSafe(x, P, 'bubble', 8, bx, by, w, h);
+  x.fillStyle = P.art.name === 'aesir' ? '#3a2614' : '#1b1530';
+  x.fillText(text, bx + 5, by + 9);
+}
+function nineSafe(x, P, name, k, dx, dy, w, h) {
+  // Simple 9-slice that also works when the target is shorter than 2*k.
+  const f = P.ui.frames[name].frame, img = P.uiImg;
+  const kk = Math.min(k, Math.floor(h / 2), Math.floor(w / 2));
+  const parts = [[0, kk], [kk, f.w - 2 * kk], [f.w - kk, kk]];
+  const dxs = [[0, kk], [kk, w - 2 * kk], [w - kk, kk]];
+  const dys = [[0, kk], [kk, h - 2 * kk], [h - kk, kk]];
+  const sys = [[0, kk], [kk, f.h - 2 * kk], [f.h - kk, kk]];
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+    if (dxs[i][1] <= 0 || dys[j][1] <= 0) continue;
+    x.drawImage(img, f.x + parts[i][0], f.y + sys[j][0], parts[i][1], sys[j][1], dx + dxs[i][0], dy + dys[j][0], dxs[i][1], dys[j][1]);
+  }
+}
+
+// ---------- map ----------
+let mapScene = null;
+function seeded(seed) { let a = seed; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
+function buildMap(P) {
+  const C = 32, R = 16, rand = seeded(7);
+  const T = [...Array(R)].map(() => Array(C).fill('grass'));
+  for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+    if (((x - 24) / 6) ** 2 + ((y - 4) / 3.4) ** 2 < 1) T[y][x] = 'water';
+    if (((x - 5) / 3) ** 2 + ((y - 12.5) / 2.2) ** 2 < 1) T[y][x] = 'water';
+  }
+  const settle = { x: 8, y: 5 }, camps = [{ x: 18, y: 11, status: 'working' }, { x: 25, y: 9, status: 'blocked' }, { x: 13, y: 2, status: 'done' }];
+  const road = (a, b) => { let { x, y } = a; while (x !== b.x) { if (T[y][x] !== 'water') T[y][x] = 'path'; x += Math.sign(b.x - x); } while (y !== b.y) { if (T[y][x] !== 'water') T[y][x] = 'path'; y += Math.sign(b.y - y); } T[y][x] = 'path'; };
+  for (const c of camps) road({ x: settle.x + 1, y: settle.y + 2 }, { x: c.x, y: c.y + 1 });
+  const deco = [];
+  for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+    if (T[y][x] !== 'grass') continue;
+    const near = (p, d) => Math.abs(p.x - x) < d && Math.abs(p.y - y) < d;
+    if (near(settle, 4) || camps.some((c) => near(c, 3))) continue;
+    const r = rand();
+    if (r < 0.12) deco.push({ x, y, n: 'tree' }); else if (r < 0.15) deco.push({ x, y, n: 'bush' }); else if (r < 0.165) deco.push({ x, y, n: 'rock' });
+    else if (r < 0.2) T[y][x] = 'flowers';
+  }
+  const v = (y, x, k) => y >= 0 && x >= 0 && y < R && x < C && T[y][x] === k;
+  const base = T.map((row, y) => row.map((k, x) => {
+    if (k === 'grass') return `grass_${Math.floor(rand() * 4)}`;
+    if (k === 'flowers') return 'flowers';
+    const m = (v(y - 1, x, k) ? 1 : 0) | (v(y, x + 1, k) ? 2 : 0) | (v(y + 1, x, k) ? 4 : 0) | (v(y, x - 1, k) ? 8 : 0);
+    return `${k}_${m}`;
+  }));
+  const idx = P.tileset.meta.tiles;
+  const extra = idx.runestone !== undefined ? 'runestone' : 'stump';
+  deco.slice(0, 3).forEach((d) => (d.n = extra));
+  mapScene = { C, R, base, deco, settle, camps, T };
+}
+
+function drawMap(P, t) {
+  const c = document.getElementById('map');
+  const { C, R, base, deco, settle, camps, T } = mapScene;
+  if (c.width !== C * 16) { c.width = C * 16; c.height = R * 16; }
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  const meta = P.tileset.meta, img = P.tilesImg, shimmer = Math.floor(t * 1.5) % 2;
+  const tile = (name, tx, ty) => { const i = meta.tiles[name]; x.drawImage(img, (i % meta.columns) * 16, Math.floor(i / meta.columns) * 16, 16, 16, tx, ty, 16, 16); };
+  for (let y = 0; y < R; y++) for (let xx = 0; xx < C; xx++) {
+    let n = base[y][xx];
+    if (n.startsWith('water') && shimmer) n += '_b';
+    tile(n, xx * 16, y * 16);
+  }
+  for (const d of deco) tile(d.n, d.x * 16, d.y * 16);
+  const pf = P.props.frames, pi = P.propsImg;
+  const sf = pf.settlement.frame;
+  sprite(x, pi, pf, 'settlement', settle.x * 16 + 8 - sf.w / 2 + 8, settle.y * 16 + 16 - sf.h + 16);
+  const roles = ROLE_ORDER;
+  camps.forEach((cp, ci) => {
+    const gx = cp.x * 16, gy = cp.y * 16;
+    const pulse = cp.status === 'blocked' ? 0.5 + 0.5 * Math.abs(Math.sin(t * 4)) : 0.85;
+    x.save(); x.globalAlpha = pulse;
+    x.drawImage(tintProp(P, 'glow', P.art.status[cp.status]), gx - 24, gy - 20, 64, 64);
+    x.restore();
+    sprite(x, pi, pf, 'camp', gx - 8, gy - 8);
+    sprite(x, pi, pf, `campfire_${Math.floor(t * 8 + ci) % 4}`, gx + 14, gy + 4);
+    sprite(x, pi, pf, 'banner_pole', gx - 18, gy - 12);
+    x.drawImage(tintProp(P, `banner_cloth_${Math.floor(t * 2 + ci) % 2}`, P.art.status[cp.status]), gx - 18, gy - 12);
+    for (let k = 0; k < 2; k++) {
+      const role = roles[(ci * 2 + k + 1) % roles.length];
+      drawChar(x, P, role, `idle_${Math.floor(t * 2 + k) % 2}`, gx + 26 + k * 14, gy - 6, 1, { status: cp.status, cloak: state.cloak, t, flip: k === 1 });
+    }
+  });
+  // mount wandering near the settlement
+  const mx = settle.x * 16 + 40 + Math.round(((t * 12) % 80));
+  sprite(x, pi, pf, `mount_walk_${Math.floor(t * 8) % 4}`, mx, settle.y * 16 + 30);
+  // orchestrator beside the settlement
+  drawChar(x, P, 'orchestrator', `idle_${Math.floor(t * 2) % 2}`, settle.x * 16 - 22, settle.y * 16 + 14, 1, { status: 'working', cloak: state.cloak, t });
+  // minimap
+  const mm = P.art.map.minimap, s = 2, mw = C * s + 20, mh = R * s + 20, ox = c.width - mw - 6, oy = c.height - mh - 6;
+  x.fillStyle = mm.background; x.fillRect(ox + 4, oy + 4, mw - 8, mh - 8);
+  for (let y = 0; y < R; y++) for (let xx = 0; xx < C; xx++) {
+    const k = T[y][xx];
+    x.fillStyle = k === 'water' ? mm.water : k === 'path' ? mm.path : mm.grass;
+    x.fillRect(ox + 10 + xx * s, oy + 10 + y * s, s, s);
+  }
+  for (const d of deco) if (d.n === 'tree') { x.fillStyle = mm.tree; x.fillRect(ox + 10 + d.x * s, oy + 10 + d.y * s, s, s); }
+  x.fillStyle = mm.building; x.fillRect(ox + 10 + settle.x * s, oy + 10 + settle.y * s, 3, 3);
+  camps.forEach((cp) => x.drawImage(tintProp(P, 'pin', P.art.status[cp.status]), ox + 10 + cp.x * s - 3, oy + 10 + cp.y * s - 3));
+  nineSafe(x, P, 'minimap_frame', 8, ox, oy, mw, mh);
+}
+
+const propTint = {};
+function tintProp(P, name, color) {
+  const key = `${P.art.name}|${name}|${color}`;
+  if (propTint[key]) return propTint[key];
+  const f = P.props.frames[name].frame;
+  const c = document.createElement('canvas'); c.width = f.w; c.height = f.h;
+  const x = c.getContext('2d');
+  x.drawImage(P.propsImg, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+  x.globalCompositeOperation = 'multiply'; x.fillStyle = color; x.fillRect(0, 0, f.w, f.h);
+  x.globalCompositeOperation = 'destination-in'; x.drawImage(P.propsImg, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+  return (propTint[key] = c);
+}
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const t = reduced ? 0 : now / 1000;
+  const P = loaded[state.pack];
+  if (P && mapScene) {
+    const anim = state.anim, frames = P.art.character.frames.filter((f) => f.startsWith(anim + '_'));
+    const fr = frames[Math.floor(t * FPS[anim]) % frames.length];
+    for (const { role, x } of cardCtx) { x.clearRect(0, 0, 24, 32); drawChar(x, P, role, fr, 0, 0, 1, { status: state.status, cloak: state.cloak, t }); }
+    if (!reduced) stepStrip(dt, Math.floor((document.getElementById('strip').clientWidth || 800) / 3));
+    drawStrip(P, t);
+    drawMap(P, t);
+  }
+  requestAnimationFrame(frame);
+}
+render().then(() => requestAnimationFrame(frame));
+</script>

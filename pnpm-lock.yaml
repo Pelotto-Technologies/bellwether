@@ -56,6 +56,8 @@ importers:
         specifier: ^7.0.0
         version: 7.3.7(@types/node@22.20.5)
 
+  tools/spritegen: {}
+
 packages:
 
   '@esbuild/aix-ppc64@0.21.5':

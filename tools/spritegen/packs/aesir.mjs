@@ -1,0 +1,46 @@
+// Aesir pack: Norse-myth figures drawn from public-domain mythology, in an
+// original style. Avoids any film or comic designs (no winged helmets, no red
+// capes on the hammer-bearer).
+export default {
+  name: 'aesir',
+  displayName: 'Aesir',
+  description: 'Gods and folk of the northern sagas, with rune-lit staves and a fjord-side map.',
+  fallback: 'generic',
+  palette: {
+    q: '#1e1614', o: '#140f17', e: '#140f17', k: '#4a1c1c', n: '#e08a7a',
+    s: '#eec3a0', S: '#c99674',
+    g: '#a8f0ff', G: '#f2feff', z: '#d4f8ff',
+    m: '#b9c2cc', M: '#7d8794', w: '#8a5a33', W: '#5e3b20',
+    l: '#4e3424', L: '#36231a', b: '#3b2a22', B: '#271b16',
+    p: '#4a4038', P: '#352d27', a: '#d9a83a', A: '#a87a22',
+  },
+  status: {
+    working: '#6ee08a', done: '#ffd25a', blocked: '#ff5a4d', idle: '#dfe8f0', unknown: '#8c94a0',
+  },
+  characters: [
+    { id: 'orchestrator', role: 'orchestrator', displayName: 'Odin', hair: 'long', beard: 'long', hat: 'brim', face: 'eyepatch',
+      torso: 'robe', item: 'spear', accessories: ['cape'],
+      colors: { h: '#c9c9cf', H: '#9a9aa4', f: '#d8d8de', F: '#a4a4ae', x: '#3a4258', X: '#272d3e', t: '#4a5878', T: '#36405a', c: '#2a3a6a', C: '#1c2850' } },
+    { id: 'coordinator', role: 'coordinator', displayName: 'Tyr', hair: 'short', beard: 'short', hat: 'helm', torso: 'armor',
+      item: 'sword', accessories: ['shield', 'cape'],
+      colors: { h: '#5a3a24', H: '#3e2818', f: '#5a3a24', F: '#3e2818', t: '#9a2f2f', T: '#742222', c: '#7a5634', C: '#5a3e24', y: '#3a6a8a', Y: '#2a4e68' } },
+    { id: 'architect', role: 'architect', displayName: 'Vidar', hair: 'short', beard: 'short', hat: 'hood', torso: 'tunic',
+      item: 'runeStaff', accessories: ['cape'], boots: ['a', 'A'],
+      colors: { h: '#6a4a2e', H: '#4a321e', f: '#6a4a2e', F: '#4a321e', t: '#5a6a4a', T: '#435036', c: '#4a5a52', C: '#34423c', a: '#8a6a44', A: '#644a2c' } },
+    { id: 'implementer', role: 'implementer', displayName: 'Thor', hair: 'short', beard: 'full', torso: 'tunic', item: 'hammer',
+      accessories: ['mantle'],
+      colors: { h: '#c4502a', H: '#963a1c', f: '#c4502a', F: '#963a1c', t: '#4a6a8a', T: '#37516b', c: '#8a6a4a', C: '#644c34' } },
+    { id: 'reviewer', role: 'reviewer', displayName: 'Baldur', hair: 'long', hat: 'circlet', torso: 'robe', item: 'sunStaff',
+      accessories: ['cape'], blush: true,
+      colors: { h: '#f2d27a', H: '#c9a64e', t: '#f2ede0', T: '#cfc6b0', c: '#e8c86a', C: '#bf9e44', y: '#e05a4a', p: '#cfc6b0', P: '#a89e88' } },
+    { id: 'researcher', role: 'researcher', displayName: 'Mimir', hair: 'bald', beard: 'long', torso: 'robe', item: 'horn',
+      accessories: ['collar'],
+      colors: { h: '#e2e2e8', H: '#b0b0ba', f: '#ececf2', F: '#b8b8c2', t: '#2c4a6e', T: '#1f3654', c: '#2c4a6e', C: '#1f3654', y: '#e8dcc0', Y: '#bfae8a' } },
+    { id: 'writer', role: 'writer', displayName: 'Saga', hair: 'braid', torso: 'dress', item: 'scroll', accessories: ['scarf'], blush: true,
+      colors: { h: '#8a4a2a', H: '#64331c', t: '#3e7a5a', T: '#2c5a42', c: '#c46a3a', C: '#9a4e28', y: '#efe4c8' } },
+    { id: 'ops', role: 'ops', displayName: 'Aegir', hair: 'long', beard: 'long', torso: 'tunic', item: 'oar', accessories: ['mantle'],
+      colors: { h: '#5aa898', H: '#3e7e70', f: '#6ab8a8', F: '#468a7c', t: '#2e5a6a', T: '#20434f', c: '#3a7a8a', C: '#2a5a66', s: '#d9b08e', S: '#b48a6a' } },
+    { id: 'generic', role: 'generic', displayName: 'Villager', hair: 'short', torso: 'tunic', item: 'torch', blush: true,
+      colors: { h: '#a87a4a', H: '#7e5832', t: '#8a7a5e', T: '#6a5c44', c: '#8a7a5e', C: '#6a5c44', g: '#ffc35a', G: '#fff2c4' } },
+  ],
+};

@@ -1,0 +1,12 @@
+{
+  "name": "@bellwether/spritegen",
+  "private": true,
+  "type": "module",
+  "description": "Generates the public theme packs' pixel art from code.",
+  "scripts": {
+    "art": "node build.mjs",
+    "art:check": "node build.mjs --check",
+    "preview": "node preview.mjs",
+    "test": "node --test"
+  }
+}
