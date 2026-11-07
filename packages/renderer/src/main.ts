@@ -1,11 +1,15 @@
 import { Application } from 'pixi.js';
 import { connectFeed, FeedState } from './feed.js';
+import { inferHandoff } from './map/chatter.js';
+import { hasMapArt, loadMapArt } from './map/assets.js';
 import { availablePacks, packData } from './packs.js';
+import { MapScene } from './pixi/map.js';
 import { loadArt } from './pixi/pack.js';
 import { StripScene } from './pixi/strip.js';
 import { pickPack } from './select.js';
 
 const params = new URLSearchParams(location.search);
+const mode = params.get('mode') === 'map' ? 'map' : 'strip';
 const transparent = params.has('transparent');
 const scale = Math.max(1, Math.min(6, Number(params.get('scale') ?? 3)));
 document.body.classList.add(transparent ? 'transparent' : 'backdrop');
@@ -35,20 +39,39 @@ async function main() {
   const available = availablePacks();
   const requested = params.get('pack');
   if (requested && !available.includes(requested)) console.warn(`bellwether: unknown pack "${requested}", have ${available.join(', ')}`);
-  const pack = packData(pickPack(available, requested, await configuredPack()));
+  const packName = pickPack(available, requested, await configuredPack());
+  const pack = packData(packName);
   const theme = pack.theme;
-  const art = await loadArt(pack);
+  const art = mode === 'map' ? null : await loadArt(pack);
   const app = new Application();
   await app.init({ backgroundAlpha: 0, resizeTo: window, antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1 });
   document.body.appendChild(app.canvas);
 
   const feed = new FeedState(theme.sayTtlMs);
-  const scene = new StripScene(app, theme, feed, scale, art);
+  const scene =
+    mode === 'map'
+      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'))
+      : new StripScene(app, theme, feed, scale, art);
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'm' && e.key !== 'M') return;
+    const next = new URLSearchParams(location.search);
+    next.set('mode', mode === 'map' ? 'strip' : 'map');
+    location.search = next.toString();
+  });
   const chip = document.getElementById('chip');
 
   connectFeed(
     deltaUrl(),
-    (d) => feed.apply(d, performance.now()),
+    (d) => {
+      const before = d.kind === 'member' ? feed.world.parties[d.partyId] : undefined;
+      feed.apply(d, performance.now());
+      // Inferred chatter: a hand-off reads as the finished member saying something.
+      if (d.kind === 'member' && before) {
+        const after = feed.world.parties[d.partyId];
+        const hand = after && inferHandoff(before, after, d.member);
+        if (hand) feed.apply({ t: d.t, kind: 'say', partyId: d.partyId, paneId: hand.from.paneId, text: hand.text }, performance.now());
+      }
+    },
     (mode) => {
       if (chip) chip.textContent = mode.kind === 'ws' ? `adapter · ${mode.url}` : `mock · ${mode.reason}`;
     },

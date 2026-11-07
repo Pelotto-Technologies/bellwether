@@ -10,7 +10,7 @@ Reads the Herdr TUI socket API. Display only in v1, with interactive hooks stubb
 Theme packs are swappable; the core knows roles (architect, implementer, reviewer,
 ...), not characters.
 
-**Status:** MVP. Strip mode runs on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`. The Electron shell and map mode are next. The plan is in [docs/PLAN.md](docs/PLAN.md).
+**Status:** MVP. Strip mode runs on mock agents or live Herdr (`--live`); the installer lives in `packages/cli`. Map mode is in; the Electron shell is next. The plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Run it
 
@@ -55,6 +55,25 @@ Pick a pack with `pack = "aesir"` in `bellwether.toml`, `--pack aesir` or
 `BELLWETHER_PACK=aesir` on the adapter (it serves the choice as `/config.json`), or
 `?pack=` in the URL. Unknown names fall back to `neutral`.
 
+### Map mode
+
+`?mode=map` (or press `m` to toggle with strip mode) shows a pixel world. Each repo is a
+settlement placed by hashing its path into a grid, so it stays put between runs. Each
+party camps beside its repo's settlement, with a glow in its rolled-up status colour
+(green working, yellow done, red pulsing blocked). Members wander around the camp;
+blocked ones stand still. When a member speaks (a `say` token, or an inferred hand-off
+from a teammate who just finished) it walks over to a teammate, or to a party camped at
+the same settlement, and the speech bubble shows.
+
+- Click a glow, or a dot on the minimap in the corner, to zoom into that party. A panel
+  lists its members with role, agent, status and their latest line. Esc, the panel's
+  close button, or clicking empty ground zooms back out.
+- The pack's map tileset and props (settlements, camps, campfires, glow) are used; pick
+  the pack as above.
+
+Layout, terrain, camera, chatter and wandering are pure modules under
+`packages/renderer/src/map/` with tests; `src/pixi/map.ts` is the thin Pixi scene.
+
 To watch your real Herdr agents instead, run the adapter against the live socket:
 
 ```sh
@@ -77,7 +96,7 @@ pnpm typecheck && pnpm test && pnpm build
 
 ```
 packages/adapter    world model, mock source, WebSocket server, recorder/replayer; Herdr client next
-packages/renderer   PixiJS strip mode and theme loader (web page); map mode later
+packages/renderer   PixiJS strip and map modes and the theme loader (web page)
 packages/shell      Electron overlay window + tray (planned)
 packages/cli        bellwether install | uninstall (run | record | replay planned)
 themes/neutral      ships with the repo

@@ -12,10 +12,25 @@
         font: 12px ui-monospace, monospace; color: #cfd6e6; background: rgba(0,0,0,.45);
       }
       body.transparent #chip { display: none; }
+      #detail {
+        position: fixed; top: 12px; right: 12px; width: 280px; max-height: 70vh; overflow: auto;
+        padding: 10px 12px; border-radius: 6px; color: #e8ecf6; background: rgba(12,15,24,.88);
+        font: 12px ui-monospace, monospace; border: 1px solid rgba(255,255,255,.2);
+      }
+      #detail[hidden] { display: none; }
+      #detail h2 { margin: 0; font-size: 14px; }
+      #detail .sub { margin: 2px 0 8px; opacity: .7; }
+      #detail ul { list-style: none; margin: 0; padding: 0; }
+      #detail li { margin: 6px 0; }
+      #detail .line { opacity: .75; }
+      #detail-close { position: absolute; top: 6px; right: 8px; cursor: pointer; background: none; border: 0; color: inherit; font: inherit; }
+      .st.working { color: #3ddc84; } .st.done { color: #ffd23f; } .st.blocked { color: #ff4d4d; }
+      .st.idle { color: #d8d8d8; } .st.unknown { color: #7a7a7a; }
     </style>
   </head>
   <body>
     <div id="chip">connecting…</div>
+    <div id="detail" hidden><button id="detail-close" title="Back to the map (Esc)">✕</button><div id="detail-body"></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
