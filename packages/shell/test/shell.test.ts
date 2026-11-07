@@ -102,7 +102,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -111,7 +111,16 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+  });
+  it('offers skins and applies the choice to the renderer URL', () => {
+    const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
+    expect(m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toContain('Aesir');
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-pack', pack: 'wayfarers' });
+    expect(r).toMatchObject({ restartAdapter: false, reload: true });
+    expect(rendererUrl(r.cfg)).toBe('http://127.0.0.1:7341/?transparent=&pack=wayfarers');
+    expect('pack' in applyAction(r.cfg, { type: 'pick-pack', pack: undefined }).cfg).toBe(false);
+    expect(normalizeConfig({ pack: '../x' }).pack).toBeUndefined();
   });
   it('applies actions', () => {
     const t = applyAction(DEFAULT_CONFIG, { type: 'toggle-mode' });

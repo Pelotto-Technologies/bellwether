@@ -98,7 +98,8 @@ pnpm shell       # builds adapter and renderer, then launches the overlay
 
 The shell attaches to an adapter already serving `http://127.0.0.1:7341/` or, if none
 answers, spawns `packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist`.
-The tray icon menu has: switch strip/map (reloads with `?mode=map`), pick monitor, pick
+The tray icon menu has: switch strip/map (reloads with `?mode=map`), pick skin (reloads
+with `?pack=`), pick monitor, pick
 Herdr session (restarts a spawned adapter with `--session`), and quit. Choices persist in
 `shell.json` in Electron's userData folder. Set `BELLWETHER_ADAPTER_BIN` or
 `BELLWETHER_RENDERER_DIR` to point at other builds.

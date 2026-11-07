@@ -70,7 +70,10 @@ export function partiesFromSnapshot(snap: SessionSnapshot, ctx: MapContext): Rec
   }
   const out: Record<string, Party> = {};
   for (const ws of snap.workspaces) {
-    const p = partyFromWorkspace(ws, byWs.get(ws.workspace_id) ?? {}, ctx);
+    // A workspace with no agents has nothing to show; it appears once an agent starts.
+    const members = byWs.get(ws.workspace_id);
+    if (!members) continue;
+    const p = partyFromWorkspace(ws, members, ctx);
     out[p.id] = p;
   }
   return out;

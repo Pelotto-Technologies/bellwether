@@ -7,6 +7,8 @@ export interface ShellConfig {
   mode: Mode;
   /** Electron display id; undefined means primary. */
   displayId?: number;
+  /** Skin pack name (`neutral`, `aesir`, `wayfarers`, or a private folder); undefined defers to bellwether.toml. */
+  pack?: string;
   /** Herdr session passed to the adapter; undefined means all sessions. */
   session?: string;
   /** Spawn the adapter ourselves (true) or attach to one already running (false). */
@@ -40,7 +42,8 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   const r = raw as Record<string, unknown>;
   if (r.mode === 'strip' || r.mode === 'map') out.mode = r.mode;
   if (typeof r.displayId === 'number' && Number.isFinite(r.displayId)) out.displayId = r.displayId;
-  if (typeof r.session === 'string' && r.session.length > 0) out.session = r.session;
+  if (typeof r.pack === 'string' && /^[\w-]+$/.test(r.pack)) out.pack = r.pack;
+   if (typeof r.session === 'string' && r.session.length > 0) out.session = r.session;
   if (typeof r.spawnAdapter === 'boolean') out.spawnAdapter = r.spawnAdapter;
   if (typeof r.port === 'number' && Number.isInteger(r.port) && r.port > 0 && r.port < 65536) {
     out.port = r.port;
