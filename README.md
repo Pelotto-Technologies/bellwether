@@ -24,6 +24,21 @@ themes/<private>    your own skins, gitignored
 docs/               plan and research artifacts
 ```
 
+## Data sources
+
+The adapter reads from a mock source (default) or live Herdr. Pick one in
+`bellwether.toml` (gitignored) or with `BELLWETHER_SOURCE=mock|live`:
+
+```toml
+source = "live"
+[herdr]
+sessions = "all"        # every running session; or ["default", "overlay-dev"]
+# socket = "..."        # explicit socket or pipe path
+```
+
+`pnpm --filter @bellwether/adapter build && node packages/adapter/dist/bin.js --live --session overlay-dev`
+prints deltas as JSON lines.
+
 ## Research artifacts
 
 `docs/research/` holds the verified protocol details this project rests on: the Herdr

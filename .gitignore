@@ -1,28 +1,7 @@
-# dependencies and build
 node_modules/
 dist/
-out/
-.turbo/
-*.tsbuildinfo
-
-# local runtime
-bellwether.toml
 *.jsonl
-!docs/research/**/*.jsonl
-.env
-.env.*
-
-# private theme packs: only themes/neutral and themes/aesir are public
+bellwether.toml
 themes/*
-!themes/neutral/
-!themes/aesir/
 !themes/README.md
-
-# editors and OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# claude code local state
-.claude/settings.local.json
+!themes/neutral/
