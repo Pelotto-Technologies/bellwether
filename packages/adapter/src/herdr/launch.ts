@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { HerdrConnection, type Connector } from './connection.js';
 import { resolveTarget, type SessionTarget } from './paths.js';
 import { isRole, type Role } from '../types.js';
@@ -34,10 +33,35 @@ export interface LaunchResult {
   timedOut: boolean;
 }
 
-/** Wrap an argument in double quotes when it has whitespace or quotes (embedded quotes are backslash-escaped). */
+/**
+ * Wrap an argument in double quotes when it has whitespace. Shells disagree on how to
+ * escape a quote inside quotes (bash vs PowerShell vs cmd), so arguments containing a
+ * double quote are refused rather than typed wrongly.
+ */
 export function quoteArg(a: string): string {
-  if (a !== '' && !/[\s"]/.test(a)) return a;
-  return `"${a.replace(/"/g, '\\"')}"`;
+  if (a.includes('"')) throw new Error(`cannot type an argument containing a double quote: ${a}`);
+  if (a !== '' && !/\s/.test(a)) return a;
+  return `"${a}"`;
+}
+
+/** Drop trailing characters in `chars` (a loop, not a regex, so it stays linear). */
+function trimEnd(s: string, chars: string): string {
+  let end = s.length;
+  while (end > 0 && chars.includes(s[end - 1]!)) end--;
+  return s.slice(0, end);
+}
+
+function trimStart(s: string, chars: string): string {
+  let start = 0;
+  while (start < s.length && chars.includes(s[start]!)) start++;
+  return s.slice(start);
+}
+
+/** Last path segment, for both `/` and `\\` separators, ignoring trailing separators. */
+function folderName(cwd: string): string {
+  const trimmed = trimEnd(cwd, '/\\');
+  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return trimmed.slice(cut + 1);
 }
 
 export function commandLine(argv: string[]): string {
@@ -46,16 +70,14 @@ export function commandLine(argv: string[]): string {
 
 /** `orchestrator-<repo slug>` matching `[a-z][a-z0-9_-]{0,31}`; the role word is never truncated. */
 export function agentNameFor(role: string, cwd: string): string {
-  const base = path.basename(cwd.replace(/[\\/]+$/, '').replace(/\\/g, '/'));
-  const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = trimStart(trimEnd(folderName(cwd).toLowerCase().replace(/[^a-z0-9]+/g, '-'), '-'), '-');
   const room = 32 - role.length - 1;
-  const tail = slug.slice(0, Math.max(0, room)).replace(/-+$/, '');
+  const tail = trimEnd(slug.slice(0, Math.max(0, room)), '-');
   return tail ? `${role}-${tail}` : role;
 }
 
 export function defaultLabel(cwd: string): string {
-  const base = path.basename(cwd.replace(/[\\/]+$/, '').replace(/\\/g, '/'));
-  return `${base || 'workspace'} Orchestration`;
+  return `${folderName(cwd) || 'workspace'} Orchestration`;
 }
 
 /**
@@ -75,6 +97,8 @@ export async function launchOrchestrator(opts: LaunchOptions = {}): Promise<Laun
   const pollMs = opts.pollMs ?? 500;
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const command = opts.command?.length ? opts.command : undefined;
+  // Validate the command line before touching Herdr.
+  const line = command ? commandLine(command) : undefined;
 
   const conn = await HerdrConnection.open(target.connectPath, opts.connector);
   try {
@@ -91,9 +115,8 @@ export async function launchOrchestrator(opts: LaunchOptions = {}): Promise<Laun
       return result;
     }
 
-    const line = commandLine(command);
     result.commandLine = line;
-    await conn.request('pane.send_text', { pane_id: paneId, text: line });
+    await conn.request('pane.send_text', { pane_id: paneId, text: line! });
     await conn.request('pane.send_keys', { pane_id: paneId, keys: ['Enter'] });
 
     const deadline = now() + timeoutMs;

@@ -99,7 +99,8 @@ describe('helpers', () => {
     expect(n.startsWith('orchestrator-')).toBe(true);
     expect(agentNameFor('orchestrator', '/x/___')).toBe('orchestrator');
   });
-  it('quotes args with spaces or quotes', () => {
-    expect(commandLine(['a', 'b c', 'd"e', ''])).toBe('a "b c" "d\\"e" ""');
+  it('quotes args with spaces, keeps backslashes, refuses double quotes', () => {
+    expect(commandLine(['a', 'b c', 'C:\\src\\my repo', ''])).toBe('a "b c" "C:\\src\\my repo" ""');
+    expect(() => commandLine(['d"e'])).toThrow(/double quote/);
   });
 });
