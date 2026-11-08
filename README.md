@@ -89,10 +89,18 @@ under each party's feet (`minimal = true`, or Labels in the tray menu):
 ### Crowds and multiple monitors
 
 When the strip fills up, parties step back into depth rows (up to four) and keep walking,
-passing behind each other instead of standing still. Got more than one monitor? Tick
-**Span all monitors** under Monitor in the tray menu: the overlay puts a strip window on the
-bottom of every monitor and joins them into one long strip, so parties wander across the
-seams. Browser tabs can do the same with `?span=<offset>,<total>` (CSS pixels).
+passing behind each other instead of standing still. The back rows stand in the shade and
+the ground gets deeper to hold them:
+
+![A crowded strip: parties in four depth rows walking behind each other](docs/images/strip-crowd.gif)
+
+Got more than one monitor? Tick **Span all monitors** under Monitor in the tray menu. The
+overlay puts a strip window on the bottom of every monitor and joins them into one long
+strip, so parties wander across the seams (here three monitors, 1280, 1920 and 1280 wide):
+
+![One strip spanning three monitors, parties crossing between them](docs/images/strip-span.gif)
+
+Browser tabs can do the same with `?span=<offset>,<total>` (CSS pixels).
 
 ### Map mode
 

@@ -340,7 +340,10 @@ export class StripScene {
     const backRows = Math.max(0, ...rowOf.values());
     for (let r = 0; r <= backRows; r++) {
       const ids = trains.filter((t) => rowOf.get(t.id) === r).map((t) => t.id);
-      for (const [id, lane] of layoutLanes(ids, width, 16, weights)) lanes.set(id, lane);
+      // Stagger the rows by a fraction of a lane so the back rows peek out between the front ones instead of lining up in columns.
+      const reach = backRows && ids.length ? (width - 32) / ids.length / 2 : 0;
+      const shift = backRows ? reach * (r / backRows) : 0;
+      for (const [id, lane] of layoutLanes(ids, width - reach, 16, weights)) lanes.set(id, { start: lane.start + shift, end: lane.end + shift });
     }
     const ease = 1 - Math.exp(-3 * dt);
     this.groundDepth += (backRows - this.groundDepth) * ease;
