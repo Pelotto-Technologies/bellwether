@@ -25,12 +25,12 @@ function deltaUrl(): string | null {
 }
 
 /** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
-async function servedConfig(): Promise<{ pack?: string; scale?: number }> {
+async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean }> {
   try {
     const res = await fetch('./config.json', { cache: 'no-store' });
     if (!res.ok) return {};
-    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown };
-    return { ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}), ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}) };
+    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown; minimal?: unknown };
+    return { ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}), ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}), ...(typeof cfg.minimal === 'boolean' ? { minimal: cfg.minimal } : {}) };
   } catch {
     return {};
   }
@@ -43,6 +43,7 @@ async function main() {
   const served = await servedConfig();
   const packName = pickPack(available, requested, served.pack);
   // `?scale=` beats bellwether.toml; either way it is clamped to a whole number so pixels stay crisp.
+  const minimal = params.has('minimal') ? params.get('minimal') !== '0' : served.minimal === true;
   const scale = Math.max(1, Math.min(6, Math.round(Number(params.get('scale') ?? served.scale ?? 3)) || 3));
   const pack = packData(packName);
   const theme = pack.theme;
@@ -55,7 +56,7 @@ async function main() {
   const scene =
     mode === 'map'
       ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
-      : new StripScene(app, theme, feed, scale, art);
+      : new StripScene(app, theme, feed, scale, art, minimal);
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'm' && e.key !== 'M') return;
     const next = new URLSearchParams(location.search);

@@ -18,6 +18,8 @@ export interface ShellConfig {
   port: number;
   /** Strip pixel scale (2 compact, 3 normal, 4 large); undefined defers to bellwether.toml, then 3. */
   scale?: number;
+  /** Icon-only labels on the strip; undefined defers to bellwether.toml. */
+  minimal?: boolean;
 }
 
 export const DEFAULT_SCALE = 3;
@@ -61,6 +63,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
     out.url = `http://127.0.0.1:${r.port}/?transparent`;
   }
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
+  if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   const scale = validScale(r.scale);
   if (scale !== undefined) out.scale = scale;
   return out;

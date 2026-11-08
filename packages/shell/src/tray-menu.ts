@@ -4,6 +4,7 @@ import type { Mode, ShellConfig } from './config.js';
 export type MenuAction =
   | { type: 'toggle-mode' }
   | { type: 'pick-display'; id: number }
+  | { type: 'pick-labels'; minimal: boolean | undefined }
   | { type: 'pick-scale'; scale: number | undefined }
   | { type: 'pick-pack'; pack: string | undefined }
   | { type: 'pick-session'; session: string | undefined }
@@ -22,6 +23,7 @@ export const BUILTIN_PACKS: readonly { name: string; label: string }[] = [
 
 /** Strip sizes offered in the tray; the number is the art pixel scale. */
 export const SIZES: readonly { scale: number; label: string }[] = [
+  { scale: 1, label: 'Tiny' },
   { scale: 2, label: 'Compact' },
   { scale: 3, label: 'Normal' },
   { scale: 4, label: 'Large' },
@@ -31,7 +33,7 @@ const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal'> & { pack?: string },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -46,6 +48,11 @@ export function buildMenuModel(
     { kind: 'item', label: 'Size', enabled: false },
     { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.scale, action: { type: 'pick-scale', scale: undefined } },
     ...SIZES.map<MenuItem>((z) => ({ kind: 'item', label: z.label, checked: z.scale === cfg.scale, action: { type: 'pick-scale', scale: z.scale } })),
+    { kind: 'separator' },
+    { kind: 'item', label: 'Labels', enabled: false },
+    { kind: 'item', label: 'Default (bellwether.toml)', checked: cfg.minimal === undefined, action: { type: 'pick-labels', minimal: undefined } },
+    { kind: 'item', label: 'Full labels', checked: cfg.minimal === false, action: { type: 'pick-labels', minimal: false } },
+    { kind: 'item', label: 'Icon only', checked: cfg.minimal === true, action: { type: 'pick-labels', minimal: true } },
     { kind: 'separator' },
     { kind: 'item', label: 'Skin', enabled: false },
     { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.pack, action: { type: 'pick-pack', pack: undefined } },
@@ -79,6 +86,12 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       return { cfg: { ...cfg, mode: cfg.mode === 'strip' ? 'map' : 'strip' }, restartAdapter: false, reload: true };
     case 'pick-display':
       return { cfg: { ...cfg, displayId: action.id }, restartAdapter: false, reload: false };
+    case 'pick-labels': {
+      const next = { ...cfg };
+      if (action.minimal === undefined) delete next.minimal;
+      else next.minimal = action.minimal;
+      return { cfg: next, restartAdapter: false, reload: cfg.minimal !== action.minimal };
+    }
     case 'pick-scale': {
       const next = { ...cfg };
       if (action.scale) next.scale = action.scale;

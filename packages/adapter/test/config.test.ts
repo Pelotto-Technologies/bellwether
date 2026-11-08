@@ -53,3 +53,11 @@ describe('strip scale', () => {
     expect(() => parseSourceConfig('scale = 2.5')).toThrow(/scale/);
   });
 });
+
+describe('minimal labels', () => {
+  it('reads minimal from toml', () => {
+    expect(parseSourceConfig('minimal = true').minimal).toBe(true);
+    expect(parseSourceConfig('source = "mock"').minimal).toBeUndefined();
+    expect(() => parseSourceConfig('minimal = "yes"')).toThrow(/minimal/);
+  });
+});

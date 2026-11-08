@@ -104,7 +104,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -113,7 +113,7 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
   });
   it('offers skins and applies the choice to the renderer URL', () => {
     const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
@@ -179,7 +179,7 @@ describe('strip size', () => {
     expect(stripHeightFor(3)).toBe(162);
     expect(stripHeightFor(2)).toBeLessThan(stripHeightFor(3));
     // Character, nameplate (about 14 art px) and banner all sit inside the window.
-    for (const s of [2, 3, 4]) expect(stripHeightFor(s)).toBeGreaterThanOrEqual((32 + 12) * s);
+    for (const s of [1, 2, 3, 4]) expect(stripHeightFor(s)).toBeGreaterThanOrEqual((32 + 12) * s);
     expect(windowBounds(primary, 'strip', 2).height).toBe(stripHeightFor(2));
   });
   it('validates scale and picks menu, then served, then 3', async () => {
@@ -198,5 +198,17 @@ describe('strip size', () => {
     expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('scale=');
     const items = buildMenuModel(r.cfg, [primary], []);
     expect(items.find((i) => i.kind === 'item' && i.label === 'Compact')).toMatchObject({ checked: true });
+  });
+});
+
+describe('labels', () => {
+  it('menu switches to icon-only and passes it to the renderer', () => {
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-labels', minimal: true });
+    expect(r.cfg.minimal).toBe(true);
+    expect(r.reload).toBe(true);
+    expect(rendererUrl(r.cfg)).toContain('minimal=1');
+    expect(rendererUrl(applyAction(r.cfg, { type: 'pick-labels', minimal: false }).cfg)).toContain('minimal=0');
+    expect(rendererUrl(applyAction(r.cfg, { type: 'pick-labels', minimal: undefined }).cfg)).not.toContain('minimal');
+    expect(normalizeConfig({ minimal: 'x' }).minimal).toBeUndefined();
   });
 });

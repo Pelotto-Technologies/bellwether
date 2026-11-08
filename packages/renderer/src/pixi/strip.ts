@@ -84,6 +84,8 @@ const BANNER_W = 18;
 
 /** Rows of the 16px ground tile that show above the window's bottom edge, in art pixels. */
 const GROUND_SHOW = 8;
+/** Extra rows of ground shown in minimal mode, so the status icon fits below the feet. */
+const ICON_ROOM = 8;
 /** How far a character's feet sink into the ground, in art pixels. */
 const FEET_SINK = 3;
 
@@ -111,12 +113,16 @@ export class StripScene {
     private feed: FeedState,
     private scale: number,
     private art: LoadedArt | null = null,
+    /** Minimal labels: no nameplate above the heads, just a small status icon below the feet. */
+    private minimal = false,
   ) {
+    this.groundShow = GROUND_SHOW + (minimal ? ICON_ROOM : 0);
     app.stage.addChild(this.ground, this.layer, this.fx);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
 
+  private groundShow = GROUND_SHOW;
   private groundTiles: Sprite[] = [];
   private groundWidth = 0;
 
@@ -139,7 +145,7 @@ export class StripScene {
       }
       this.groundWidth = width;
     }
-    for (const t of this.groundTiles) t.y = height - GROUND_SHOW * s;
+    for (const t of this.groundTiles) t.y = height - this.groundShow * s;
   }
 
   private frame(role: Role, frame: FrameName, beacon: boolean) {
@@ -256,7 +262,7 @@ export class StripScene {
     let groundY: number;
     if (art) {
       this.layoutGround(width, height);
-      groundY = height - (GROUND_SHOW - FEET_SINK) * s;
+      groundY = height - (this.groundShow - FEET_SINK) * s;
     } else {
       const groundH = 3 * s;
       groundY = height - groundH;
@@ -362,7 +368,19 @@ export class StripScene {
         view.root.alpha = spawnPose(this.t - view.born).alpha;
         const center = (fig0 + fig1) / 2;
         view.label.text = seg.label;
-        if (view.plate) {
+        view.label.visible = !this.minimal;
+        if (view.plate) view.plate.visible = !this.minimal;
+        if (view.icon) view.icon.visible = true;
+        if (this.minimal) {
+          // Minimal: only a status icon (or a coloured square without art) centred just under the feet.
+          view.chip.clear();
+          if (view.icon && art) {
+            view.icon.texture = this.art!.ui.textures[art.ui.statusIcons[seg.status]] ?? Texture.EMPTY;
+            view.icon.position.set(center - (9 * s) / 2, groundY + s);
+          } else {
+            view.chip.rect(center - 2 * s, groundY + s, 4 * s, 4 * s).fill(hexNum(this.theme.palette[seg.status]));
+          }
+        } else if (view.plate) {
           // Nameplate sits above the heads; the status icon colour rides on the label tint.
           const padX = 6 * s;
           const padY = 3 * s;
