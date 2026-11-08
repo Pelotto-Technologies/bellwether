@@ -74,6 +74,8 @@ interface PartyView {
 
 /** Colour of a leader's banner pole, tether and nameplate chip. */
 const GOLD = 0xe8c547;
+/** Width reserved for a leader's banner, in art pixels. */
+const BANNER_W = 18;
 
 /** Rows of the 16px ground tile that show above the window's bottom edge, in art pixels. */
 const GROUND_SHOW = 8;
@@ -267,7 +269,7 @@ export class StripScene {
           view.label.text = text;
         }
         seg.label = text;
-        seg.width = Math.max(own, view.label.width + chrome);
+        seg.width = Math.max(own + (seg.leader ? BANNER_W * s : 0), view.label.width + chrome);
       }
     }
     const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
@@ -325,7 +327,9 @@ export class StripScene {
         }
         const own = Math.max(0, seg.members.length - 1) * spacing + figW * s;
         // Characters centre inside the segment when its nameplate is the wider part.
-        const x0 = tv.walker.x + off + (seg.width - own) / 2;
+        // A leader reserves room ahead of itself for its banner, so the flag always fits in the window.
+        const reserve = seg.leader ? BANNER_W * s : 0;
+        const x0 = tv.walker.x + off + (dir === 1 ? 0 : reserve) + (seg.width - reserve - own) / 2;
         seg.members.forEach((m, i) => {
           const mv = view.members.get(m.paneId) ?? this.makeMember(view, m.paneId);
           const target = x0 + i * spacing + (figW * s) / 2;
@@ -398,14 +402,15 @@ export class StripScene {
       tv.tether.rect(x0, groundY + 1.5 * s, x1 - x0, 2 * s).fill(color);
     }
     const lead = extents.find((e) => e.seg.leader)!;
-    const poleX = dir === 1 ? lead.fig0 + figW * s * 0.1 : lead.fig1 - figW * s * 0.1;
-    const top = groundY - figH * s - 36 * s;
-    tv.banner.rect(poleX - s / 2, top, s, groundY - top).fill(0x2a2118);
-    tv.banner.rect(poleX - 1.5 * s, top - 2 * s, 3 * s, 2 * s).fill(GOLD);
-    const stripes = extents.filter((e) => !e.seg.leader && e.seg.tint).map((e) => hexNum(e.seg.tint!));
-    const fw = 14 * s;
+    // The pole stands just ahead of the leader at head height; the flag streams forward from it.
+    const poleX = dir === 1 ? lead.fig1 + 2 * s : lead.fig0 - 2 * s;
+    const fw = (BANNER_W - 4) * s;
     const fh = 10 * s;
-    const fx = dir === 1 ? poleX - fw : poleX + s / 2;
+    const top = groundY - figH * s;
+    tv.banner.rect(poleX - s / 2, top - 2 * s, s, groundY - top + 2 * s).fill(0x2a2118);
+    tv.banner.rect(poleX - 1.5 * s, top - 4 * s, 3 * s, 2 * s).fill(GOLD);
+    const stripes = extents.filter((e) => !e.seg.leader && e.seg.tint).map((e) => hexNum(e.seg.tint!));
+    const fx = dir === 1 ? poleX + s / 2 : poleX - s / 2 - fw;
     const n = Math.max(1, stripes.length);
     (stripes.length ? stripes : [GOLD]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
     tv.banner.rect(fx, top, fw, fh).stroke({ color: 0x2a2118, width: s, alignment: 1 });

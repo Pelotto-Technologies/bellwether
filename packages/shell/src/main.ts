@@ -2,14 +2,14 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, dialog, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { type DisplayInfo, pickDisplay, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
 import { configPath, loadConfig, saveConfig, type ShellConfig } from './config.js';
 import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
 import { applyAction, buildMenuModel, type MenuAction, type MenuItem } from './tray-menu.js';
 import { errorPage, waitForReady } from './ready.js';
-import { rendererUrl } from './url.js';
+import { modeFromUrl, rendererUrl } from './url.js';
 
 let cfg: ShellConfig;
 let win: BrowserWindow | undefined;
@@ -104,6 +104,16 @@ function createWindow(): void {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   placeWindow();
+  // The page switches mode by navigating to `?mode=...` (the `m` key, the on-screen exit button).
+  // Turn that into a real mode change so the window is resized too, instead of loading it in place.
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url.startsWith('data:')) return;
+    const next = modeFromUrl(url);
+    if (next && next !== cfg.mode) {
+      e.preventDefault();
+      void dispatch({ type: 'toggle-mode' });
+    }
+  });
   win.once('ready-to-show', () => win?.showInactive());
   // A failed load leaves a blank white page in the transparent window: retry, and show
   // a visible message meanwhile instead of a bare white bar.
@@ -130,8 +140,26 @@ function toElectron(items: MenuItem[]): MenuItemConstructorOptions[] {
   });
 }
 
+let raiseTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The overlay sits above everything, including the tray menu, so drop it while a menu is open. */
+function lowerWindow(): void {
+  if (!win || win.isDestroyed()) return;
+  win.setAlwaysOnTop(false);
+  clearTimeout(raiseTimer);
+  raiseTimer = setTimeout(raiseWindow, 20000); // safety net if the close event never arrives
+}
+
+function raiseWindow(): void {
+  clearTimeout(raiseTimer);
+  if (!win || win.isDestroyed()) return;
+  win.setAlwaysOnTop(true, 'screen-saver');
+}
+
 function rebuildMenu(): void {
-  tray?.setContextMenu(Menu.buildFromTemplate(toElectron(buildMenuModel(cfg, displays(), sessions))));
+  const menu = Menu.buildFromTemplate(toElectron(buildMenuModel(cfg, displays(), sessions)));
+  menu.on('menu-will-close', () => setTimeout(raiseWindow, 150));
+  tray?.setContextMenu(menu);
 }
 
 async function dispatch(action: MenuAction): Promise<void> {
@@ -164,6 +192,7 @@ if (!app.requestSingleInstanceLock()) {
     /* tray app: stay alive */
   });
   app.on('before-quit', stopAdapter);
+  app.on('will-quit', () => globalShortcut.unregisterAll());
   process.on('exit', stopAdapter);
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(sig, () => app.quit());
   app.whenReady().then(async () => {
@@ -174,7 +203,13 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(join(assetsDir(), 'icon.png')));
     tray = new Tray(trayIcon());
     tray.setToolTip('Bellwether');
-    tray.on('click', () => void refreshSessions().then(rebuildMenu));
+    tray.on('click', () => {
+      lowerWindow();
+      void refreshSessions().then(rebuildMenu);
+    });
+    tray.on('right-click', lowerWindow);
+    // Always a way out of map mode, even if the tray menu misbehaves: Ctrl/Cmd+Alt+M toggles strip and map.
+    globalShortcut.register('CommandOrControl+Alt+M', () => void dispatch({ type: 'toggle-mode' }));
     rebuildMenu();
     const onDisplays = () => {
       placeWindow();

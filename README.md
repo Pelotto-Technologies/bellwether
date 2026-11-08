@@ -91,7 +91,7 @@ To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md`
 
 Settlements gain a building for every four agents in the repo and camps gain a tent per two members, with a small pop when something new is built.
 
-Press `m` in the page to toggle strip and map mode. In map mode, click a glow to zoom into a party and read each member's role, agent, status and
+In the desktop overlay, **Ctrl+Alt+M** (Cmd+Alt+M on macOS) toggles strip and map from anywhere, and map mode has an **Exit map** button in the corner. Press `m` in the page to toggle strip and map mode. In map mode, click a glow to zoom into a party and read each member's role, agent, status and
 latest line. Esc zooms back out.
 
 ### Configure with `bellwether.toml`
