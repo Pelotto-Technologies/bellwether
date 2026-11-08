@@ -1,6 +1,6 @@
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, realpathSync, statSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Action } from './actions.js';
 import type { WorldSource } from './source.js';
@@ -38,6 +38,38 @@ const MIME: Record<string, string> = {
 };
 
 /**
+ * Maps a request URL to a file strictly inside `dir`. Returns 'forbidden' for
+ * anything that decodes to a null byte, escapes the root lexically, or escapes
+ * it through a symlink; undefined when the file does not exist.
+ */
+export function resolveStaticFile(dir: string, url: string): string | 'forbidden' | undefined {
+  let urlPath: string;
+  try {
+    urlPath = decodeURIComponent(url.split('?')[0]!.split('#')[0]!);
+  } catch {
+    return 'forbidden';
+  }
+  if (urlPath.includes('\0') || urlPath.includes('\\')) return 'forbidden';
+  let root: string;
+  try {
+    root = realpathSync(resolve(dir));
+  } catch {
+    return undefined;
+  }
+  const candidate = resolve(root, '.' + (urlPath.startsWith('/') ? urlPath : '/' + urlPath));
+  if (candidate !== root && !candidate.startsWith(root + sep)) return 'forbidden';
+  try {
+    let real = realpathSync(candidate);
+    if (real !== root && !real.startsWith(root + sep)) return 'forbidden';
+    if (statSync(real).isDirectory()) real = realpathSync(join(real, 'index.html'));
+    if (real !== root && !real.startsWith(root + sep)) return 'forbidden';
+    return statSync(real).isFile() ? real : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Broadcasts every Delta from a source to WebSocket clients on `/deltas`.
  * A client that connects late first receives a snapshot of the current world.
  */
@@ -60,17 +92,12 @@ export class DeltaServer {
         res.writeHead(404).end();
         return;
       }
-      const root = resolve(dir);
-      const urlPath = decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
-      let file = normalize(join(root, urlPath));
-      if (file !== root && !file.startsWith(root + sep)) {
+      const file = resolveStaticFile(dir, req.url ?? '/');
+      if (file === 'forbidden') {
         res.writeHead(403).end();
         return;
       }
-      try {
-        if (statSync(file).isDirectory()) file = join(file, 'index.html');
-        statSync(file);
-      } catch {
+      if (!file) {
         res.writeHead(404).end();
         return;
       }
