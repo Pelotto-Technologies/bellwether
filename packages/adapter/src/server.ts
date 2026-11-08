@@ -37,6 +37,14 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+function finishStatic(root: string, file: string): string | 'forbidden' | undefined {
+  if (!file.startsWith(root + sep)) return 'forbidden';
+  // Symlink check: the real location must also be inside the real root.
+  const real = realpathSync(file);
+  if (!real.startsWith(root + sep)) return 'forbidden';
+  return statSync(file).isFile() ? file : undefined;
+}
+
 /**
  * Maps a request URL to a file strictly inside `dir`. Returns 'forbidden' for
  * anything that decodes to a null byte, escapes the root lexically, or escapes
@@ -56,16 +64,17 @@ export function resolveStaticFile(dir: string, url: string): string | 'forbidden
   } catch {
     return undefined;
   }
-  const candidate = resolve(root, '.' + (urlPath.startsWith('/') ? urlPath : '/' + urlPath));
-  if (candidate !== root && !candidate.startsWith(root + sep)) return 'forbidden';
-  const inside = (p: string): boolean => p === root || p.startsWith(root + sep);
+  if (!urlPath.startsWith('/')) urlPath = '/' + urlPath;
+  if (urlPath.endsWith('/')) urlPath += 'index.html';
+  const candidate = resolve(root, '.' + urlPath);
+  if (!candidate.startsWith(root + sep)) return 'forbidden';
   try {
-    let target = candidate;
-    if (statSync(target).isDirectory()) target = resolve(target, 'index.html');
-    if (!inside(target)) return 'forbidden';
-    // Symlink check: the real location must also be inside the real root.
-    if (!inside(realpathSync(target))) return 'forbidden';
-    return statSync(target).isFile() ? target : undefined;
+    if (statSync(candidate).isDirectory()) {
+      const index = resolve(candidate, 'index.html');
+      if (!index.startsWith(root + sep)) return 'forbidden';
+      return finishStatic(root, index);
+    }
+    return finishStatic(root, candidate);
   } catch {
     return undefined;
   }
