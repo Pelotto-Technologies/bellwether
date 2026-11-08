@@ -1,4 +1,4 @@
-// Builds a single self-contained HTML page that previews both packs.
+// Builds a single self-contained HTML page that previews all packs.
 //   node tools/spritegen/preview.mjs <out.html>
 import fs from 'node:fs';
 import path from 'node:path';

@@ -19,6 +19,7 @@ export const BUILTIN_PACKS: readonly { name: string; label: string }[] = [
   { name: 'neutral', label: 'Workshop Crew' },
   { name: 'aesir', label: 'Aesir' },
   { name: 'wayfarers', label: 'Wayfarers' },
+  { name: 'scifi', label: 'Deep Space' },
 ];
 
 /** Strip sizes offered in the tray; the number is the art pixel scale. */

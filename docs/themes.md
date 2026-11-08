@@ -7,8 +7,8 @@ example. This guide covers the formats and how the renderer loads them.
 
 ## Public and private packs
 
-`neutral`, `aesir` and `wayfarers` are public and committed. Any other folder under
-`themes/` is private: `.gitignore` ignores `themes/*` except those three. Put personal
+`neutral`, `aesir`, `wayfarers` and `scifi` are public and committed. Any other folder under
+`themes/` is private: `.gitignore` ignores `themes/*` except those four. Put personal
 skins there and never commit them or mention their characters in core code, prompts or
 tests. Packs are found automatically.
 

@@ -6,6 +6,7 @@ See `docs/PLAN.md` §2 "Theme pack" for the manifest shape.
 - `neutral/` (Workshop Crew) ships with the repo and is the default.
 - `aesir/` (Aesir) is the second public theme.
 - `wayfarers/` (Wayfarers) is an original fantasy quest party.
+- `scifi/` (Deep Space) is an original sci-fi survey crew on an alien outpost.
 - Any other folder here is private and ignored by git. Keep personal skins there.
 
 ## Layout

@@ -22,6 +22,7 @@ Skins are swappable theme packs; the core only knows roles (`architect`, `implem
 | **Workshop Crew** (`neutral`, default) | ![](docs/images/neutral-strip.png) | ![](docs/images/neutral-map.png) |
 | **Aesir** (`aesir`) | ![](docs/images/aesir-strip.png) | ![](docs/images/aesir-map.png) |
 | **Wayfarers** (`wayfarers`) | ![](docs/images/wayfarers-strip.png) | ![](docs/images/wayfarers-map.png) |
+| **Deep Space** (`scifi`) | ![](docs/images/scifi-strip.png) | ![](docs/images/scifi-map.png) |
 
 Screenshots come from the built-in mock agents (`pnpm mock`).
 
@@ -100,7 +101,7 @@ Create `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
 source = "live"          # "live" for real Herdr, "mock" for fake agents
-pack = "aesir"           # neutral | aesir | wayfarers
+pack = "aesir"           # neutral | aesir | wayfarers | scifi
 scale = 2                # strip size, 1 to 6 (default 3; 2 is compact)
 scrub = false            # true hashes repo/branch names in recordings
 
@@ -158,7 +159,7 @@ Page options (query string):
 | Option | Effect |
 |---|---|
 | `?transparent` | No backdrop or chip. Use this for an OBS browser source. |
-| `?pack=aesir` | Skin pack: `neutral` (Workshop Crew, default), `aesir`, `wayfarers`, or a private folder under `themes/`. Overrides `pack` in `bellwether.toml`. |
+| `?pack=aesir` | Skin pack: `neutral` (Workshop Crew, default), `aesir`, `wayfarers`, `scifi` (Deep Space), or a private folder under `themes/`. Overrides `pack` in `bellwether.toml`. |
 | `?scale=4` | Pixel scale, 1 to 6 (default 3). |
 | `?source=mock` | Skip the adapter and run the mock in the browser. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
@@ -342,7 +343,7 @@ works. Paste the contents of `SKILL.md` into `AGENTS.md` or
 ## License
 
 Apache License 2.0, the same as Herdr. Copyright 2026 Pelotto Technologies. See
-[LICENSE](LICENSE). The public skin packs (`neutral`, `aesir`, `wayfarers`) are original
+[LICENSE](LICENSE). The public skin packs (`neutral`, `aesir`, `wayfarers`, `scifi`) are original
 art under the same license.
 
 Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -1,0 +1,28 @@
+{
+  "name": "scifi",
+  "description": "Deep Space: an original sci-fi survey crew working a glass-domed outpost on a violet-mossed alien world.",
+  "beacon": "orchestrator",
+  "palette": {
+    "working": "#4af0a0",
+    "done": "#ffd24a",
+    "blocked": "#ff5470",
+    "idle": "#dfe8f0",
+    "unknown": "#8a94aa"
+  },
+  "outline": "#0c1020",
+  "skin": "#f0c4a0",
+  "ground": "#3e8478",
+  "roles": {
+    "orchestrator": { "body": "#2a4a9a", "accent": "#5ae8ff", "hat": "none", "prop": "staff" },
+    "coordinator": { "body": "#e8f0f4", "accent": "#e07a2a", "hat": "none", "prop": "none" },
+    "architect": { "body": "#4a3a8a", "accent": "#6a3ab0", "hat": "cap", "prop": "book" },
+    "implementer": { "body": "#e8742a", "accent": "#ffe08a", "hat": "helm", "prop": "hammer" },
+    "reviewer": { "body": "#d8dce6", "accent": "#c43a54", "hat": "none", "prop": "none" },
+    "researcher": { "body": "#2e7a68", "accent": "#4af0a0", "hat": "helm", "prop": "none" },
+    "writer": { "body": "#6a8ac8", "accent": "#e8b84a", "hat": "none", "prop": "book" },
+    "ops": { "body": "#2ac4a8", "accent": "#ffe08a", "hat": "cap", "prop": "lantern" },
+    "generic": { "body": "#8a98b4", "accent": "#5ae8ff", "hat": "none", "prop": "none" }
+  },
+  "art": "art.json",
+  "sayTtlMs": 6000
+}
