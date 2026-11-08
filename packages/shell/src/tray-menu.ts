@@ -17,6 +17,7 @@ export const BUILTIN_PACKS: readonly { name: string; label: string }[] = [
   { name: 'neutral', label: 'Workshop Crew' },
   { name: 'aesir', label: 'Aesir' },
   { name: 'wayfarers', label: 'Wayfarers' },
+  { name: 'scifi', label: 'Deep Space' },
 ];
 
 const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');

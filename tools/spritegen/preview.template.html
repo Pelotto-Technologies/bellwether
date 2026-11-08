@@ -59,7 +59,7 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">Bellwether · art review</div>
-    <h1>Three skin packs, nine roles each</h1>
+    <h1>Four skin packs, nine roles each</h1>
     <p>Every frame here is drawn from code in <code>tools/spritegen</code> and rendered at 24×32. Pick a pack, an animation and a status to see how the status light and cloak recolour work. Everything is original art.</p>
   </header>
 
@@ -108,7 +108,7 @@ const DATA = /*__DATA__*/null;
 const ANIMS = ['walk', 'idle', 'wave', 'talk', 'raise', 'blink'];
 const FPS = { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1 };
 const STATUSES = ['working', 'done', 'blocked', 'idle', 'unknown'];
-const PACK_LABEL = { neutral: 'Workshop Crew', aesir: 'Aesir', wayfarers: 'Wayfarers' };
+const PACK_LABEL = { neutral: 'Workshop Crew', aesir: 'Aesir', wayfarers: 'Wayfarers', scifi: 'Deep Space' };
 const ROLE_ORDER = ['orchestrator', 'coordinator', 'architect', 'implementer', 'reviewer', 'researcher', 'writer', 'ops', 'generic'];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const state = { pack: 'neutral', anim: 'walk', status: 'working', cloak: null };

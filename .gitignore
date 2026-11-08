@@ -7,7 +7,7 @@ themes/*
 !themes/neutral/
 !themes/aesir/
 !themes/wayfarers/
-!themes/wayfarers/
+!themes/scifi/
 !docs/demo/*.jsonl
 blog/
 

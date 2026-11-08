@@ -7,7 +7,7 @@ export interface ShellConfig {
   mode: Mode;
   /** Electron display id; undefined means primary. */
   displayId?: number;
-  /** Skin pack name (`neutral`, `aesir`, `wayfarers`, or a private folder); undefined defers to bellwether.toml. */
+  /** Skin pack name (`neutral`, `aesir`, `wayfarers`, `scifi`, or a private folder); undefined defers to bellwether.toml. */
   pack?: string;
   /** Herdr session passed to the adapter; undefined means all sessions. */
   session?: string;

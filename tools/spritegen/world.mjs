@@ -222,6 +222,24 @@ export function settlement(style) {
     g.outline('o');
     return g;
   }
+  if (style.building === 'dome') {
+    // A glass habitat dome on a steel ring, with an airlock door and a beacon mast.
+    const g = new Grid(40, 28);
+    for (let y = 3; y < 23; y++) for (let x = 0; x < 40; x++) {
+      const dx = (x - 19.5) / 19.5, dy = (y - 23) / 20;
+      if (dx * dx + dy * dy > 1) continue;
+      const rib = (x + 2) % 9 === 0;
+      g.set(x, y, rib ? 'R' : hash(x, y, 21) < 0.08 || (x + y) % 11 === 0 && y < 14 ? 'W' : y < 9 ? 'v' : 'u');
+    }
+    g.rect(1, 23, 38, 4, 'q'); g.rect(1, 23, 38, 1, 'R'); g.rect(1, 26, 38, 1, 'r');
+    for (let x = 4; x < 37; x += 6) g.set(x, 24, 'y');
+    g.rect(16, 15, 8, 10, 'r'); g.rect(17, 16, 6, 9, 'e'); g.rect(19, 16, 2, 9, 'u');
+    g.rect(16, 14, 8, 1, 'R'); g.set(19, 20, 'y'); g.set(20, 20, 'y');
+    for (const cx of [8, 31]) { g.rect(cx, 15, 3, 3, 'y'); g.rect(cx, 15, 3, 1, 'Y'); }
+    g.rect(29, 0, 1, 5, 'q'); g.set(29, 0, 'a'); g.set(28, 1, 'R'); g.set(30, 1, 'R');
+    g.outline('o');
+    return g;
+  }
   if (style.building === 'longhouse') {
     const g = new Grid(48, 32);
     // turf roof
@@ -261,6 +279,19 @@ export function settlement(style) {
 }
 
 export function tent(style) {
+  if (style.building === 'dome') {
+    // A small landing pod: half-sphere shell with a lit hatch.
+    const g = new Grid(24, 20);
+    for (let y = 3; y < 18; y++) for (let x = 0; x < 24; x++) {
+      const dx = (x - 11.5) / 11.5, dy = (y - 17.5) / 14.5;
+      if (dx * dx + dy * dy <= 1) g.set(x, y, x < 12 ? 'r' : 'q');
+    }
+    for (let y = 10; y < 18; y++) for (let x = 8; x < 16; x++) if (Math.hypot(x - 11.5, (y - 17.5) * 1.2) < 4.2) g.set(x, y, y < 12 ? 'y' : 'k');
+    g.set(11, 1, 'a'); g.set(11, 2, 'q'); g.set(12, 2, 'q');
+    g.rect(1, 17, 22, 1, 'R');
+    g.outline('o');
+    return g;
+  }
   const g = new Grid(24, 20);
   for (let y = 3; y < 18; y++) {
     const half = Math.floor((y - 3) * 0.75) + 1;

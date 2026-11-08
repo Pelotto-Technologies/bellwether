@@ -12,7 +12,7 @@ const json = (...p: string[]) => JSON.parse(readFileSync(join(themes, ...p), 'ut
 
 describe('parseArt on the bundled packs', () => {
   it('finds the three public packs', () => {
-    expect(packs).toEqual(expect.arrayContaining(['neutral', 'aesir', 'wayfarers']));
+    expect(packs).toEqual(expect.arrayContaining(['neutral', 'aesir', 'wayfarers', 'scifi']));
   });
 
   for (const pack of packs) {
@@ -52,7 +52,7 @@ describe('parseArt on the bundled packs', () => {
 });
 
 describe('pickPack', () => {
-  const have = ['aesir', 'neutral', 'wayfarers'];
+  const have = ['aesir', 'neutral', 'scifi', 'wayfarers'];
   it('prefers the first known candidate', () => {
     expect(pickPack(have, 'wayfarers', 'aesir')).toBe('wayfarers');
     expect(pickPack(have, 'nope', 'aesir')).toBe('aesir');
