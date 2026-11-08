@@ -89,6 +89,8 @@ To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md`
 | A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
 | A desktop overlay | `bellwether overlay` (Electron, transparent, always on top, click-through). The first run installs Electron into `~/.bellwether/electron` (about 100 MB, once). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
 
+Settlements gain a building for every four agents in the repo and camps gain a tent per two members, with a small pop when something new is built.
+
 Press `m` in the page to toggle strip and map mode. In map mode, click a glow to zoom into a party and read each member's role, agent, status and
 latest line. Esc zooms back out.
 

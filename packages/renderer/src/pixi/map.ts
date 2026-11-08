@@ -6,6 +6,7 @@ import { pickPartner } from '../map/chatter.js';
 import type { MapArt } from '../map/assets.js';
 import { fitZoom, focusZoom, nearestParty, screenToWorld, stepCamera, type Camera } from '../map/camera.js';
 import { describeParty } from '../map/detail.js';
+import { agentsByRepo, campSize, campSlots, pop, townSize, townSlots } from '../map/growth.js';
 import { layoutMap, repoKey, settlementName, tileToWorld, TILE, type MapLayout } from '../map/layout.js';
 import { buildTerrain, groundTileName } from '../map/terrain.js';
 import { isMoving, spawnWanderer, stepWanderer, type Bounds, type Wanderer } from '../map/wander.js';
@@ -50,6 +51,9 @@ interface PartyView {
   glow: Sprite;
   camp: Sprite;
   fire: Sprite;
+  /** Extra tents added as the party grows, with the time each was built. */
+  tents: Sprite[];
+  tentBorn: number[];
   flag: Graphics;
   tint?: string | undefined;
   label: Text;
@@ -69,6 +73,11 @@ export class MapScene {
   private leaders = new Map<string, MemberView>();
   private fellowships: FellowshipView = groupFellowships({ machine: 'local', parties: {} });
   private settlementViews: Container[] = [];
+  private towns = new Map<string, Container>();
+  /** Build time of each building per settlement, kept across layout rebuilds so growth pops once. */
+  private townBorn = new Map<string, number[]>();
+  /** False until the first world arrives, so what already exists does not pop in. */
+  private primed = false;
   private textures = new Map<string, Texture>();
   private layout: MapLayout = layoutMap({ machine: 'local', parties: {} });
   private cam: Camera = { cx: 0, cy: 0, zoom: 1 };
@@ -153,6 +162,7 @@ export class MapScene {
     for (const l of [this.terrainLayer, this.buildingLayer]) l.removeChildren().forEach((c) => c.destroy({ children: true }));
     this.waterSprites = [];
     this.settlementViews = [];
+    this.towns.clear();
     const terrain = buildTerrain(layout);
 
     for (let y = 0; y < terrain.h; y++) {
@@ -176,11 +186,11 @@ export class MapScene {
 
     for (const s of layout.settlements) {
       const c = new Container();
-      const spr = new Sprite(this.art.prop('settlement'));
-      spr.anchor.set(0.5, 1);
+      const town = new Container();
+      this.towns.set(s.key, town);
       const p = tileToWorld(s.tile);
       c.position.set(p.x, p.y);
-      c.addChild(spr);
+      c.addChild(town);
       const name = new Text({ text: s.name, style: { fontFamily: 'monospace', fontSize: 9, fill: 0xffffff, stroke: { color: 0x000000, width: 3 } }, resolution: 4 });
       name.anchor.set(0.5, 0);
       name.position.set(0, 2);
@@ -207,7 +217,7 @@ export class MapScene {
     const flag = new Graphics();
     root.addChild(glow, camp, fire, flag, label);
     this.buildingLayer.addChild(root);
-    const view: PartyView = { root, glow, camp, fire, flag, label, members: new Map() };
+    const view: PartyView = { root, glow, camp, fire, tents: [], tentBorn: [], flag, label, members: new Map() };
     this.parties.set(id, view);
     return view;
   }
@@ -248,8 +258,10 @@ export class MapScene {
         this.parties.delete(id);
       }
     }
+    this.growTowns();
     for (const party of Object.values(world.parties)) this.updateParty(party, fv.tints.get(party.id), now);
     this.updateLeaders(fv.fellowships, world, now);
+    if (Object.keys(world.parties).length) this.primed = true;
     this.drawMarks(fv.fellowships, fv.tints);
     this.updatePanel(now);
   }
@@ -259,12 +271,58 @@ export class MapScene {
     return { cx: p.x, cy: p.y - 8 };
   }
 
+  /** One more building in a repo's settlement for every four agents; new ones pop in. */
+  private growTowns(): void {
+    const raw = this.feed.world;
+    if (!this.primed && Object.keys(raw.parties).length === 0) return;
+    const counts = agentsByRepo(raw);
+    for (const [key, town] of this.towns) {
+      const n = townSize(counts.get(key) ?? 0);
+      const born = this.townBorn.get(key) ?? [];
+      while (born.length < n) born.push(this.primed ? this.t : -99);
+      this.townBorn.set(key, born);
+      while (town.children.length < n) {
+        const spr = new Sprite(this.art.prop('settlement'));
+        spr.anchor.set(0.5, 1);
+        town.addChild(spr);
+      }
+      const slots = townSlots(n);
+      // Back to front so nearer buildings overlap farther ones.
+      const order = slots.map((_, i) => i).sort((a, b) => slots[a]!.y - slots[b]!.y);
+      order.forEach((slot, z) => {
+        const spr = town.children[slot] as Sprite;
+        spr.position.set(slots[slot]!.x, slots[slot]!.y);
+        spr.scale.set(pop(this.t - born[slot]!));
+        town.setChildIndex(spr, z);
+      });
+    }
+  }
+
+  private growCamp(view: PartyView, members: number): void {
+    const n = campSize(members);
+    while (view.tentBorn.length < n) view.tentBorn.push(this.primed ? this.t : -99);
+    while (view.tents.length < n - 1) {
+      const t = new Sprite(this.art.prop('camp'));
+      t.anchor.set(0.5, 1);
+      view.root.addChildAt(t, view.root.getChildIndex(view.camp));
+      view.tents.push(t);
+    }
+    const slots = campSlots(n);
+    view.camp.position.set(slots[0]!.x, slots[0]!.y);
+    view.camp.scale.set(pop(this.t - view.tentBorn[0]!));
+    view.tents.forEach((t, i) => {
+      t.position.set(slots[i + 1]!.x, slots[i + 1]!.y);
+      t.scale.set(pop(this.t - view.tentBorn[i + 1]!));
+    });
+  }
+
   private updateParty(party: Party, tint: string | undefined, now: number): void {
     const camp = this.layout.camps.get(party.id);
     if (!camp) return;
     const view = this.parties.get(party.id) ?? this.makeParty(party.id);
     const home = tileToWorld(camp.tile);
     view.root.position.set(home.x, home.y);
+    this.growCamp(view, Object.keys(party.members).length);
     if (view.tint !== tint) {
       view.tint = tint;
       view.flag.clear();
