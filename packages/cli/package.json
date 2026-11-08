@@ -1,6 +1,6 @@
 {
   "name": "@pelotto-tech/bellwether",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Pixel stream overlay for Herdr agent workspaces: CLI, adapter and overlay page in one package",
   "license": "Apache-2.0",
   "type": "module",
