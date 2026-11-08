@@ -56,7 +56,11 @@ const DELEGATE_TOOLS = new Set(['Task', 'Agent']);
 
 /** Normalize for hashing: slashes forward, no trailing slash, case-folded when it looks like a Windows path. */
 export function normalizeCwd(cwd: string): string {
-  let p = cwd.replace(/\\/g, '/').replace(/\/+$/, '');
+  let p = cwd.replace(/\\/g, '/');
+  // Trim trailing slashes with a loop: a `/\/+$/` regex is quadratic on long runs of `/`.
+  let end = p.length;
+  while (end > 0 && p[end - 1] === '/') end--;
+  p = p.slice(0, end);
   if (/^[a-z]:/i.test(cwd) || cwd.includes('\\')) p = p.toLowerCase();
   return p || '/';
 }
