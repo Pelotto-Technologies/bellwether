@@ -47,7 +47,7 @@ function retarget(w: Wanderer, id: string, home: Pt, radius: number, bounds?: Bo
  * One step, kept inside `bounds` (the map edge). `meet` overrides the target (walk to a conversation partner and stop
  * short of them). Blocked members hold still; others stroll at their status speed.
  */
-export function stepWanderer(w: Wanderer, id: string, status: Status, home: Pt, radius: number, dt: number, meet?: Pt, bounds?: Bounds): Wanderer {
+export function stepWanderer(w: Wanderer, id: string, status: Status, home: Pt, radius: number, dt: number, meet?: Pt, bounds?: Bounds, speedOverride?: number): Wanderer {
   let cur = w;
   if (meet) {
     // Stand a little to the side of the partner.
@@ -57,7 +57,7 @@ export function stepWanderer(w: Wanderer, id: string, status: Status, home: Pt, 
   } else if (Math.hypot(w.tx - w.x, w.ty - w.y) < 1) {
     cur = retarget(w, id, home, radius, bounds);
   }
-  const speed = meet ? Math.max(SPEED.working, 24) : SPEED[status];
+  const speed = speedOverride ?? (meet ? Math.max(SPEED.working, 24) : SPEED[status]);
   if (speed === 0) return cur;
   const dx = cur.tx - cur.x;
   const dy = cur.ty - cur.y;

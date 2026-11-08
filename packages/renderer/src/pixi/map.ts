@@ -9,6 +9,7 @@ import { describeParty } from '../map/detail.js';
 import { agentsByRepo, campSize, campSlots, pop, townSize, townSlots } from '../map/growth.js';
 import { layoutMap, repoKey, settlementName, tileToWorld, TILE, type MapLayout } from '../map/layout.js';
 import { buildTerrain, groundTileName } from '../map/terrain.js';
+import { nextRiding, parkSpot, RIDE_SPEED, summonPlan } from '../map/ride.js';
 import { isMoving, spawnWanderer, stepWanderer, type Bounds, type Wanderer } from '../map/wander.js';
 import { SPEED, beaconAlpha, bob, hash01, walkFrame } from '../sim.js';
 import { FRAME_NAMES, SPRITE_H, SPRITE_W, buildFrame, paletteFor, rasterize, type FrameName } from '../sprites.js';
@@ -20,6 +21,10 @@ import type { LoadedArt } from './pack.js';
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 const CAMP_RADIUS = 22;
+/** How far a rider sits above the ground while mounted, in world pixels. */
+const RIDER_LIFT = 8;
+/** A leader farther than this from its settlement rides home. */
+const HOME_RADIUS = 40;
 /** Sprite-sheet characters are drawn smaller on the map so a camp still fits among the tiles. */
 const FIGURE_SCALE = 0.75;
 /** Leaders stand around their settlement, closer in than camps. */
@@ -37,6 +42,8 @@ interface MemberView {
   phase: number;
   /** Scene time the member first appeared; arrival plays from here. */
   born: number;
+  /** An orchestrator's mount: ridden on long journeys, parked and idling otherwise. */
+  mount?: { sprite: Sprite; x: number; y: number; dir: 1 | -1; riding: boolean };
 }
 
 interface StepCtx {
@@ -48,6 +55,8 @@ interface StepCtx {
   tint?: string | undefined;
   /** Leaders walk to this point when they speak. */
   meetPoint?: { x: number; y: number } | undefined;
+  /** A leader riding out to summon a new camp: where, and how fast. */
+  summon?: { to: { x: number; y: number }; speed: number } | undefined;
 }
 
 interface PartyView {
@@ -75,6 +84,8 @@ export class MapScene {
   /** Arrival puffs, redrawn every frame. */
   private fx = new Graphics();
   private reduced = prefersReducedMotion();
+  /** New led camps waiting for their orchestrator to ride out and summon them. */
+  private summons = new Map<string, { prefix: string; to: { x: number; y: number }; arrive: number; speed: number }>();
   private waterSprites: { sprite: Sprite; a: Texture; b: Texture }[] = [];
   private parties = new Map<string, PartyView>();
   private leaders = new Map<string, MemberView>();
@@ -166,7 +177,9 @@ export class MapScene {
   /** Rebuilds terrain and settlements; only runs when the layout changes. */
   private rebuild(layout: MapLayout): void {
     this.layout = layout;
-    for (const l of [this.terrainLayer, this.buildingLayer]) l.removeChildren().forEach((c) => c.destroy({ children: true }));
+    // Camps outlive a layout change (a new party moves the map around them), so keep their views.
+    const camps = new Set<unknown>([...this.parties.values()].map((v) => v.root));
+    for (const l of [this.terrainLayer, this.buildingLayer]) l.removeChildren().forEach((c) => (camps.has(c) ? undefined : c.destroy({ children: true })));
     this.waterSprites = [];
     this.settlementViews = [];
     this.towns.clear();
@@ -206,6 +219,7 @@ export class MapScene {
       this.buildingLayer.addChild(c);
       this.settlementViews.push(c);
     }
+    for (const v of this.parties.values()) this.buildingLayer.addChild(v.root);
   }
 
   private makeParty(id: string): PartyView {
@@ -306,9 +320,20 @@ export class MapScene {
     }
   }
 
-  private growCamp(view: PartyView, members: number): void {
+  /** A new camp in a led fellowship waits for its orchestrator, who rides out to summon it. */
+  private planSummon(partyId: string, home: { x: number; y: number }): void {
+    const f = this.fellowships.byParty.get(partyId);
+    if (!f || !this.primed || this.reduced) return;
+    const prefix = `${f.key}/`;
+    const leader = [...this.leaders].find(([id]) => id.startsWith(prefix))?.[1];
+    if (!leader) return;
+    const plan = summonPlan(this.t, { x: leader.w.x, y: leader.w.y }, home);
+    this.summons.set(partyId, { prefix, to: home, arrive: plan.arrive, speed: plan.speed });
+  }
+
+  private growCamp(view: PartyView, members: number, arrive?: number): void {
     const n = campSize(members);
-    while (view.tentBorn.length < n) view.tentBorn.push(birthTime(this.t, this.primed, this.reduced));
+    while (view.tentBorn.length < n) view.tentBorn.push(arrive ?? birthTime(this.t, this.primed, this.reduced));
     while (view.tents.length < n - 1) {
       const t = new Sprite(this.art.prop('camp'));
       t.anchor.set(0.5, 1);
@@ -329,10 +354,16 @@ export class MapScene {
   private updateParty(party: Party, tint: string | undefined, now: number): void {
     const camp = this.layout.camps.get(party.id);
     if (!camp) return;
+    const isNew = !this.parties.has(party.id);
     const view = this.parties.get(party.id) ?? this.makeParty(party.id);
     const home = tileToWorld(camp.tile);
     view.root.position.set(home.x, home.y);
-    this.growCamp(view, Object.keys(party.members).length);
+    if (isNew) this.planSummon(party.id, home);
+    const summon = this.summons.get(party.id);
+    if (summon && this.t > summon.arrive + 0.5) this.summons.delete(party.id);
+    // A summoned camp appears when its orchestrator arrives.
+    view.root.visible = !summon || this.t >= summon.arrive;
+    this.growCamp(view, Object.keys(party.members).length, summon?.arrive);
     if (view.tint !== tint) {
       view.tint = tint;
       view.flag.clear();
@@ -368,13 +399,14 @@ export class MapScene {
       let mv = view.members.get(m.paneId);
       if (!mv) {
         mv = this.makeMember(m.paneId, `${party.id}/${m.paneId}`, { x: home.x, y: home.y + 6 }, CAMP_RADIUS);
+        if (summon) mv.born = summon.arrive;
         view.members.set(m.paneId, mv);
       }
       this.stepMember(mv, { sayParty: party.id, wid: `${party.id}/${m.paneId}`, status: party.status, tint }, m, { x: home.x, y: home.y + 6 }, CAMP_RADIUS, m.paneId === beaconPane, now);
     });
   }
 
-  private makeMember(paneId: string, wid: string, home: { x: number; y: number }, radius: number): MemberView {
+  private makeMember(paneId: string, wid: string, home: { x: number; y: number }, radius: number, rider = false): MemberView {
     const sprite = new Sprite();
     sprite.anchor.set(0.5, 1);
     const figure = this.figures ? new Figure(this.figures, this.theme) : undefined;
@@ -382,11 +414,22 @@ export class MapScene {
     const text = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 8, fill: 0x1b1b24 }, resolution: 4 });
     const bubble = new Container();
     bubble.addChild(bg, text);
-    this.actorLayer.addChild(figure ? figure.container : sprite, bubble);
-    return { sprite, ...(figure ? { figure } : {}), bubble, text, bg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced), w: spawnWanderer(wid, home, radius, this.bounds()) };
+    const body = figure ? figure.container : sprite;
+    let mount: MemberView['mount'];
+    if (rider && this.art.hasProp('mount_idle')) {
+      const ms = new Sprite(this.art.prop('mount_idle'));
+      ms.anchor.set(0.5, 1);
+      ms.visible = false;
+      // The mount stands behind its rider.
+      this.actorLayer.addChild(ms);
+      mount = { sprite: ms, x: home.x, y: home.y, dir: 1, riding: false };
+    }
+    this.actorLayer.addChild(body, bubble);
+    return { ...(mount ? { mount } : {}), sprite, ...(figure ? { figure } : {}), bubble, text, bg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced), w: spawnWanderer(wid, home, radius, this.bounds()) };
   }
 
   private destroyMember(mv: MemberView): void {
+    mv.mount?.sprite.destroy();
     if (mv.figure) mv.figure.destroy();
     else mv.sprite.destroy();
     mv.bubble.destroy({ children: true });
@@ -405,13 +448,14 @@ export class MapScene {
         live.add(id);
         let mv = this.leaders.get(id);
         if (!mv) {
-          mv = this.makeMember(l.member.paneId, `lead/${id}`, home, LEADER_RADIUS);
+          mv = this.makeMember(l.member.paneId, `lead/${id}`, home, LEADER_RADIUS, true);
           this.leaders.set(id, mv);
         }
         const follower = pickFollower(f, l.member.paneId);
         const fp = follower ? Object.values(world.parties[follower]?.members ?? {}).sort((a, b) => a.paneId.localeCompare(b.paneId))[0] : undefined;
         const fv = follower && fp ? this.parties.get(follower)?.members.get(fp.paneId) : undefined;
-        this.stepMember(mv, { sayParty: l.partyId, wid: `lead/${id}`, status: l.member.status, meetPoint: fv ? { x: fv.w.x, y: fv.w.y } : undefined }, l.member, home, LEADER_RADIUS, true, now);
+        const sm = [...this.summons.values()].find((s) => id.startsWith(s.prefix) && this.t < s.arrive);
+        this.stepMember(mv, { sayParty: l.partyId, wid: `lead/${id}`, status: l.member.status, meetPoint: fv ? { x: fv.w.x, y: fv.w.y } : undefined, summon: sm ? { to: sm.to, speed: sm.speed } : undefined }, l.member, home, LEADER_RADIUS, true, now);
       }
     }
     for (const [id, mv] of this.leaders) {
@@ -465,16 +509,44 @@ export class MapScene {
       if (pv && partner && !(partner.partyId === ctx.sayParty && partner.paneId === m.paneId)) meet = { x: pv.w.x, y: pv.w.y };
     }
     if (!say) meet = undefined;
-    mv.w = stepWanderer(mv.w, ctx.wid, m.status, home, radius, this.dt, meet, this.bounds());
-    const moving = isMoving(mv.w) && SPEED[m.status] > 0;
+    let speed: number | undefined;
+    const mount = mv.mount;
+    if (ctx.summon) {
+      // Summoning a camp beats chatting: ride out to where it will stand.
+      meet = ctx.summon.to;
+      speed = ctx.summon.speed;
+    }
+    if (mount) {
+      const homeDist = Math.hypot(home.x - mv.w.x, home.y - mv.w.y);
+      // A rider far from its settlement, or mid-ride, heads home when it has nothing else to do.
+      if (!meet && (mount.riding || homeDist > HOME_RADIUS)) meet = home;
+      const dist = meet ? Math.hypot(meet.x - mv.w.x, meet.y - mv.w.y) : 0;
+      const was = mount.riding;
+      mount.riding = nextRiding(mount.riding, dist, !!meet);
+      if (mount.riding) speed ??= RIDE_SPEED;
+      if (was && !mount.riding) {
+        const p = parkSpot(mv.w, mv.w.dir);
+        Object.assign(mount, { x: p.x, y: p.y, dir: mv.w.dir });
+      }
+    }
+    mv.w = stepWanderer(mv.w, ctx.wid, m.status, home, radius, this.dt, meet, this.bounds(), speed);
+    const moving = isMoving(mv.w) && (SPEED[m.status] > 0 || speed !== undefined);
+    const lift = mount?.riding ? RIDER_LIFT : 0;
+    if (mount) {
+      if (mount.riding) Object.assign(mount, { x: mv.w.x, y: mv.w.y, dir: mv.w.dir });
+      mount.sprite.visible = true;
+      mount.sprite.texture = this.art.prop(mount.riding && moving ? `mount_walk_${Math.floor(this.t * 8) % 4}` : 'mount_idle');
+      mount.sprite.scale.set(mount.dir * FIGURE_SCALE, FIGURE_SCALE);
+      mount.sprite.position.set(mount.x, mount.y);
+    }
     const figH = mv.figure ? this.figures!.art.character.h * FIGURE_SCALE : SPRITE_H;
     if (mv.figure) {
-      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking: !!say, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y + bob(m.status, this.t, mv.phase) * 0.5);
+      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking: !!say, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
     } else {
       const frame = FRAME_NAMES[walkFrame(moving, this.t, mv.phase)]!;
       mv.sprite.texture = this.frameTexture(m.role, frame, beacon);
       mv.sprite.scale.x = mv.w.dir;
-      mv.sprite.position.set(mv.w.x, mv.w.y + bob(m.status, this.t, mv.phase) * 0.5);
+      mv.sprite.position.set(mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
       mv.sprite.tint = m.status === 'blocked' ? 0xffd0d0 : ctx.tint ? hexNum(mixHex('#ffffff', ctx.tint, 0.55)) : 0xffffff;
     }
 
