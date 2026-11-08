@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beaconAlpha, bob, layoutLanes, memberX, stepWalker, walkFrame } from '../src/sim.js';
+import { assignRows, beaconAlpha, bob, layoutLanes, memberX, parseSpan, stepWalker, walkFrame, MAX_ROWS, ROW_FILL } from '../src/sim.js';
 
 describe('layoutLanes', () => {
   it('splits the strip into contiguous lanes in stable order', () => {
@@ -61,5 +61,37 @@ describe('motion helpers', () => {
     expect(beaconAlpha('working', 0)).toBe(1);
     const a = Array.from({ length: 20 }, (_, i) => beaconAlpha('blocked', i * 0.1));
     expect(Math.max(...a) - Math.min(...a)).toBeGreaterThan(0.3);
+  });
+});
+
+describe('depth rows', () => {
+  const g = (n: number, span = 100) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, span }));
+  it('keeps everyone in the front row while there is room to walk', () => {
+    const rows = assignRows(g(5), 1000);
+    expect(new Set(rows.values())).toEqual(new Set([0]));
+  });
+  it('opens just enough back rows when crowded, keeping each row under the fill line', () => {
+    const rows = assignRows(g(20), 1000);
+    const count = Math.max(...rows.values()) + 1;
+    expect(count).toBe(4);
+    for (let r = 0; r < count; r++) {
+      const load = [...rows].filter(([, row]) => row === r).length * 100;
+      expect(load).toBeLessThanOrEqual(1000 * ROW_FILL);
+    }
+  });
+  it('caps the number of rows and stays deterministic', () => {
+    const rows = assignRows(g(200), 1000);
+    expect(Math.max(...rows.values())).toBe(MAX_ROWS - 1);
+    expect([...assignRows(g(200), 1000)]).toEqual([...rows]);
+  });
+});
+
+describe('parseSpan', () => {
+  it('reads a window slice of a spanning strip', () => {
+    expect(parseSpan('1920,5760')).toEqual({ offset: 1920, total: 5760 });
+    expect(parseSpan('0,1920')).toEqual({ offset: 0, total: 1920 });
+  });
+  it('ignores anything malformed', () => {
+    for (const raw of [null, '', 'x', '10', '-1,100', '100,100', '5,0', 'a,b']) expect(parseSpan(raw)).toBeUndefined();
   });
 });

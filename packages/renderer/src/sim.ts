@@ -83,3 +83,46 @@ export function hash01(s: string): number {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return ((h >>> 0) % 10000) / 10000;
 }
+
+/** At most this many depth rows; past it the back rows just get more crowded. */
+export const MAX_ROWS = 4;
+/** A row is full once its groups take this share of the width, so everyone keeps room to walk. */
+export const ROW_FILL = 0.6;
+
+/**
+ * Splits walking groups into depth rows when the strip gets crowded. Row 0 is the front;
+ * higher rows stand further back and are drawn behind. Everything fits in row 0 until the
+ * groups fill `fill` of the width; then just enough rows are opened and groups are dealt
+ * out, widest first, to the row with the least load. Ties go to the front.
+ */
+export function assignRows(groups: readonly { id: string; span: number }[], width: number, fill = ROW_FILL, maxRows = MAX_ROWS): Map<string, number> {
+  const rows = new Map<string, number>();
+  const room = Math.max(1, width * fill);
+  const total = groups.reduce((n, g) => n + g.span, 0);
+  const count = Math.max(1, Math.min(maxRows, Math.ceil(total / room)));
+  const load = new Array<number>(count).fill(0);
+  const order = [...groups].sort((a, b) => b.span - a.span || a.id.localeCompare(b.id));
+  for (const g of order) {
+    let best = 0;
+    for (let r = 1; r < count; r++) if (load[r]! < load[best]!) best = r;
+    load[best]! += g.span;
+    rows.set(g.id, best);
+  }
+  return rows;
+}
+
+/** A window's slice of a strip that spans several monitors, in CSS pixels. */
+export interface SpanView {
+  /** Left edge of this window within the whole strip. */
+  offset: number;
+  /** Width of the whole strip across every monitor. */
+  total: number;
+}
+
+/** Reads `?span=<offset>,<total>`; anything malformed means this window is the whole strip. */
+export function parseSpan(raw: string | null): SpanView | undefined {
+  if (!raw) return undefined;
+  const [o, t] = raw.split(',').map(Number);
+  if (o === undefined || t === undefined || !Number.isFinite(o) || !Number.isFinite(t) || o < 0 || t <= 0 || o >= t) return undefined;
+  return { offset: o, total: t };
+}

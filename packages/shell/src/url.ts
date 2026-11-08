@@ -15,8 +15,11 @@ export function modeFromUrl(url: string): 'strip' | 'map' | undefined {
   }
 }
 
-export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal' | 'bubbles'>): string {
+/** `slice` is this window's part of a strip that spans monitors; it only applies in strip mode. */
+export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal' | 'bubbles'>, slice?: { offset: number; total: number }): string {
   const u = new URL(cfg.url);
+  if (slice && cfg.mode === 'strip') u.searchParams.set('span', `${Math.round(slice.offset)},${Math.round(slice.total)}`);
+  else if (u.searchParams.has('span')) u.searchParams.delete('span');
   if (cfg.mode === 'map') u.searchParams.set('mode', 'map');
   else if (u.searchParams.has('mode')) u.searchParams.delete('mode');
   if (cfg.pack) u.searchParams.set('pack', cfg.pack);

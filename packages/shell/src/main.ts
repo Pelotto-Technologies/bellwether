@@ -3,7 +3,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
-import { type DisplayInfo, pickDisplay, windowBounds } from './bounds.js';
+import { type DisplayInfo, pickDisplay, type Rect, spanLayout, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
 import { configPath, effectiveScale, loadConfig, saveConfig, validScale, type ShellConfig } from './config.js';
 import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
@@ -12,7 +12,10 @@ import { errorPage, waitForReady } from './ready.js';
 import { modeFromUrl, rendererUrl } from './url.js';
 
 let cfg: ShellConfig;
-let win: BrowserWindow | undefined;
+/** One window, or one per monitor while the strip spans them. */
+let wins: BrowserWindow[] = [];
+/** URL each window last loaded, so a window only reloads when its own URL changes. */
+const loaded = new WeakMap<BrowserWindow, string>();
 let tray: Tray | undefined;
 let adapter: ChildProcess | undefined;
 let sessions: string[] = [];
@@ -89,19 +92,47 @@ async function refreshSessions(): Promise<void> {
   }
 }
 
-function placeWindow(): void {
-  if (!win) return;
-  const d = pickDisplay(displays(), cfg.displayId);
-  if (!d) return;
-  win.setBounds(windowBounds(d, cfg.mode, effectiveScale(cfg, servedScale)));
-  win.setAlwaysOnTop(true, 'screen-saver');
-  // Map mode needs clicks; strip mode lets them fall through to whatever is underneath.
-  if (cfg.mode === 'map') win.setIgnoreMouseEvents(false);
-  else win.setIgnoreMouseEvents(true, { forward: true });
+interface Placement {
+  bounds: Rect;
+  slice?: { offset: number; total: number };
 }
 
-function createWindow(): void {
-  win = new BrowserWindow({
+/** Where each window goes: one per monitor when the strip spans them, else one on the chosen monitor. */
+function placements(): Placement[] {
+  const ds = displays();
+  const scale = effectiveScale(cfg, servedScale);
+  if (cfg.mode === 'strip' && cfg.span && ds.length > 1) {
+    return spanLayout(ds, scale).map((sl) => ({ bounds: sl.bounds, slice: { offset: sl.offset, total: sl.total } }));
+  }
+  const d = pickDisplay(ds, cfg.displayId);
+  return d ? [{ bounds: windowBounds(d, cfg.mode, scale) }] : [];
+}
+
+/** Creates or drops windows to match the placements, moves each into place and loads its URL if it changed. */
+function placeWindows(reload = false): void {
+  const want = placements();
+  while (wins.length < want.length) wins.push(createWindow());
+  while (wins.length > want.length) wins.pop()?.destroy();
+  wins.forEach((w, i) => {
+    const p = want[i]!;
+    w.setBounds(p.bounds);
+    // Moving between monitors with different scaling can land at the wrong size on Windows; a second set fixes it.
+    const got = w.getBounds();
+    if (got.width !== p.bounds.width || got.height !== p.bounds.height) w.setBounds(p.bounds);
+    w.setAlwaysOnTop(true, 'screen-saver');
+    // Map mode needs clicks; strip mode lets them fall through to whatever is underneath.
+    if (cfg.mode === 'map') w.setIgnoreMouseEvents(false);
+    else w.setIgnoreMouseEvents(true, { forward: true });
+    const url = rendererUrl(cfg, p.slice);
+    if (reload || loaded.get(w) !== url) {
+      loaded.set(w, url);
+      void w.loadURL(url);
+    }
+  });
+}
+
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     transparent: true,
     frame: false,
     show: false,
@@ -114,7 +145,6 @@ function createWindow(): void {
     backgroundColor: '#00000000',
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
-  placeWindow();
   // The page switches mode by navigating to `?mode=...` (the `m` key, the on-screen exit button).
   // Turn that into a real mode change so the window is resized too, instead of loading it in place.
   win.webContents.on('will-navigate', (e, url) => {
@@ -125,17 +155,18 @@ function createWindow(): void {
       void dispatch({ type: 'toggle-mode' });
     }
   });
-  win.once('ready-to-show', () => win?.showInactive());
+  win.once('ready-to-show', () => win.showInactive());
   // A failed load leaves a blank white page in the transparent window: retry, and show
   // a visible message meanwhile instead of a bare white bar.
   win.webContents.on('did-fail-load', (_e, _code, _desc, failedUrl, isMainFrame) => {
     if (!isMainFrame || failedUrl.startsWith('data:')) return;
-    void win?.loadURL(errorPage(failedUrl));
+    void win.loadURL(errorPage(failedUrl));
     setTimeout(() => {
-      if (win && !win.isDestroyed()) void win.loadURL(rendererUrl(cfg));
+      const url = loaded.get(win);
+      if (!win.isDestroyed() && url) void win.loadURL(url);
     }, 2000);
   });
-  void win.loadURL(rendererUrl(cfg));
+  return win;
 }
 
 function toElectron(items: MenuItem[]): MenuItemConstructorOptions[] {
@@ -155,16 +186,14 @@ let raiseTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** The overlay sits above everything, including the tray menu, so drop it while a menu is open. */
 function lowerWindow(): void {
-  if (!win || win.isDestroyed()) return;
-  win.setAlwaysOnTop(false);
+  for (const w of wins) if (!w.isDestroyed()) w.setAlwaysOnTop(false);
   clearTimeout(raiseTimer);
   raiseTimer = setTimeout(raiseWindow, 20000); // safety net if the close event never arrives
 }
 
 function raiseWindow(): void {
   clearTimeout(raiseTimer);
-  if (!win || win.isDestroyed()) return;
-  win.setAlwaysOnTop(true, 'screen-saver');
+  for (const w of wins) if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'screen-saver');
 }
 
 function rebuildMenu(): void {
@@ -182,8 +211,7 @@ async function dispatch(action: MenuAction): Promise<void> {
   cfg = r.cfg;
   await saveConfig(configPath(app.getPath('userData')), cfg);
   if (r.restartAdapter) await startAdapter();
-  placeWindow();
-  if (r.reload) void win?.loadURL(rendererUrl(cfg));
+  placeWindows(r.reload);
   rebuildMenu();
 }
 
@@ -211,7 +239,7 @@ if (!app.requestSingleInstanceLock()) {
     await Promise.all([startAdapter(), refreshSessions()]);
     await waitForReady(() => reachable(cfg.url));
     await refreshServedScale();
-    createWindow();
+    placeWindows();
     if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(join(assetsDir(), 'icon.png')));
     tray = new Tray(trayIcon());
     tray.setToolTip('Bellwether');
@@ -224,7 +252,7 @@ if (!app.requestSingleInstanceLock()) {
     globalShortcut.register('CommandOrControl+Alt+M', () => void dispatch({ type: 'toggle-mode' }));
     rebuildMenu();
     const onDisplays = () => {
-      placeWindow();
+      placeWindows();
       rebuildMenu();
     };
     screen.on('display-added', onDisplays);

@@ -2,7 +2,7 @@ import { rollup, type Member, type Role, type Status } from '@bellwether/adapter
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
-import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, SPEED, type Walker } from '../sim.js';
+import { assignRows, beaconAlpha, bob, hash01, layoutLanes, stepWalker, walkFrame, MAX_ROWS, SPEED, type Lane, type SpanView, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
 import { DoubleTap } from '../doubletap.js';
@@ -62,6 +62,8 @@ interface Extent {
 
 interface TrainView {
   walker: Walker;
+  /** Eased depth row (0 = front); a group steps back smoothly when the strip fills up. */
+  depth: number;
   tether: Graphics;
   banner: Graphics;
 }
@@ -88,6 +90,13 @@ const GROUND_SHOW = 8;
 const ICON_ROOM = 8;
 /** How far a character's feet sink into the ground, in art pixels. */
 const FEET_SINK = 3;
+/** How far each depth row stands behind the one in front, in art pixels. */
+export const ROW_LIFT = 4;
+/** Brightness of each depth row: the back rows are in the shade. */
+const ROW_SHADE = [0xffffff, 0xd8d8d8, 0xb4b4b4, 0x929292];
+
+/** Walker state one strip window shares with the others when the strip spans monitors. */
+export type WalkerSync = [id: string, x: number, dir: 1 | -1][];
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 
@@ -106,6 +115,12 @@ export class StripScene {
   private reduced = prefersReducedMotion();
 
   private doubleTap = new DoubleTap();
+  /** One container per depth row, back rows first so they draw behind. */
+  private rowLayers: Container[] = [];
+  /** Eased number of back rows; the ground grows deeper with it. */
+  private groundDepth = 0;
+  /** Walker positions from the lead window, applied on the next frame. */
+  private adopted: Map<string, Walker> | undefined;
 
   constructor(
     private app: Application,
@@ -115,37 +130,69 @@ export class StripScene {
     private art: LoadedArt | null = null,
     /** Minimal labels: no nameplate above the heads, just a small status icon below the feet. */
     private minimal = false,
+    /** This window's slice of a strip spanning several monitors; absent means the window is the whole strip. */
+    private span?: SpanView,
   ) {
-    this.groundShow = GROUND_SHOW + (minimal ? ICON_ROOM : 0);
+    this.baseShow = GROUND_SHOW + (minimal ? ICON_ROOM : 0);
+    this.groundShow = this.baseShow;
+    for (let r = 0; r < MAX_ROWS; r++) {
+      const row = new Container();
+      row.tint = ROW_SHADE[r] ?? 0x808080;
+      this.rowLayers.push(row);
+    }
+    this.layer.addChild(...[...this.rowLayers].reverse());
     app.stage.addChild(this.ground, this.layer, this.fx);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
 
+  private baseShow = GROUND_SHOW;
   private groundShow = GROUND_SHOW;
   private groundTiles: Sprite[] = [];
   private groundWidth = 0;
+  private groundRows = 0;
+
+  /** Width of the whole strip: every monitor's worth when spanning. */
+  private worldWidth(): number {
+    return this.span?.total ?? this.app.screen.width;
+  }
+
+  /** Current walker positions, for the lead window to share. */
+  walkers(): WalkerSync {
+    return [...this.trains].map(([id, tv]) => [id, tv.walker.x, tv.walker.dir]);
+  }
+
+  /** Take the lead window's walker positions so every monitor shows the same strip. */
+  adopt(list: WalkerSync): void {
+    this.adopted = new Map(list.map(([id, x, dir]) => [id, { x, dir }]));
+  }
 
   /** Rebuilds the ground strip from the pack's tiles. Only the top rows show; the rest sits below the window. */
   private layoutGround(width: number, height: number) {
     const a = this.art!;
     const s = this.scale;
     const tile = 16 * s;
-    if (width !== this.groundWidth || this.groundTiles.length === 0) {
+    // A crowded strip shows more ground (the back rows stand on it), so it may need a second row of tiles.
+    const rows = Math.max(1, Math.ceil(this.groundShow / 16));
+    if (width !== this.groundWidth || rows !== this.groundRows || this.groundTiles.length === 0) {
       for (const t of this.groundTiles) t.destroy();
       this.groundTiles = [];
       const names = a.art.ground.tiles;
-      for (let i = 0; i * tile < width; i++) {
-        const tex = a.ground.textures[names[Math.floor(hash01(`g${i}`) * names.length)]!]!;
-        const sp = new Sprite(tex);
-        sp.scale.set(s);
-        sp.x = i * tile;
-        this.ground.addChild(sp);
-        this.groundTiles.push(sp);
+      for (let r = 0; r < rows; r++) {
+        for (let i = 0; i * tile < width; i++) {
+          const tex = a.ground.textures[names[Math.floor(hash01(r ? `g${i}r${r}` : `g${i}`) * names.length)]!]!;
+          const sp = new Sprite(tex);
+          sp.scale.set(s);
+          sp.x = i * tile;
+          this.ground.addChild(sp);
+          this.groundTiles.push(sp);
+        }
       }
       this.groundWidth = width;
+      this.groundRows = rows;
     }
-    for (const t of this.groundTiles) t.y = height - this.groundShow * s;
+    const perRow = this.groundTiles.length / rows;
+    this.groundTiles.forEach((t, k) => (t.y = height - this.groundShow * s + Math.floor(k / perRow) * tile));
   }
 
   private frame(role: Role, frame: FrameName, beacon: boolean) {
@@ -221,7 +268,7 @@ export class StripScene {
     }
     const chip = new Graphics();
     root.addChild(chip, label);
-    this.layer.addChild(root);
+    this.rowLayers[0]!.addChild(root);
     const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
     root.alpha = this.primed && !this.reduced ? 0 : 1;
     this.parties.set(id, view);
@@ -254,20 +301,14 @@ export class StripScene {
   update(dt: number, now: number): void {
     this.t += dt;
     this.fx.clear();
-    const { width, height } = this.app.screen;
+    const { height } = this.app.screen;
+    const width = this.worldWidth();
+    // Spanning monitors: this window shows its own slice of the one long strip.
+    this.app.stage.x = -(this.span?.offset ?? 0);
     const s = this.scale;
     const art = this.art?.art;
     const figW = art ? art.character.w : SPRITE_W;
     const figH = art ? art.character.h : SPRITE_H;
-    let groundY: number;
-    if (art) {
-      this.layoutGround(width, height);
-      groundY = height - (this.groundShow - FEET_SINK) * s;
-    } else {
-      const groundH = 3 * s;
-      groundY = height - groundH;
-      this.ground.clear().rect(0, groundY, width, groundH).fill(hexNum(this.theme.ground));
-    }
 
     const fv = groupFellowships(this.feed.world);
     const trains = this.trainFor(fv);
@@ -293,7 +334,27 @@ export class StripScene {
     }
     const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
     const weights = Object.fromEntries(trains.map((t) => [t.id, Math.max(1, spanOf(t) / (figW * s * 3))]));
-    const lanes = layoutLanes(trains.map((t) => t.id), width, 16, weights);
+    // Crowded: deal the groups out into depth rows, each with the full width to walk in.
+    const rowOf = assignRows(trains.map((t) => ({ id: t.id, span: spanOf(t) })), width - 32);
+    const lanes = new Map<string, Lane>();
+    const backRows = Math.max(0, ...rowOf.values());
+    for (let r = 0; r <= backRows; r++) {
+      const ids = trains.filter((t) => rowOf.get(t.id) === r).map((t) => t.id);
+      for (const [id, lane] of layoutLanes(ids, width, 16, weights)) lanes.set(id, lane);
+    }
+    const ease = 1 - Math.exp(-3 * dt);
+    this.groundDepth += (backRows - this.groundDepth) * ease;
+    if (Math.abs(backRows - this.groundDepth) < 0.01) this.groundDepth = backRows;
+    this.groundShow = this.baseShow + Math.ceil(this.groundDepth * ROW_LIFT);
+    let groundY: number;
+    if (art) {
+      this.layoutGround(width, height);
+      groundY = height - (this.baseShow - FEET_SINK) * s;
+    } else {
+      const groundH = (3 + this.groundDepth * ROW_LIFT) * s;
+      groundY = height - 3 * s;
+      this.ground.clear().rect(0, height - groundH, width, groundH).fill(hexNum(this.theme.ground));
+    }
 
     const liveSegs = new Set(trains.flatMap((t) => t.segments.map((g) => g.id)));
     for (const [id, view] of this.parties) {
@@ -320,9 +381,23 @@ export class StripScene {
         const banner = new Graphics();
         this.layer.addChildAt(tether, 0);
         this.layer.addChild(banner);
-        tv = { walker: { x: lane.start + hash01(train.id) * Math.max(0, lane.end - lane.start - span), dir: hash01(train.id + '!') > 0.5 ? 1 : -1 }, tether, banner };
+        tv = { walker: { x: lane.start + hash01(train.id) * Math.max(0, lane.end - lane.start - span), dir: hash01(train.id + '!') > 0.5 ? 1 : -1 }, depth: rowOf.get(train.id) ?? 0, tether, banner };
         this.trains.set(train.id, tv);
       }
+      const shared = this.adopted?.get(train.id);
+      if (shared) tv.walker = shared;
+      const row = rowOf.get(train.id) ?? 0;
+      tv.depth += (row - tv.depth) * ease;
+      if (Math.abs(row - tv.depth) < 0.01) tv.depth = row;
+      // Back rows stand a little higher on the ground and draw behind the front.
+      const rowLayer = this.rowLayers[Math.min(row, MAX_ROWS - 1)]!;
+      if (tv.tether.parent !== rowLayer) rowLayer.addChildAt(tv.tether, 0);
+      if (tv.banner.parent !== rowLayer) rowLayer.addChild(tv.banner);
+      for (const seg of train.segments) {
+        const root = this.parties.get(seg.id)?.root;
+        if (root && root.parent !== rowLayer) rowLayer.addChild(root);
+      }
+      const trainGround = groundY - tv.depth * ROW_LIFT * s;
       const status = rollup(train.segments.flatMap((g) => g.members));
       tv.walker = stepWalker(tv.walker, status, lane, span, dt);
       const moving = SPEED[status] > 0;
@@ -355,8 +430,8 @@ export class StripScene {
           mv.x = mv.x === undefined ? target : mv.x + (target - mv.x) * (1 - Math.exp(-8 * dt));
           const beaconPane = (seg.members.find((q) => q.role === this.theme.beacon) ?? seg.members[0])?.paneId;
           const sayParty = seg.sayParty.get(m.paneId)!;
-          if (art) this.drawArtMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, groundY, moving, now);
-          else this.drawMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, groundY, moving, now);
+          if (art) this.drawArtMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
+          else this.drawMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
         });
         const x1 = x0 + own;
         extents.push({ seg, x0: tv.walker.x + off, x1: tv.walker.x + off + seg.width, fig0: x0, fig1: x1 });
@@ -376,9 +451,9 @@ export class StripScene {
           view.chip.clear();
           if (view.icon && art) {
             view.icon.texture = this.art!.ui.textures[art.ui.statusIcons[seg.status]] ?? Texture.EMPTY;
-            view.icon.position.set(center - (9 * s) / 2, groundY + s);
+            view.icon.position.set(center - (9 * s) / 2, trainGround + s);
           } else {
-            view.chip.rect(center - 2 * s, groundY + s, 4 * s, 4 * s).fill(hexNum(this.theme.palette[seg.status]));
+            view.chip.rect(center - 2 * s, trainGround + s, 4 * s, 4 * s).fill(hexNum(this.theme.palette[seg.status]));
           }
         } else if (view.plate) {
           // Nameplate sits above the heads; the status icon colour rides on the label tint.
@@ -389,7 +464,7 @@ export class StripScene {
           const h = view.label.height + padY * 2;
           view.plate.width = w / s;
           view.plate.height = h / s;
-          const top = groundY - figH * s - 6 - h;
+          const top = trainGround - figH * s - 6 - h;
           view.plate.position.set(center - w / 2, top);
           view.label.style.fill = 0xffffff;
           view.label.anchor.set(0, 0.5);
@@ -401,12 +476,13 @@ export class StripScene {
           this.drawChip(view, seg, center - w / 2, top + h, w, s);
         } else {
           view.label.style.fill = hexNum(this.theme.palette[seg.status]);
-          view.label.position.set(center, groundY - figH * s - 4);
-          this.drawChip(view, seg, center - view.label.width / 2, groundY - figH * s - 2, view.label.width, s);
+          view.label.position.set(center, trainGround - figH * s - 4);
+          this.drawChip(view, seg, center - view.label.width / 2, trainGround - figH * s - 2, view.label.width, s);
         }
       }
-      this.drawTrain(tv, train, extents, dir, groundY, figW, figH, s);
+      this.drawTrain(tv, train, extents, dir, trainGround, figW, figH, s);
     }
+    this.adopted = undefined;
     if (trains.length) this.primed = true;
   }
 
@@ -486,7 +562,7 @@ export class StripScene {
       sk.height = h / s;
       mv.bubbleText.position.set(padX, padY);
       if (mv.bubbleTail) mv.bubbleTail.position.set(w / 2, h - s);
-      const maxX = this.app.screen.width - w - 4;
+      const maxX = this.worldWidth() - w - 4;
       const above = art.character.h * s + (ui.tail ? 6 * s : 0) + (view.plate ? 14 * s : 6);
       mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - w / 2)), y - above - h);
     }
@@ -529,7 +605,7 @@ export class StripScene {
         mv.bubbleText.position.set(5, 3);
       }
       const bw = mv.bubbleBg.width;
-      const maxX = this.app.screen.width - bw - 4;
+      const maxX = this.worldWidth() - bw - 4;
       mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - bw / 2)), y - SPRITE_H * s - 46);
     }
   }
