@@ -44,3 +44,20 @@ describe('source config', () => {
     expect(createSource({ source: 'live', herdr: { sessions: ['x'] } })).toBeInstanceOf(HerdrSource);
   });
 });
+
+describe('strip scale', () => {
+  it('reads scale from toml and rejects bad values', () => {
+    expect(parseSourceConfig('scale = 2').scale).toBe(2);
+    expect(parseSourceConfig('source = "mock"').scale).toBeUndefined();
+    expect(() => parseSourceConfig('scale = 7')).toThrow(/scale/);
+    expect(() => parseSourceConfig('scale = 2.5')).toThrow(/scale/);
+  });
+});
+
+describe('minimal labels', () => {
+  it('reads minimal from toml', () => {
+    expect(parseSourceConfig('minimal = true').minimal).toBe(true);
+    expect(parseSourceConfig('source = "mock"').minimal).toBeUndefined();
+    expect(() => parseSourceConfig('minimal = "yes"')).toThrow(/minimal/);
+  });
+});

@@ -6,6 +6,8 @@ import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, 
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
 import { DoubleTap } from '../doubletap.js';
+import { birthTime, prefersReducedMotion, spawnPose, type SpawnPose } from '../spawn.js';
+import { drawPuff } from './spawnfx.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
@@ -22,6 +24,8 @@ interface MemberView {
   bubbleText: Text;
   bubbleBg: Graphics;
   phase: number;
+  /** Scene time the member first appeared; arrival plays from here. */
+  born: number;
 }
 
 /** One nameplate's worth of characters: a party, or a fellowship's leaders. */
@@ -70,6 +74,7 @@ interface PartyView {
   chip: Graphics;
   members: Map<string, MemberView>;
   dir: 1 | -1;
+  born: number;
 }
 
 /** Colour of a leader's banner pole, tether and nameplate chip. */
@@ -79,6 +84,8 @@ const BANNER_W = 18;
 
 /** Rows of the 16px ground tile that show above the window's bottom edge, in art pixels. */
 const GROUND_SHOW = 8;
+/** Extra rows of ground shown in minimal mode, so the status icon fits below the feet. */
+const ICON_ROOM = 8;
 /** How far a character's feet sink into the ground, in art pixels. */
 const FEET_SINK = 3;
 
@@ -92,6 +99,11 @@ export class StripScene {
   private ground = new Graphics();
   private layer = new Container();
   private t = 0;
+  /** Arrival puffs, redrawn every frame on top of the characters. */
+  private fx = new Graphics();
+  /** False until the first world arrives, so what already exists does not play an arrival. */
+  private primed = false;
+  private reduced = prefersReducedMotion();
 
   private doubleTap = new DoubleTap();
 
@@ -101,11 +113,16 @@ export class StripScene {
     private feed: FeedState,
     private scale: number,
     private art: LoadedArt | null = null,
+    /** Minimal labels: no nameplate above the heads, just a small status icon below the feet. */
+    private minimal = false,
   ) {
-    app.stage.addChild(this.ground, this.layer);
+    this.groundShow = GROUND_SHOW + (minimal ? ICON_ROOM : 0);
+    app.stage.addChild(this.ground, this.layer, this.fx);
     this.ground.eventMode = 'none';
+    this.fx.eventMode = 'none';
   }
 
+  private groundShow = GROUND_SHOW;
   private groundTiles: Sprite[] = [];
   private groundWidth = 0;
 
@@ -128,7 +145,7 @@ export class StripScene {
       }
       this.groundWidth = width;
     }
-    for (const t of this.groundTiles) t.y = height - GROUND_SHOW * s;
+    for (const t of this.groundTiles) t.y = height - this.groundShow * s;
   }
 
   private frame(role: Role, frame: FrameName, beacon: boolean) {
@@ -158,7 +175,7 @@ export class StripScene {
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24 } });
     const bubble = new Container();
-    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
+    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
     if (this.art) {
       const ui = this.art.art.ui;
       const sl = ui.bubble.slice;
@@ -205,7 +222,8 @@ export class StripScene {
     const chip = new Graphics();
     root.addChild(chip, label);
     this.layer.addChild(root);
-    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1 };
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
+    root.alpha = this.primed && !this.reduced ? 0 : 1;
     this.parties.set(id, view);
     return view;
   }
@@ -235,6 +253,7 @@ export class StripScene {
 
   update(dt: number, now: number): void {
     this.t += dt;
+    this.fx.clear();
     const { width, height } = this.app.screen;
     const s = this.scale;
     const art = this.art?.art;
@@ -243,7 +262,7 @@ export class StripScene {
     let groundY: number;
     if (art) {
       this.layoutGround(width, height);
-      groundY = height - (GROUND_SHOW - FEET_SINK) * s;
+      groundY = height - (this.groundShow - FEET_SINK) * s;
     } else {
       const groundH = 3 * s;
       groundY = height - groundH;
@@ -346,9 +365,22 @@ export class StripScene {
 
       for (const { seg, fig0, fig1 } of extents) {
         const view = this.parties.get(seg.id)!;
+        view.root.alpha = spawnPose(this.t - view.born).alpha;
         const center = (fig0 + fig1) / 2;
         view.label.text = seg.label;
-        if (view.plate) {
+        view.label.visible = !this.minimal;
+        if (view.plate) view.plate.visible = !this.minimal;
+        if (view.icon) view.icon.visible = true;
+        if (this.minimal) {
+          // Minimal: only a status icon (or a coloured square without art) centred just under the feet.
+          view.chip.clear();
+          if (view.icon && art) {
+            view.icon.texture = this.art!.ui.textures[art.ui.statusIcons[seg.status]] ?? Texture.EMPTY;
+            view.icon.position.set(center - (9 * s) / 2, groundY + s);
+          } else {
+            view.chip.rect(center - 2 * s, groundY + s, 4 * s, 4 * s).fill(hexNum(this.theme.palette[seg.status]));
+          }
+        } else if (view.plate) {
           // Nameplate sits above the heads; the status icon colour rides on the label tint.
           const padX = 6 * s;
           const padY = 3 * s;
@@ -375,6 +407,20 @@ export class StripScene {
       }
       this.drawTrain(tv, train, extents, dir, groundY, figW, figH, s);
     }
+    if (trains.length) this.primed = true;
+  }
+
+  /** Beam a new member in (fade, stretch, drop) and puff sparks in the party's status colour at its feet. */
+  private arrive(mv: MemberView, body: { alpha: number; scale: { x: number; y: number }; y: number }, cx: number, groundY: number, status: Status): void {
+    const age = this.t - mv.born;
+    const pose: SpawnPose = spawnPose(age);
+    if (pose.alpha >= 1 && pose.lift === 0) return;
+    const s = this.scale;
+    body.alpha *= pose.alpha;
+    body.scale.x *= pose.sx;
+    body.scale.y *= pose.sy;
+    body.y -= pose.lift * s;
+    drawPuff(this.fx, cx, groundY, age, hexNum(this.theme.palette[status]), s);
   }
 
   /** A coloured bar under a nameplate in the party's fellowship tint (gold for a leader). */
@@ -425,6 +471,7 @@ export class StripScene {
     const dir = view.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
     mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
+    this.arrive(mv, mv.figure!.container, cx, groundY, seg.status);
 
     mv.bubble.visible = !!text;
     if (text) {
@@ -457,6 +504,7 @@ export class StripScene {
     mv.sprite.position.set(cx, y);
     mv.sprite.alpha = m.status === 'idle' || m.status === 'unknown' ? 0.85 : 1;
     mv.sprite.tint = seg.tint ? hexNum(mixHex('#ffffff', seg.tint, 0.55)) : 0xffffff;
+    this.arrive(mv, mv.sprite, cx, groundY, seg.status);
 
     mv.glow.clear();
     if (isBeacon) {

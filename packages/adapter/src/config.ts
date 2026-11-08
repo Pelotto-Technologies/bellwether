@@ -10,6 +10,10 @@ export interface SourceConfig {
   source: SourceKind;
   /** Skin pack the overlay shows (a folder name under themes/). The renderer falls back to neutral if it is unknown. */
   pack?: string;
+  /** Pixel scale of the strip, 1 to 6 (`scale = 2` for a compact strip). Default 3. */
+  scale?: number;
+  /** Strip shows only a small status icon below the feet instead of the nameplate above (`minimal = true`). */
+  minimal?: boolean;
   /** Scrub recordings at record time (`scrub = true`). */
   scrub?: boolean;
   /** Let the overlay send prompts and keys to agents (`actions = true`). Focus is always allowed. */
@@ -29,6 +33,8 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * ```toml
  * source = "live"            # or "mock"
  * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, scifi, or a private theme folder
+ * scale = 2                  # strip pixel scale, 1 to 6 (default 3); 2 is compact
+ * minimal = true             # strip shows just a status icon under the feet, no nameplate
  * scrub = true               # hash labels and strip say text in recordings
  * actions = true             # let the overlay prompt and send keys to agents (focus is always on)
  * [herdr]
@@ -52,9 +58,13 @@ export function parseSourceConfig(text: string): SourceConfig {
   if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(raw.pack))) {
     throw new Error('bellwether.toml: pack must be a theme folder name');
   }
+  if (raw.scale !== undefined && (typeof raw.scale !== 'number' || !Number.isInteger(raw.scale) || raw.scale < 1 || raw.scale > 6)) {
+    throw new Error('bellwether.toml: scale must be a whole number from 1 to 6');
+  }
+  if (raw.minimal !== undefined && typeof raw.minimal !== 'boolean') throw new Error('bellwether.toml: minimal must be true or false');
   if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
   if (raw.actions !== undefined && typeof raw.actions !== 'boolean') throw new Error('bellwether.toml: actions must be true or false');
-  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), herdr };
+  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), herdr };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */

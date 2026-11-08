@@ -16,7 +16,21 @@ export interface ShellConfig {
   /** Renderer URL (the adapter's served overlay). */
   url: string;
   port: number;
-  stripHeight: number;
+  /** Strip pixel scale (2 compact, 3 normal, 4 large); undefined defers to bellwether.toml, then 3. */
+  scale?: number;
+  /** Icon-only labels on the strip; undefined defers to bellwether.toml. */
+  minimal?: boolean;
+}
+
+export const DEFAULT_SCALE = 3;
+
+/** Scale the strip actually uses: the menu choice, else the adapter's served `scale`, else 3. */
+export function effectiveScale(cfg: Pick<ShellConfig, 'scale'>, served?: number): number {
+  return validScale(cfg.scale) ?? validScale(served) ?? DEFAULT_SCALE;
+}
+
+export function validScale(n: unknown): number | undefined {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 6 ? n : undefined;
 }
 
 export const DEFAULT_PORT = 7341;
@@ -26,7 +40,6 @@ export const DEFAULT_CONFIG: ShellConfig = {
   spawnAdapter: true,
   url: `http://127.0.0.1:${DEFAULT_PORT}/?transparent`,
   port: DEFAULT_PORT,
-  stripHeight: 160,
 };
 
 export const CONFIG_FILE = 'shell.json';
@@ -50,7 +63,9 @@ export function normalizeConfig(raw: unknown): ShellConfig {
     out.url = `http://127.0.0.1:${r.port}/?transparent`;
   }
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
-  if (typeof r.stripHeight === 'number' && r.stripHeight >= 32 && r.stripHeight <= 1000) out.stripHeight = Math.round(r.stripHeight);
+  if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
+  const scale = validScale(r.scale);
+  if (scale !== undefined) out.scale = scale;
   return out;
 }
 

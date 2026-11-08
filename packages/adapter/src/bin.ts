@@ -60,6 +60,8 @@ const { values, positionals } = parseArgs({
 let scrubConfig = false;
 let actionsConfig = false;
 let clientPack: string | undefined = values.pack;
+let clientScale: number | undefined;
+let clientMinimal = false;
 
 if (values.help) {
   console.log(USAGE);
@@ -86,6 +88,8 @@ async function pickSource(): Promise<WorldSource> {
   const cfg = await loadSourceConfig(values.config ?? 'bellwether.toml');
   if (values.pack) cfg.pack = values.pack;
   clientPack = cfg.pack ?? clientPack;
+  clientScale = cfg.scale;
+  clientMinimal = cfg.minimal ?? false;
   scrubConfig = cfg.scrub ?? false;
   actionsConfig = cfg.actions ?? false;
   if (values.live) cfg.source = 'live';
@@ -101,7 +105,7 @@ async function pickSource(): Promise<WorldSource> {
 }
 
 const source = await pickSource();
-const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: clientPack ? { pack: clientPack } : {}, actions: values.actions || actionsConfig, log });
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: { ...(clientPack ? { pack: clientPack } : {}), ...(clientScale ? { scale: clientScale } : {}), ...(clientMinimal ? { minimal: true } : {}) }, actions: values.actions || actionsConfig, log });
 server.attach(source);
 if (values.record) {
   const rec = recordTo(values.record);
