@@ -6,6 +6,7 @@ import { launchOverlay } from './overlay.js';
 import { detect, install, systemContext, uninstall, type Outcome } from './install.js';
 import { readFileSync } from 'node:fs';
 import { runSayHook } from './hook/say.js';
+import { runEventHook } from './hook/event.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
 
@@ -13,8 +14,8 @@ commands:
   agents      show which coding agents are present
   install     write the skill pack, role hook and message hook for each present agent
   uninstall   remove only what install wrote
-  overlay     open the desktop overlay (click-through, always on top, tray menu)
-  run         serve the overlay from live Herdr (adapter flags pass through)
+  overlay     open the desktop overlay (click-through, always on top, tray menu); --hooks reads Claude Code sessions without Herdr
+  run         serve the overlay from live Herdr, or --hooks (adapter flags pass through)
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
   orchestrate [--cwd D] [--label L] [--role R] [--session S] [--timeout MS] [-- CMD...]
@@ -60,6 +61,17 @@ function main(argv: string[]): number {
       return 0;
     }
     runSayHook({ stdin, env: process.env, run: (bin, args) => void spawnSync(bin, args, { stdio: 'ignore', timeout: 3000, windowsHide: true }) });
+    return 0;
+  }
+  if (cmd === 'hook' && rest[0] === 'event') {
+    // Called by the Claude Code plugin on session activity. Appends one line to a file; never fails the agent.
+    try {
+      const i = rest.indexOf('--agent');
+      const agent = i >= 0 ? rest[i + 1] : undefined;
+      runEventHook({ stdin: readFileSync(0, 'utf8'), env: process.env, ...(agent ? { agent } : {}) });
+    } catch {
+      // swallow
+    }
     return 0;
   }
   const ctx = systemContext();

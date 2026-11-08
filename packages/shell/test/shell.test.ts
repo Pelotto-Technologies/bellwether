@@ -80,7 +80,7 @@ describe('adapterArgs', () => {
   it('reads all sessions by default', () => {
     expect(adapterArgs({ port: 7341 }, '/a/bin.js', '/r')).toEqual({
       command: 'node',
-      args: ['/a/bin.js', '--live', '--port', '7341', '--serve', '/r', '--exit-with-parent', '--all'],
+      args: ['/a/bin.js', '--prefer-live', '--port', '7341', '--serve', '/r', '--exit-with-parent', '--all'],
     });
   });
   it('passes a chosen session instead of --all', () => {
