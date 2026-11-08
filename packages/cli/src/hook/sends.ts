@@ -16,19 +16,30 @@ export interface SentMessage {
 }
 
 /**
- * A herdr executable (`herdr`, `herdr.exe`, a quoted path ending in herdr, or
- * `${HERDR_BIN_PATH:-herdr}` / `$env:HERDR_BIN_PATH`), then a send subcommand.
+ * A herdr executable: `herdr`, `herdr.exe`, a quoted path ending in herdr, or
+ * `${HERDR_BIN_PATH:-herdr}` / `$env:HERDR_BIN_PATH`. The subcommand is matched on
+ * tokens afterwards, never with a nested regex quantifier (no backtracking blow-up).
  */
-const SEND = /(?:herdr(?:\.exe)?|HERDR_BIN_PATH)\S*\s+(?:--?[\w-]+(?:[= ](?!agent\b|pane\b)[^\s-]\S*)?\s+)*(agent\s+prompt|pane\s+(?:run|send-text|send-input))\s+(.*)$/i;
+const EXE = /(?:herdr(?:\.exe)?|HERDR_BIN_PATH)\S*/gi;
+
+/** Global flags that take a value, as in `herdr --machine lab agent prompt ...`. */
+const GLOBAL_VALUED = new Set(['--machine', '--session', '--socket']);
 
 /** Flags that take a value, so the value is not mistaken for the target or text. */
 const VALUED = new Set(['--timeout', '--until', '--keys', '--source', '--lines', '--format', '--session', '--pane']);
 
 /** Box-drawing borders and gutters agent TUIs draw around tool calls. */
-const BORDER = /^[\s│┃║|╎┆>❯⎿└├─●⏺•·*$#]+|[\s│┃║|╎┆]+$/gu;
+const LEAD = new Set([...' \t│┃║|╎┆>❯⎿└├─●⏺•·*$#']);
+const TRAIL = new Set([...' \t│┃║|╎┆']);
 
+/** Strip TUI borders from both ends. A plain scan, so it stays linear on any input. */
 function clean(line: string): string {
-  return line.replace(BORDER, '');
+  const chars = [...line];
+  let a = 0;
+  let b = chars.length;
+  while (a < b && LEAD.has(chars[a]!)) a++;
+  while (b > a && TRAIL.has(chars[b - 1]!)) b--;
+  return chars.slice(a, b).join('');
 }
 
 interface Tok {
@@ -69,8 +80,7 @@ function tokenize(s: string): { tokens: Tok[]; open: boolean } {
   return { tokens, open: q !== undefined };
 }
 
-function parseRest(command: SendCommand, rest: string): SentMessage | undefined {
-  const { tokens } = tokenize(rest);
+function parseArgs(command: SendCommand, tokens: Tok[]): SentMessage | undefined {
   const plain: Tok[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]!;
@@ -92,24 +102,41 @@ function parseRest(command: SendCommand, rest: string): SentMessage | undefined 
     .replace(/\s+/g, ' ')
     .trim();
   if (!text) return undefined;
-  return { target: target.value.replace(/[),;]+$/, ''), text, command: command.replace(/\s+/g, ' ').toLowerCase() as SendCommand };
+  return { target: target.value.replace(/[),;]+$/, ''), text, command };
+}
+
+/** The send subcommand at the start of `tokens` (after global flags), and where its arguments begin. */
+function subcommand(tokens: Tok[]): { command: SendCommand; at: number } | undefined {
+  let i = 0;
+  while (i < tokens.length && !tokens[i]!.quoted && tokens[i]!.value.startsWith('-')) {
+    const flag = tokens[i]!.value;
+    i += GLOBAL_VALUED.has(flag) ? 2 : 1;
+  }
+  const a = tokens[i]?.value.toLowerCase();
+  const b = tokens[i + 1]?.value.toLowerCase();
+  if (a === 'agent' && b === 'prompt') return { command: 'agent prompt', at: i + 2 };
+  if (a === 'pane' && (b === 'run' || b === 'send-text' || b === 'send-input')) return { command: `pane ${b}` as SendCommand, at: i + 2 };
+  return undefined;
 }
 
 /**
- * Every herdr send command visible in `screen`, oldest first. A quoted message that
- * wraps onto following rows is joined back up (at most a few rows).
+ * Every herdr send command in `text` (a shell command, or screen rows), oldest first.
+ * A quoted message that wraps onto following lines is joined back up (at most a few).
  */
-export function parseSends(screen: string): SentMessage[] {
-  const lines = screen.split(/\r?\n/);
+export function parseSends(text: string): SentMessage[] {
+  const lines = text.split(/\r?\n/);
   const out: SentMessage[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = clean(lines[i]!);
-    const m = SEND.exec(line);
-    if (!m) continue;
-    let rest = m[2]!;
-    for (let j = 1; j <= 4 && tokenize(rest).open && i + j < lines.length; j++) rest += ' ' + clean(lines[i + j]!);
-    const msg = parseRest(m[1]! as SendCommand, rest);
-    if (msg) out.push(msg);
+    for (const m of line.matchAll(EXE)) {
+      let rest = line.slice(m.index! + m[0].length);
+      for (let j = 1; j <= 4 && tokenize(rest).open && i + j < lines.length; j++) rest += ' ' + clean(lines[i + j]!);
+      const { tokens } = tokenize(rest);
+      const sub = subcommand(tokens);
+      if (!sub) continue;
+      const msg = parseArgs(sub.command, tokens.slice(sub.at));
+      if (msg) out.push(msg);
+    }
   }
   return out;
 }

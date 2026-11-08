@@ -75,3 +75,16 @@ describe('runSayHook', () => {
     expect(sayArgs('herdr agent prompt a "b"', 'w1:p1')).toEqual(sayArgs('herdr agent prompt a "b"', 'w1:p1'));
   });
 });
+
+describe('parseSends performance', () => {
+  it('stays linear on adversarial input', () => {
+    const evil = 'herdr -' + '-- -'.repeat(5000);
+    const t0 = Date.now();
+    expect(parseSends(evil)).toEqual([]);
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
+
+  it('finds a send after another herdr command on the same line', () => {
+    expect(parseSends('herdr agent wait impl && herdr agent prompt impl "next"')).toEqual([{ target: 'impl', text: 'next', command: 'agent prompt' }]);
+  });
+});
