@@ -6,17 +6,20 @@ export type RunCommand = 'run' | 'record' | 'replay' | 'scrub' | 'orchestrate';
 
 export const RUN_COMMANDS: RunCommand[] = ['run', 'record', 'replay', 'scrub', 'orchestrate'];
 
+const SOURCE_FLAGS = ['--mock', '--live', '--hooks', '--replay'];
+
 /** Maps `bellwether <cmd> ...` onto adapter flags. Pure, so it is easy to test. */
 export function adapterArgs(cmd: RunCommand, rest: string[], serveDir?: string): string[] {
   const serve = serveDir ? ['--serve', serveDir] : [];
   switch (cmd) {
     case 'run':
-      // Live Herdr unless the user chose a source themselves.
-      return [...(rest.some((a) => a === '--mock' || a === '--live' || a === '--replay') ? [] : ['--live', '--all']), ...serve, ...rest];
+      // Live Herdr unless the user chose a source with a flag. `--prefer-live` (rather than `--live`)
+      // leaves bellwether.toml / BELLWETHER_SOURCE free to pick the hooks source.
+      return [...(rest.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--prefer-live', '--all']), ...serve, ...rest];
     case 'record': {
       const [file, ...more] = rest;
       if (!file || file.startsWith('-')) throw new Error('usage: bellwether record <file.jsonl> [--scrub] [adapter flags]');
-      return ['--live', '--all', ...serve, '--record', file, ...more];
+      return [...(more.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--prefer-live', '--all']), ...serve, '--record', file, ...more];
     }
     case 'replay': {
       const [file, ...more] = rest;

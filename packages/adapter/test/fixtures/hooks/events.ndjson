@@ -1,0 +1,12 @@
+{"v": 1, "t": 1800000000000, "agent": "claude", "ev": "start", "session": "s1", "cwd": "/home/dev/proj"}
+{"v": 1, "t": 1800000001000, "agent": "claude", "ev": "prompt", "session": "s1", "cwd": "/home/dev/proj"}
+{"v": 1, "t": 1800000002000, "agent": "claude", "ev": "tool", "session": "s1", "cwd": "/home/dev/proj", "tool": "Read", "detail": "Read main.ts"}
+{"v": 1, "t": 1800000002500, "agent": "claude", "ev": "tool_done", "session": "s1", "cwd": "/home/dev/proj", "tool": "Read", "detail": "Read main.ts"}
+{"v": 1, "t": 1800000003000, "agent": "claude", "ev": "tool", "session": "s1", "cwd": "/home/dev/proj", "tool": "Task", "detail": "Review the auth module"}
+{"v": 1, "t": 1800000003100, "agent": "claude", "ev": "sub_start", "session": "s1", "cwd": "/home/dev/proj", "sub": "a1", "subType": "Explore"}
+{"v": 1, "t": 1800000003200, "agent": "claude", "ev": "tool", "session": "s1", "cwd": "/home/dev/proj", "sub": "a1", "subType": "Explore", "tool": "Grep", "detail": "Grep login"}
+{"v": 1, "t": 1800000004000, "agent": "claude", "ev": "sub_start", "session": "s1", "cwd": "/home/dev/proj", "sub": "a2", "subType": "code-reviewer"}
+{"v": 1, "t": 1800000000500, "agent": "claude", "ev": "start", "session": "s2", "cwd": "C:\\Users\\dev\\Repo\\.claude\\worktrees\\feat-login"}
+{"v": 1, "t": 1800000001500, "agent": "claude", "ev": "prompt", "session": "s2", "cwd": "C:\\Users\\dev\\Repo\\.claude\\worktrees\\feat-login", "role": "architect"}
+{"v": 1, "t": 1800000002600, "agent": "claude", "ev": "wait", "session": "s2", "cwd": "C:\\Users\\dev\\Repo\\.claude\\worktrees\\feat-login", "detail": "Claude needs your permission to use Bash"}
+{"v": 1, "t": 1800000003500, "agent": "claude", "ev": "sub_stop", "session": "s1", "cwd": "/home/dev/proj", "sub": "a1", "subType": "Explore"}

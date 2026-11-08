@@ -13,6 +13,9 @@ const USAGE = `bellwether-adapter: stream Herdr world deltas over WebSocket
 Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock):
   --live               read the live Herdr TUI socket API
   --mock               generate mock agents
+  --hooks              read agent sessions from the events file the Claude Code plugin writes (no Herdr)
+  --events <file>      hooks: events file (default BELLWETHER_EVENTS or ~/.bellwether/events.jsonl)
+  --prefer-live        live Herdr unless bellwether.toml or BELLWETHER_SOURCE chose hooks (used by run and overlay)
   --replay <file>      replay a recorded .jsonl (loops)
   --session <name>     live: one named session      --all   live: every running session
   --socket <path>      live: explicit socket/pipe path
@@ -41,6 +44,9 @@ const { values, positionals } = parseArgs({
   options: {
     live: { type: 'boolean' },
     mock: { type: 'boolean' },
+    hooks: { type: 'boolean' },
+    events: { type: 'string' },
+    'prefer-live': { type: 'boolean' },
     replay: { type: 'string' },
     session: { type: 'string' },
     all: { type: 'boolean' },
@@ -129,8 +135,11 @@ async function pickSource(): Promise<WorldSource> {
   clientBubbles = cfg.bubbles ?? true;
   scrubConfig = cfg.scrub ?? false;
   actionsConfig = cfg.actions ?? false;
+  if (values['prefer-live'] && cfg.source !== 'hooks') cfg.source = 'live';
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
+  if (values.hooks) cfg.source = 'hooks';
+  if (values.events) cfg.hooks = { ...cfg.hooks, file: values.events };
   if (values.session) cfg.herdr.sessions = [values.session];
   if (values.all) cfg.herdr.sessions = 'all';
   if (values.socket) cfg.herdr.socket = values.socket;

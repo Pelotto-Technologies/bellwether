@@ -3,13 +3,16 @@ import { adapterArgs } from '../src/run.js';
 
 describe('adapterArgs', () => {
   it('run defaults to live, all sessions, serving the renderer', () => {
-    expect(adapterArgs('run', [], '/r')).toEqual(['--live', '--all', '--serve', '/r']);
+    expect(adapterArgs('run', [], '/r')).toEqual(['--prefer-live', '--all', '--serve', '/r']);
   });
   it('run respects an explicit source', () => {
     expect(adapterArgs('run', ['--mock'], '/r')).toEqual(['--serve', '/r', '--mock']);
   });
+  it('run with --hooks does not force live', () => {
+    expect(adapterArgs('run', ['--hooks', '--events', 'e.jsonl'], '/r')).toEqual(['--serve', '/r', '--hooks', '--events', 'e.jsonl']);
+  });
   it('record passes the file and scrub flag', () => {
-    expect(adapterArgs('record', ['a.jsonl', '--scrub'])).toEqual(['--live', '--all', '--record', 'a.jsonl', '--scrub']);
+    expect(adapterArgs('record', ['a.jsonl', '--scrub'])).toEqual(['--prefer-live', '--all', '--record', 'a.jsonl', '--scrub']);
   });
   it('replay and scrub map to adapter flags', () => {
     expect(adapterArgs('replay', ['a.jsonl', '--speed', '4'], '/r')).toEqual(['--serve', '/r', '--replay', 'a.jsonl', '--speed', '4']);

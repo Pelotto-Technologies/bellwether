@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { electronCacheDir, locateShell } from '../src/overlay.js';
+import { electronCacheDir, locateShell, overlayEnv } from '../src/overlay.js';
 
 describe('overlay', () => {
   it('finds the shell bundled under runtime/', () => {
@@ -17,5 +17,9 @@ describe('overlay', () => {
   });
   it('lets BELLWETHER_HOME move the Electron cache', () => {
     expect(electronCacheDir({ BELLWETHER_HOME: '/x' })).toBe('/x');
+  });
+  it('--hooks and --events pick the hooks source through the environment', () => {
+    expect(overlayEnv(['--hooks', '--events', '/e.jsonl'], { A: '1' })).toEqual({ A: '1', BELLWETHER_SOURCE: 'hooks', BELLWETHER_EVENTS: '/e.jsonl' });
+    expect(overlayEnv([], { A: '1' })).toEqual({ A: '1' });
   });
 });

@@ -202,6 +202,17 @@ Unix sockets natively, the renderer and the blog embed share one codebase, and t
 transparent click-through overlay is a well-worn Electron path. Tauri 2 is the swap if
 bundle size ever matters; the adapter and renderer would not change.
 
+### Hooks source (no Herdr)
+
+A second generic source, `HooksSource` (`packages/adapter/src/hooks/`), tails
+`~/.bellwether/events.jsonl` (`BELLWETHER_EVENTS` overrides). Writers append one normalized
+line per agent event (`{v, t, agent, ev, session, cwd, sub?, tool?, detail?, role?}`, type in
+`hooks/event.ts`); the Claude Code plugin in `plugins/bellwether` does it by running
+`bellwether hook event` from its hooks, which is the only place that names an agent. The
+source maps one party per working directory, one member per session and one per running
+subagent, and emits the same `Delta`s as the Herdr source (it reuses `diffParties`). Select it
+with `--hooks`, `source = "hooks"` or `BELLWETHER_SOURCE=hooks`. Local sessions only.
+
 ### State model (what the adapter emits)
 
 This is a sketch; see `packages/adapter/src/types.ts` for the source of truth.

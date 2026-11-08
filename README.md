@@ -50,6 +50,29 @@ fake agents on the same port.
 Already installed? After upgrading, run `bellwether install` again so your agents get the
 newest hooks (chat bubbles need the one added in 0.1.11).
 
+## Without Herdr: Claude Code plugin
+
+No Herdr? A Claude Code plugin feeds Bellwether straight from your sessions: the Claude Code
+CLI and local Code sessions in the Claude desktop app. Each session is an agent, each working
+directory a party, and subagents show up as extra agents while they run.
+
+```sh
+npm i -g @pelotto-tech/bellwether@latest
+```
+
+```
+/plugin marketplace add Pelotto-Technologies/bellwether
+/plugin install bellwether@bellwether
+```
+
+```sh
+bellwether overlay --hooks    # or source = "hooks" in bellwether.toml
+```
+
+The plugin appends short event lines (tool name and file, never prompt text) to
+`~/.bellwether/events.jsonl`. It covers sessions on this machine only; cloud sessions are not
+visible. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
+
 ## A tour
 
 ### Reading the strip
@@ -253,7 +276,7 @@ remembered between runs.
 Put a `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
-source = "live"          # "live" for real Herdr, "mock" for fake agents
+source = "live"          # "live" for real Herdr, "hooks" for the Claude Code plugin, "mock" for fake agents
 pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
 scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
@@ -263,10 +286,13 @@ scrub = false            # true hashes repo/branch names in recordings
 [herdr]
 sessions = "all"         # or ["default", "overlay-dev"]
 # socket = "..."         # explicit socket or pipe path
+
+[hooks]
+# file = "..."           # events file for source = "hooks" (default ~/.bellwether/events.jsonl)
 ```
 
 Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
-`--session <name>` or `--all`, `BELLWETHER_SOURCE=live`, `--port`), and the tray menu or
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=live` or `hooks`, `--hooks`, `--events <file>`, `--port`), and the tray menu or
 page URL overrides those:
 
 | URL option | Effect |
@@ -287,8 +313,9 @@ page URL overrides those:
 | `bellwether agents` | Show which coding agents are on PATH and which config dirs exist. |
 | `bellwether install [--agent claude\|copilot]` | Add the skill, role hook and message hook to each present agent. Safe to re-run. |
 | `bellwether uninstall` | Remove only what `install` wrote. |
-| `bellwether overlay` | Open the desktop overlay. |
-| `bellwether run` | Serve the overlay from live Herdr on port 7341. |
+| `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: Claude Code plugin events, no Herdr). |
+| `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
+| `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
 | `bellwether record F [--scrub]` | Run live and append deltas to `F`. |
 | `bellwether replay F [--speed n]` | Serve the overlay from a recording. |

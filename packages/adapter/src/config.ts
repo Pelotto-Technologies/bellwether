@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'smol-toml';
+import { HooksSource } from './hooks/source.js';
 import { HerdrSource } from './herdr/source.js';
 import { MockSource } from './mock.js';
 import type { WorldSource } from './source.js';
 
-export type SourceKind = 'mock' | 'live';
+export type SourceKind = 'mock' | 'live' | 'hooks';
 
 export interface SourceConfig {
   source: SourceKind;
@@ -25,6 +26,11 @@ export interface SourceConfig {
     sessions?: 'all' | string[];
     socket?: string;
   };
+  /** The `hooks` source: agent sessions on this machine, no Herdr. Carried only when set. */
+  hooks?: {
+    /** Events file written by `bellwether hook event`. Default `~/.bellwether/events.jsonl`. */
+    file?: string;
+  };
 }
 
 export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
@@ -33,7 +39,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * Parse the source section of `bellwether.toml`:
  *
  * ```toml
- * source = "live"            # or "mock"
+ * source = "live"            # or "mock", or "hooks" (Claude Code plugin events, no Herdr)
  * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, scifi, or a private theme folder
  * scale = 2                  # strip pixel scale, 1 to 6 (default 3); 2 is compact
  * minimal = true             # strip shows just a status icon under the feet, no nameplate
@@ -43,12 +49,14 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * [herdr]
  * sessions = "all"           # or ["default", "overlay-dev"]
  * # socket = "/path/to/herdr.sock"
+ * [hooks]
+ * # file = "/path/to/events.jsonl"   # default ~/.bellwether/events.jsonl (or BELLWETHER_EVENTS)
  * ```
  */
 export function parseSourceConfig(text: string): SourceConfig {
   const raw = parse(text) as Record<string, unknown>;
   const source = raw.source ?? DEFAULT_CONFIG.source;
-  if (source !== 'mock' && source !== 'live') throw new Error(`bellwether.toml: source must be "mock" or "live", got ${JSON.stringify(source)}`);
+  if (source !== 'mock' && source !== 'live' && source !== 'hooks') throw new Error(`bellwether.toml: source must be "mock", "live" or "hooks", got ${JSON.stringify(source)}`);
   const h = (raw.herdr ?? {}) as Record<string, unknown>;
   const herdr: SourceConfig['herdr'] = {};
   if (h.sessions !== undefined) {
@@ -58,6 +66,8 @@ export function parseSourceConfig(text: string): SourceConfig {
     else throw new Error('bellwether.toml: herdr.sessions must be "all", a name, or a list of names');
   }
   if (typeof h.socket === 'string') herdr.socket = h.socket;
+  const hk = (raw.hooks ?? {}) as Record<string, unknown>;
+  if (hk.file !== undefined && (typeof hk.file !== 'string' || !hk.file)) throw new Error('bellwether.toml: hooks.file must be a path');
   if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(raw.pack))) {
     throw new Error('bellwether.toml: pack must be a theme folder name');
   }
@@ -68,7 +78,7 @@ export function parseSourceConfig(text: string): SourceConfig {
   if (raw.bubbles !== undefined && typeof raw.bubbles !== 'boolean') throw new Error('bellwether.toml: bubbles must be true or false');
   if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
   if (raw.actions !== undefined && typeof raw.actions !== 'boolean') throw new Error('bellwether.toml: actions must be true or false');
-  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), herdr };
+  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), herdr, ...(typeof hk.file === 'string' ? { hooks: { file: hk.file } } : {}) };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */
@@ -80,7 +90,9 @@ export async function loadSourceConfig(file = 'bellwether.toml', env: NodeJS.Pro
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
   const override = env.BELLWETHER_SOURCE;
-  if (override === 'mock' || override === 'live') cfg.source = override;
+  if (override === 'mock' || override === 'live' || override === 'hooks') cfg.source = override;
+  // The hook writer only sees the env var, so it wins over the file to keep both ends on one path.
+  if (env.BELLWETHER_EVENTS) cfg.hooks = { ...cfg.hooks, file: env.BELLWETHER_EVENTS };
   if (env.BELLWETHER_PACK && /^[a-z0-9][a-z0-9_-]*$/i.test(env.BELLWETHER_PACK)) cfg.pack = env.BELLWETHER_PACK;
   return cfg;
 }
@@ -90,12 +102,16 @@ export interface CreateSourceDeps {
   /** Factories, overridable in tests. */
   live?: (cfg: SourceConfig) => WorldSource;
   mock?: (cfg: SourceConfig) => WorldSource;
+  hooks?: (cfg: SourceConfig) => WorldSource;
 }
 
 /** Pick the world source named by config. */
 export function createSource(cfg: SourceConfig, deps: CreateSourceDeps = {}): WorldSource {
   if (cfg.source === 'live') {
     return deps.live ? deps.live(cfg) : new HerdrSource({ sessions: cfg.herdr.sessions, socket: cfg.herdr.socket, log: deps.log });
+  }
+  if (cfg.source === 'hooks') {
+    return deps.hooks ? deps.hooks(cfg) : new HooksSource({ file: cfg.hooks?.file, log: deps.log });
   }
   return deps.mock ? deps.mock(cfg) : new MockSource();
 }

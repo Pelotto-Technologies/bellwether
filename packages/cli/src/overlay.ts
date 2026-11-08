@@ -45,13 +45,26 @@ export function ensureElectron(cacheDir = electronCacheDir()): string {
   return bin;
 }
 
-export function launchOverlay(_args: string[]): number {
+/**
+ * Source choice for the overlay's adapter, passed as environment because the desktop shell
+ * spawns the adapter itself. `--hooks` (optionally `--events <file>`) reads Claude Code
+ * sessions without Herdr; without it, bellwether.toml and BELLWETHER_SOURCE decide.
+ */
+export function overlayEnv(args: string[], env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...env };
+  if (args.includes('--hooks')) out.BELLWETHER_SOURCE = 'hooks';
+  const i = args.indexOf('--events');
+  if (i >= 0 && args[i + 1]) out.BELLWETHER_EVENTS = args[i + 1];
+  return out;
+}
+
+export function launchOverlay(args: string[]): number {
   const rt = locateRuntime();
   if (!rt.rendererDist) throw new Error('overlay page is not built; run pnpm build');
   const electron = ensureElectron();
   const child = spawn(electron, [locateShell()], {
     stdio: 'inherit',
-    env: { ...process.env, BELLWETHER_ADAPTER_BIN: rt.adapterBin, BELLWETHER_RENDERER_DIR: rt.rendererDist },
+    env: { ...overlayEnv(args), BELLWETHER_ADAPTER_BIN: rt.adapterBin, BELLWETHER_RENDERER_DIR: rt.rendererDist },
   });
   child.on('exit', (code) => process.exit(code ?? 0));
   return 0;
