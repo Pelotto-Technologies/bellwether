@@ -1,6 +1,6 @@
 {
   "name": "@bellwether/shell",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Electron overlay window and tray for the Bellwether strip",

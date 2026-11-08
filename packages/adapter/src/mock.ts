@@ -11,10 +11,13 @@ interface PartySeed {
 }
 
 const PARTIES: PartySeed[] = [
+  // One orchestrator at the root of `api` leads three worktrees: they share a repo, so the overlay groups them.
+  { label: 'api', repo: 'api', roles: ['orchestrator'] },
   { label: 'auth-refresh', repo: 'api', branch: 'feat/auth-refresh', roles: ['coordinator', 'architect', 'implementer', 'reviewer'] },
+  { label: 'billing-export', repo: 'api', branch: 'feat/billing-export', roles: ['coordinator', 'implementer', 'implementer'] },
+  { label: 'search-index', repo: 'api', branch: 'perf/search-index', roles: ['architect', 'researcher', 'implementer'] },
   { label: 'docs-site', repo: 'docs', branch: 'docs/getting-started', roles: ['coordinator', 'writer', 'researcher'] },
   { label: 'deploy-pipeline', repo: 'infra', roles: ['architect', 'ops', 'implementer'] },
-  { label: 'orchestrator', repo: 'home', roles: ['orchestrator'] },
 ];
 
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;

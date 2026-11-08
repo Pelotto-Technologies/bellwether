@@ -1,11 +1,16 @@
 import type { Member, Status } from '@bellwether/adapter/core';
 import { Container, Sprite, Texture } from 'pixi.js';
 import { chooseAnim, frameIndex, frameNames } from '../anim.js';
+import { mixHex } from '../fellowship.js';
 import { beaconAlpha } from '../sim.js';
 import type { Theme } from '../theme.js';
 import type { LoadedArt } from './pack.js';
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
+/** Share of the fellowship tint in the cloak: enough to read at a glance, low enough to keep roles apart. */
+const TINT_MIX = 0.75;
+/** A faint wash over the whole figure so the tint reads even where the cloak mask is small. */
+const BODY_WASH = 0.16;
 
 export interface FigurePose {
   member: Member;
@@ -16,6 +21,8 @@ export interface FigurePose {
   talking: boolean;
   t: number;
   phase: number;
+  /** Fellowship tint mixed into the cloak so sibling parties look different. */
+  tint?: string | undefined;
 }
 
 /**
@@ -48,9 +55,11 @@ export class Figure {
     const idx = frameIndex(art.character.counts[anim], art.character.fps[anim], p.t, p.phase);
     const names = frameNames(anim, idx);
 
+    this.base.tint = p.tint ? hexNum(mixHex('#ffffff', p.tint, BODY_WASH)) : 0xffffff;
     this.base.texture = sheet.textures[names.base] ?? Texture.EMPTY;
     this.cloak.texture = sheet.textures[names.cloak] ?? Texture.EMPTY;
-    this.cloak.tint = hexNum(art.roles[m.role].cloak);
+    const cloak = art.roles[m.role].cloak;
+    this.cloak.tint = hexNum(p.tint ? mixHex(cloak, p.tint, TINT_MIX) : cloak);
     this.tip.visible = this.tipGlow.visible = p.isBeacon;
     if (p.isBeacon) {
       const color = hexNum(this.theme.palette[p.partyStatus]);

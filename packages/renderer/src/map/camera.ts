@@ -41,28 +41,6 @@ export function stepCamera(c: Camera, target: Camera, dt: number, rate = 8): Cam
   return { cx: lerp(c.cx, target.cx), cy: lerp(c.cy, target.cy), zoom };
 }
 
-export interface MiniLayout {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** Minimap pixels per world pixel. */
-  scale: number;
-}
-
-/** Bottom-right minimap box with the map's aspect ratio. */
-export function minimapBox(map: Size, screen: Size, maxW = 200, margin = 12): MiniLayout {
-  const scale = Math.min(maxW / map.w, (screen.h * 0.3) / map.h);
-  const w = map.w * scale;
-  const h = map.h * scale;
-  return { x: screen.w - w - margin, y: screen.h - h - margin, w, h, scale };
-}
-
-export function minimapToWorld(box: MiniLayout, p: Pt): Pt | null {
-  if (p.x < box.x || p.y < box.y || p.x > box.x + box.w || p.y > box.y + box.h) return null;
-  return { x: (p.x - box.x) / box.scale, y: (p.y - box.y) / box.scale };
-}
-
 /** Id of the nearest party within `radius` world pixels of `p`, if any. */
 export function nearestParty(points: { id: string; x: number; y: number }[], p: Pt, radius: number): string | undefined {
   let best: string | undefined;

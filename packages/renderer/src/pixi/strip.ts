@@ -1,5 +1,6 @@
-import type { Member, Party, Role } from '@bellwether/adapter/core';
+import { rollup, type Member, type Role, type Status } from '@bellwether/adapter/core';
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
+import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
 import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, SPEED, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
@@ -12,6 +13,8 @@ interface MemberView {
   sprite: Sprite;
   /** Sprite-sheet mode: the shared figure (frame, cloak mask and status light). */
   figure?: Figure;
+  /** Eased x so a group can reorder (leader to the front) without anyone teleporting. */
+  x?: number;
   bubbleSkin?: NineSliceSprite;
   bubbleTail?: Sprite;
   glow: Graphics;
@@ -21,14 +24,56 @@ interface MemberView {
   phase: number;
 }
 
+/** One nameplate's worth of characters: a party, or a fellowship's leaders. */
+interface Segment {
+  /** Unique per segment (the party id, or `lead:<fellowship>`). */
+  id: string;
+  label: string;
+  status: Status;
+  tint?: string | undefined;
+  leader: boolean;
+  members: Member[];
+  /** Width the segment takes along the strip: its characters or its nameplate, whichever is wider. */
+  width: number;
+  /** Pane id to the party that owns its speech. */
+  sayParty: Map<string, string>;
+}
+
+interface Train {
+  id: string;
+  fellowship?: Fellowship | undefined;
+  /** Leader segment first, then followers; or a single party. */
+  segments: Segment[];
+}
+
+interface Extent {
+  seg: Segment;
+  /** Whole segment, nameplate included. */
+  x0: number;
+  x1: number;
+  /** Just the characters. */
+  fig0: number;
+  fig1: number;
+}
+
+interface TrainView {
+  walker: Walker;
+  tether: Graphics;
+  banner: Graphics;
+}
+
 interface PartyView {
   root: Container;
   label: Text;
   plate?: NineSliceSprite;
   icon?: Sprite;
+  chip: Graphics;
   members: Map<string, MemberView>;
-  walker: Walker;
+  dir: 1 | -1;
 }
+
+/** Colour of a leader's banner pole, tether and nameplate chip. */
+const GOLD = 0xe8c547;
 
 /** Rows of the 16px ground tile that show above the window's bottom edge, in art pixels. */
 const GROUND_SHOW = 8;
@@ -41,6 +86,7 @@ const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 export class StripScene {
   private textures = new Map<string, { texture: Texture; grid: string[] }>();
   private parties = new Map<string, PartyView>();
+  private trains = new Map<string, TrainView>();
   private ground = new Graphics();
   private layer = new Container();
   private t = 0;
@@ -136,7 +182,7 @@ export class StripScene {
     return view;
   }
 
-  private makeParty(party: Party, lane: { start: number; end: number }): PartyView {
+  private makePartyShell(id: string): PartyView {
     const root = new Container();
     const label = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0xffffff, stroke: { color: 0x000000, width: 3 } } });
     label.anchor.set(0.5, 1);
@@ -154,12 +200,35 @@ export class StripScene {
       icon.scale.set(this.scale);
       root.addChild(icon);
     }
-    root.addChild(label);
+    const chip = new Graphics();
+    root.addChild(chip, label);
     this.layer.addChild(root);
-    const start = lane.start + hash01(party.id) * Math.max(0, lane.end - lane.start - 60);
-    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), members: new Map(), walker: { x: start, dir: hash01(party.id + '!') > 0.5 ? 1 : -1 } };
-    this.parties.set(party.id, view);
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1 };
+    this.parties.set(id, view);
     return view;
+  }
+
+  private trainFor(world: ReturnType<typeof groupFellowships>): Train[] {
+    const trains: Train[] = [];
+    const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean): Segment => {
+      const sorted = [...members].sort((a, b) => a.paneId.localeCompare(b.paneId));
+      return { id, label, status: rollup(sorted), tint, leader, members: sorted, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
+    };
+    for (const f of world.fellowships) {
+      const leaders = f.leaders.map((l) => l.member);
+      const partyOf = new Map(f.leaders.map((l) => [l.member.paneId, l.partyId]));
+      const segments = [seg(`lead:${f.key}`, `★ ${f.name}`, leaders, (m) => partyOf.get(m.paneId)!, undefined, true)];
+      for (const id of f.partyIds) {
+        const p = world.world.parties[id]!;
+        segments.push(seg(id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => id, world.tints.get(id), false));
+      }
+      trains.push({ id: `fellow:${f.key}`, fellowship: f, segments });
+    }
+    for (const p of Object.values(world.world.parties)) {
+      if (world.byParty.has(p.id)) continue;
+      trains.push({ id: p.id, segments: [seg(p.id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => p.id, world.tints.get(p.id), false)] });
+    }
+    return trains;
   }
 
   update(dt: number, now: number): void {
@@ -179,81 +248,178 @@ export class StripScene {
       this.ground.clear().rect(0, groundY, width, groundH).fill(hexNum(this.theme.ground));
     }
 
-    const world = this.feed.world;
-    const lanes = layoutLanes(Object.keys(world.parties), width);
+    const fv = groupFellowships(this.feed.world);
+    const trains = this.trainFor(fv);
+    // Art characters have transparent margins; pack them a little tighter than their box.
+    const spacing = (art ? figW * 0.7 : SPRITE_W + 3) * s;
+    const gap = spacing * 0.6;
+    for (const t of trains) {
+      for (const seg of t.segments) {
+        const view = this.parties.get(seg.id) ?? this.makePartyShell(seg.id);
+        const own = Math.max(0, seg.members.length - 1) * spacing + figW * s;
+        const chrome = view.plate ? (6 * 2 + (view.icon ? 12 : 0)) * s : 0;
+        // A nameplate may be a little wider than its characters, never much: long labels get an ellipsis.
+        const room = Math.max(own * 1.25, 90 * s) - chrome;
+        view.label.text = seg.label;
+        let text = seg.label;
+        while (view.label.width > room && text.length > 4) {
+          text = `${text.slice(0, -2).trimEnd()}…`;
+          view.label.text = text;
+        }
+        seg.label = text;
+        seg.width = Math.max(own, view.label.width + chrome);
+      }
+    }
+    const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
+    const weights = Object.fromEntries(trains.map((t) => [t.id, Math.max(1, spanOf(t) / (figW * s * 3))]));
+    const lanes = layoutLanes(trains.map((t) => t.id), width, 16, weights);
 
+    const liveSegs = new Set(trains.flatMap((t) => t.segments.map((g) => g.id)));
     for (const [id, view] of this.parties) {
-      if (!world.parties[id]) {
+      if (!liveSegs.has(id)) {
         view.root.destroy({ children: true });
         this.parties.delete(id);
       }
     }
+    const liveTrains = new Set(trains.map((t) => t.id));
+    for (const [id, tv] of this.trains) {
+      if (!liveTrains.has(id)) {
+        tv.tether.destroy();
+        tv.banner.destroy();
+        this.trains.delete(id);
+      }
+    }
 
-    // Art characters have transparent margins; pack them a little tighter than their box.
-    const spacing = (art ? figW * 0.7 : SPRITE_W + 3) * s;
-    for (const party of Object.values(world.parties)) {
-      const lane = lanes.get(party.id)!;
-      const view = this.parties.get(party.id) ?? this.makeParty(party, lane);
-      const members = Object.values(party.members).sort((a, b) => a.paneId.localeCompare(b.paneId));
-      const span = Math.max(0, members.length - 1) * spacing + figW * s;
-      view.walker = stepWalker(view.walker, party.status, lane, span, dt);
-      const moving = SPEED[party.status] > 0;
-      const beaconPane = (members.find((m) => m.role === this.theme.beacon) ?? members[0])?.paneId;
+    for (const train of trains) {
+      const lane = lanes.get(train.id)!;
+      const span = spanOf(train);
+      let tv = this.trains.get(train.id);
+      if (!tv) {
+        const tether = new Graphics();
+        const banner = new Graphics();
+        this.layer.addChildAt(tether, 0);
+        this.layer.addChild(banner);
+        tv = { walker: { x: lane.start + hash01(train.id) * Math.max(0, lane.end - lane.start - span), dir: hash01(train.id + '!') > 0.5 ? 1 : -1 }, tether, banner };
+        this.trains.set(train.id, tv);
+      }
+      const status = rollup(train.segments.flatMap((g) => g.members));
+      tv.walker = stepWalker(tv.walker, status, lane, span, dt);
+      const moving = SPEED[status] > 0;
+      const dir = tv.walker.dir;
+      // The leader walks at the front: right end when heading right, left end when heading left.
+      const order = dir === 1 ? [...train.segments].reverse() : train.segments;
 
-      for (const [paneId, mv] of view.members) {
-        if (!party.members[paneId]) {
-          if (mv.figure) mv.figure.destroy();
-          else mv.sprite.destroy();
-          mv.glow.destroy();
-          mv.bubble.destroy({ children: true });
-          view.members.delete(paneId);
+      let off = 0;
+      const extents: Extent[] = [];
+      for (const seg of order) {
+        const view = this.parties.get(seg.id) ?? this.makePartyShell(seg.id);
+        view.dir = dir;
+        for (const [paneId, mv] of view.members) {
+          if (!seg.members.some((m) => m.paneId === paneId)) {
+            if (mv.figure) mv.figure.destroy();
+            else mv.sprite.destroy();
+            mv.glow.destroy();
+            mv.bubble.destroy({ children: true });
+            view.members.delete(paneId);
+          }
         }
+        const own = Math.max(0, seg.members.length - 1) * spacing + figW * s;
+        // Characters centre inside the segment when its nameplate is the wider part.
+        const x0 = tv.walker.x + off + (seg.width - own) / 2;
+        seg.members.forEach((m, i) => {
+          const mv = view.members.get(m.paneId) ?? this.makeMember(view, m.paneId);
+          const target = x0 + i * spacing + (figW * s) / 2;
+          mv.x = mv.x === undefined ? target : mv.x + (target - mv.x) * (1 - Math.exp(-8 * dt));
+          const beaconPane = (seg.members.find((q) => q.role === this.theme.beacon) ?? seg.members[0])?.paneId;
+          const sayParty = seg.sayParty.get(m.paneId)!;
+          if (art) this.drawArtMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, groundY, moving, now);
+          else this.drawMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, groundY, moving, now);
+        });
+        const x1 = x0 + own;
+        extents.push({ seg, x0: tv.walker.x + off, x1: tv.walker.x + off + seg.width, fig0: x0, fig1: x1 });
+        off += seg.width + gap;
       }
 
-      members.forEach((m, i) => {
-        const mv = view.members.get(m.paneId) ?? this.makeMember(view, m.paneId);
-        const cx = memberX(view.walker.x, i, spacing) + (figW * s) / 2;
-        if (art) this.drawArtMember(mv, m, party, m.paneId === beaconPane, cx, groundY, moving, now);
-        else this.drawMember(mv, m, party, m.paneId === beaconPane, cx, groundY, moving, now);
-      });
-
-      const center = view.walker.x + span / 2;
-      const text = party.branch ? `${party.label} · ${party.branch}` : party.label;
-      view.label.text = text;
-      if (view.plate) {
-        // Nameplate sits above the heads; the status icon colour rides on the label tint.
-        const padX = 6 * s;
-        const padY = 3 * s;
-        const iconW = view.icon ? 9 * s + 3 * s : 0;
-        const w = view.label.width + padX * 2 + iconW;
-        const h = view.label.height + padY * 2;
-        view.plate.width = w / s;
-        view.plate.height = h / s;
-        const top = groundY - figH * s - 6 - h;
-        view.plate.position.set(center - w / 2, top);
-        view.label.style.fill = 0xffffff;
-        view.label.anchor.set(0, 0.5);
-        view.label.position.set(center - w / 2 + padX + iconW, top + h / 2);
-        if (view.icon) {
-          view.icon.texture = this.art!.ui.textures[art!.ui.statusIcons[party.status]] ?? Texture.EMPTY;
-          view.icon.position.set(center - w / 2 + padX, top + h / 2 - (9 * s) / 2);
+      for (const { seg, fig0, fig1 } of extents) {
+        const view = this.parties.get(seg.id)!;
+        const center = (fig0 + fig1) / 2;
+        view.label.text = seg.label;
+        if (view.plate) {
+          // Nameplate sits above the heads; the status icon colour rides on the label tint.
+          const padX = 6 * s;
+          const padY = 3 * s;
+          const iconW = view.icon ? 9 * s + 3 * s : 0;
+          const w = view.label.width + padX * 2 + iconW;
+          const h = view.label.height + padY * 2;
+          view.plate.width = w / s;
+          view.plate.height = h / s;
+          const top = groundY - figH * s - 6 - h;
+          view.plate.position.set(center - w / 2, top);
+          view.label.style.fill = 0xffffff;
+          view.label.anchor.set(0, 0.5);
+          view.label.position.set(center - w / 2 + padX + iconW, top + h / 2);
+          if (view.icon) {
+            view.icon.texture = this.art!.ui.textures[art!.ui.statusIcons[seg.status]] ?? Texture.EMPTY;
+            view.icon.position.set(center - w / 2 + padX, top + h / 2 - (9 * s) / 2);
+          }
+          this.drawChip(view, seg, center - w / 2, top + h, w, s);
+        } else {
+          view.label.style.fill = hexNum(this.theme.palette[seg.status]);
+          view.label.position.set(center, groundY - figH * s - 4);
+          this.drawChip(view, seg, center - view.label.width / 2, groundY - figH * s - 2, view.label.width, s);
         }
-      } else {
-        view.label.style.fill = hexNum(this.theme.palette[party.status]);
-        view.label.position.set(center, groundY - figH * s - 4);
       }
+      this.drawTrain(tv, train, extents, dir, groundY, figW, figH, s);
     }
   }
 
+  /** A coloured bar under a nameplate in the party's fellowship tint (gold for a leader). */
+  private drawChip(view: PartyView, seg: Segment, x: number, y: number, w: number, s: number): void {
+    view.chip.clear();
+    const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : undefined;
+    if (color === undefined) return;
+    view.chip.rect(x, y, w, 2 * s).fill(color);
+  }
+
+  /**
+   * A led group shows who leads: a gold banner pole rises behind the leader, its flag striped in
+   * the tint of every party it leads, and a tether runs along the ground through the whole group.
+   */
+  private drawTrain(tv: TrainView, train: Train, extents: Extent[], dir: 1 | -1, groundY: number, figW: number, figH: number, s: number): void {
+    tv.tether.clear();
+    tv.banner.clear();
+    const f = train.fellowship;
+    if (!f) return;
+    const left = extents[0]!.x0;
+    const right = extents[extents.length - 1]!.x1;
+    tv.tether.rect(left, groundY + 1.5 * s, right - left, s).fill({ color: GOLD, alpha: 0.7 });
+    for (const { seg, x0, x1 } of extents) {
+      const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : GOLD;
+      tv.tether.rect(x0, groundY + 1.5 * s, x1 - x0, 2 * s).fill(color);
+    }
+    const lead = extents.find((e) => e.seg.leader)!;
+    const poleX = dir === 1 ? lead.fig0 + figW * s * 0.1 : lead.fig1 - figW * s * 0.1;
+    const top = groundY - figH * s - 36 * s;
+    tv.banner.rect(poleX - s / 2, top, s, groundY - top).fill(0x2a2118);
+    tv.banner.rect(poleX - 1.5 * s, top - 2 * s, 3 * s, 2 * s).fill(GOLD);
+    const stripes = extents.filter((e) => !e.seg.leader && e.seg.tint).map((e) => hexNum(e.seg.tint!));
+    const fw = 14 * s;
+    const fh = 10 * s;
+    const fx = dir === 1 ? poleX - fw : poleX + s / 2;
+    const n = Math.max(1, stripes.length);
+    (stripes.length ? stripes : [GOLD]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
+    tv.banner.rect(fx, top, fw, fh).stroke({ color: 0x2a2118, width: s, alignment: 1 });
+  }
+
   /** Sprite-sheet member: pick the animation, tint the cloak and the status light from their masks. */
-  private drawArtMember(mv: MemberView, m: Member, party: Party, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
+  private drawArtMember(mv: MemberView, m: Member, view: PartyView, seg: Segment, sayParty: string, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
     const loaded = this.art!;
     const s = this.scale;
     const { art } = loaded;
-    const text = this.feed.say(party.id, m.paneId, now);
-    const dir = this.parties.get(party.id)!.walker.dir;
+    const text = this.feed.say(sayParty, m.paneId, now);
+    const dir = view.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
-    mv.figure!.update({ member: m, partyStatus: party.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase }, dir, s, cx, y);
+    mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
 
     mv.bubble.visible = !!text;
     if (text) {
@@ -269,27 +435,28 @@ export class StripScene {
       mv.bubbleText.position.set(padX, padY);
       if (mv.bubbleTail) mv.bubbleTail.position.set(w / 2, h - s);
       const maxX = this.app.screen.width - w - 4;
-      const above = art.character.h * s + (ui.tail ? 6 * s : 0) + (this.parties.get(party.id)!.plate ? 14 * s : 6);
+      const above = art.character.h * s + (ui.tail ? 6 * s : 0) + (view.plate ? 14 * s : 6);
       mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - w / 2)), y - above - h);
     }
   }
 
-  private drawMember(mv: MemberView, m: Member, party: Party, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
+  private drawMember(mv: MemberView, m: Member, view: PartyView, seg: Segment, sayParty: string, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
     const s = this.scale;
     const memberMoving = moving && m.status !== 'blocked';
     const frameName = FRAME_NAMES[walkFrame(memberMoving, this.t, mv.phase)]!;
     const { texture, grid } = this.frame(m.role, frameName, isBeacon);
-    const dir = this.parties.get(party.id)!.walker.dir;
+    const dir = view.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
     mv.sprite.texture = texture;
     mv.sprite.scale.set(dir * s, s);
     mv.sprite.position.set(cx, y);
     mv.sprite.alpha = m.status === 'idle' || m.status === 'unknown' ? 0.85 : 1;
+    mv.sprite.tint = seg.tint ? hexNum(mixHex('#ffffff', seg.tint, 0.55)) : 0xffffff;
 
     mv.glow.clear();
     if (isBeacon) {
-      const color = hexNum(this.theme.palette[party.status]);
-      const alpha = beaconAlpha(party.status, this.t);
+      const color = hexNum(this.theme.palette[seg.status]);
+      const alpha = beaconAlpha(seg.status, this.t);
       for (const p of beaconPixels(grid)) {
         const gx = cx + dir * (p.x - SPRITE_W / 2 + 0.5) * s;
         const gy = y - (SPRITE_H - p.y - 0.5) * s;
@@ -298,7 +465,7 @@ export class StripScene {
       }
     }
 
-    const text = this.feed.say(party.id, m.paneId, now);
+    const text = this.feed.say(sayParty, m.paneId, now);
     mv.bubble.visible = !!text;
     if (text) {
       if (mv.bubbleText.text !== text) {

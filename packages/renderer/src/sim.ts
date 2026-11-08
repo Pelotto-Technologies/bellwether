@@ -20,13 +20,18 @@ export const SPEED: Record<Status, number> = {
   blocked: 0,
 };
 
-/** Splits the strip into one equal lane per party, in a stable order. */
-export function layoutLanes(ids: string[], width: number, margin = 16): Map<string, Lane> {
+/** Splits the strip into one lane per walking group, in a stable order. Lanes are equal unless `weights` says a group needs more room. */
+export function layoutLanes(ids: string[], width: number, margin = 16, weights: Record<string, number> = {}): Map<string, Lane> {
   const lanes = new Map<string, Lane>();
   const sorted = [...ids].sort();
   const usable = Math.max(0, width - margin * 2);
-  const each = sorted.length ? usable / sorted.length : 0;
-  sorted.forEach((id, i) => lanes.set(id, { start: margin + i * each, end: margin + (i + 1) * each }));
+  const total = sorted.reduce((n, id) => n + (weights[id] ?? 1), 0);
+  let at = margin;
+  for (const id of sorted) {
+    const each = total ? (usable * (weights[id] ?? 1)) / total : 0;
+    lanes.set(id, { start: at, end: at + each });
+    at += each;
+  }
   return lanes;
 }
 
@@ -38,6 +43,8 @@ export function layoutLanes(ids: string[], width: number, margin = 16): Map<stri
 export function stepWalker(w: Walker, status: Status, lane: Lane, span: number, dt: number): Walker {
   const min = lane.start;
   const max = Math.max(min, lane.end - span);
+  // A group wider than its lane cannot bounce; keep its heading rather than flipping every frame.
+  if (max <= min) return { x: min, dir: w.dir };
   const x = Math.min(max, Math.max(min, w.x + w.dir * SPEED[status] * dt));
   let dir = w.dir;
   if (x >= max && dir === 1) dir = -1;

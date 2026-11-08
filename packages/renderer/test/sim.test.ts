@@ -8,6 +8,11 @@ describe('layoutLanes', () => {
     expect(lanes.get('w3')?.end).toBeCloseTo(990);
     expect(lanes.get('w2')?.start).toBeCloseTo(lanes.get('w1')!.end);
   });
+  it('gives heavier groups wider lanes', () => {
+    const lanes = layoutLanes(['a', 'b'], 1000, 0, { a: 3, b: 1 });
+    expect(lanes.get('a')).toEqual({ start: 0, end: 750 });
+    expect(lanes.get('b')).toEqual({ start: 750, end: 1000 });
+  });
   it('handles no parties', () => {
     expect(layoutLanes([], 500).size).toBe(0);
   });
