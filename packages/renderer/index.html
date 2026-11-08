@@ -23,6 +23,10 @@
       #detail ul { list-style: none; margin: 0; padding: 0; }
       #detail li { margin: 6px 0; }
       #detail .line { opacity: .75; }
+      #detail .kill { float: right; margin-left: 6px; padding: 0 6px; cursor: pointer; border-radius: 3px; font: 11px ui-monospace, monospace;
+        color: #ffb3b3; background: rgba(255,77,77,.12); border: 1px solid rgba(255,77,77,.45); }
+      #detail .kill:hover { background: rgba(255,77,77,.3); color: #fff; }
+      #detail .kill:disabled { opacity: .5; cursor: default; }
       #exit-map {
         position: fixed; bottom: 12px; left: 12px; padding: 4px 10px; border-radius: 4px; display: none;
         font: 12px ui-monospace, monospace; color: #e8ecf6; background: rgba(12,15,24,.88);

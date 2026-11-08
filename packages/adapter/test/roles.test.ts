@@ -19,3 +19,11 @@ describe('resolveRole', () => {
     expect(resolveRole({})).toBe('generic');
   });
 });
+
+describe('isOrchestrationLabel', () => {
+  it('matches orchestration words, not substrings of other words', async () => {
+    const { isOrchestrationLabel } = await import('../src/roles.js');
+    for (const l of ['bellwether Orchestration', 'api-orchestrator', 'Orchestrate']) expect(isOrchestrationLabel(l)).toBe(true);
+    for (const l of ['bellwether', 'orchestral', '', undefined]) expect(isOrchestrationLabel(l)).toBe(false);
+  });
+});

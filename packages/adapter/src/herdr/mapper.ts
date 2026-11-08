@@ -1,5 +1,5 @@
 // Pure mapping from Herdr protocol records to the Bellwether world model.
-import { resolveRole } from '../roles.js';
+import { isOrchestrationLabel, resolveRole } from '../roles.js';
 import { rollup } from '../rollup.js';
 import type { Delta, Member, Party, Status } from '../types.js';
 import type { AgentInfo, AgentStatusChanged, PaneInfo, SessionSnapshot, WorkspaceInfo } from './protocol.js';
@@ -21,7 +21,7 @@ export interface MapContext {
   branches?: ReadonlyMap<string, string>;
 }
 
-export function memberFromPane(pane: PaneInfo | AgentInfo): Member | undefined {
+export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = false): Member | undefined {
   if (!pane.agent) return undefined;
   const tokens = pane.tokens ?? {};
   const name = 'name' in pane ? pane.name : undefined;
@@ -29,7 +29,7 @@ export function memberFromPane(pane: PaneInfo | AgentInfo): Member | undefined {
   const m: Member = {
     paneId: pane.pane_id,
     agent: pane.agent,
-    role: resolveRole({ tokens, agentName: name, title: pane.title }),
+    role: resolveRole({ tokens, agentName: name, title: pane.title, orchestrationRoot }),
     status: toStatus(pane.agent_status),
     lastChange: seq ?? pane.revision ?? 0,
   };
@@ -55,13 +55,35 @@ export function partyFromWorkspace(ws: WorkspaceInfo, members: Record<string, Me
   return p;
 }
 
+/** Trailing pane number of an id like `w1:p3`, for ordering panes within a workspace. */
+function paneNumber(id: string): number {
+  const m = /(\d+)\D*$/.exec(id);
+  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * The first pane (lowest pane number) of each workspace whose label marks it an
+ * orchestration workspace. Its agent is the orchestrator unless told otherwise.
+ */
+export function orchestrationRoots(snap: SessionSnapshot): Set<string> {
+  const out = new Set<string>();
+  for (const ws of snap.workspaces) {
+    if (!isOrchestrationLabel(ws.label)) continue;
+    const panes = [...(snap.panes ?? []), ...(snap.agents ?? [])].filter((p) => p.workspace_id === ws.workspace_id).map((p) => p.pane_id);
+    const first = [...new Set(panes)].sort((a, b) => paneNumber(a) - paneNumber(b) || a.localeCompare(b))[0];
+    if (first) out.add(first);
+  }
+  return out;
+}
+
 /** Build every party for one session from `session.snapshot`. Agent records win over pane records. */
 export function partiesFromSnapshot(snap: SessionSnapshot, ctx: MapContext): Record<string, Party> {
   const byWs = new Map<string, Record<string, Member>>();
   const seen = new Set<string>();
+  const roots = orchestrationRoots(snap);
   for (const rec of [...(snap.agents ?? []), ...(snap.panes ?? [])]) {
     if (seen.has(rec.pane_id)) continue;
-    const m = memberFromPane(rec);
+    const m = memberFromPane(rec, roots.has(rec.pane_id));
     if (!m) continue;
     seen.add(rec.pane_id);
     let ms = byWs.get(rec.workspace_id);
@@ -95,7 +117,8 @@ export function applyStatusChange(
 ): { party: Party; member: Member; rollupChanged: boolean } | undefined {
   const party = parties[partyId(ctx.session, ev.workspace_id)];
   const prev = party?.members[ev.pane_id];
-  if (!party || !prev) return undefined;
+  // The agent left its pane (back to the shell): only a re-read can say what remains.
+  if (!party || !prev || ev.agent === null) return undefined;
   const member: Member = { ...prev, status: toStatus(ev.agent_status), lastChange: prev.lastChange + 1 };
   if (ev.agent) member.agent = ev.agent;
   if (ev.title) member.title = ev.title;

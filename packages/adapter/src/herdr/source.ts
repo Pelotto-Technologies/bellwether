@@ -21,6 +21,12 @@ export interface SessionSourceOptions {
   now?: () => number;
   /** Coalesce bursts of lifecycle events into one re-read. */
   refreshDebounceMs?: number;
+  /**
+   * Safety-net re-read interval. Some changes (an `herdr agent rename`, an agent
+   * exiting back to its shell) raise no lifecycle event, so without this a member
+   * could keep a stale role or linger after its agent is gone. 0 disables it.
+   */
+  resyncMs?: number;
   /** Reconnect backoff bounds. */
   minBackoffMs?: number;
   maxBackoffMs?: number;
@@ -51,6 +57,7 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
   private dirty = false;
   private refreshTimer?: NodeJS.Timeout;
   private reconnectTimer?: NodeJS.Timeout;
+  private resyncTimer?: NodeJS.Timeout;
   private backoff: number;
   private readonly now: () => number;
   private readonly log: (msg: string) => void;
@@ -73,6 +80,13 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    const every = this.opts.resyncMs ?? 5000;
+    if (every > 0) {
+      this.resyncTimer = setInterval(() => {
+        if (this.lifecycle && !this.refreshing) this.scheduleRefresh();
+      }, every);
+      this.resyncTimer.unref?.();
+    }
     try {
       await this.connect();
     } catch (err) {
@@ -85,6 +99,7 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
     this.running = false;
     clearTimeout(this.refreshTimer);
     clearTimeout(this.reconnectTimer);
+    clearInterval(this.resyncTimer);
     for (const c of [this.lifecycle, this.status, this.rpc]) c?.close();
     this.lifecycle = this.status = this.rpc = undefined;
     this.statusPanes = '';
@@ -210,6 +225,10 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
     focus: async (paneId) => void (await (await this.rpcConn()).request('pane.focus', { pane_id: paneId })),
     prompt: async (paneId, text) => void (await (await this.rpcConn()).request('agent.prompt', { target: paneId, text })),
     sendKeys: async (paneId, keys) => void (await (await this.rpcConn()).request('agent.send_keys', { target: paneId, keys })),
+    close: async (paneId) => {
+      await (await this.rpcConn()).request('pane.close', { pane_id: paneId });
+      this.scheduleRefresh();
+    },
   };
 
   /** Whether this session currently has a member in `paneId`. */
@@ -274,6 +293,7 @@ export interface LiveOptions {
   connector?: Connector;
   now?: () => number;
   refreshDebounceMs?: number;
+  resyncMs?: number;
   minBackoffMs?: number;
   maxBackoffMs?: number;
   log?: (msg: string) => void;
@@ -307,6 +327,7 @@ export class HerdrSource extends EventEmitter implements WorldSource {
           connector: this.opts.connector,
           now: this.opts.now,
           refreshDebounceMs: this.opts.refreshDebounceMs,
+          resyncMs: this.opts.resyncMs,
           minBackoffMs: this.opts.minBackoffMs,
           maxBackoffMs: this.opts.maxBackoffMs,
           log: this.opts.log,
@@ -335,6 +356,7 @@ export class HerdrSource extends EventEmitter implements WorldSource {
     focus: async (paneId) => this.route(paneId).focus(paneId),
     prompt: async (paneId, text) => this.route(paneId).prompt(paneId, text),
     sendKeys: async (paneId, keys) => this.route(paneId).sendKeys(paneId, keys),
+    close: async (paneId) => this.route(paneId).close(paneId),
   };
 
   private route(paneId: string): Action {

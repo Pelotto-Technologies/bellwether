@@ -3,3 +3,4 @@ export * from './mapper.js';
 export * from './paths.js';
 export { HerdrSessionSource, HerdrSource, type LiveOptions, type SessionSourceOptions } from './source.js';
 export type * from './protocol.js';
+export * from './launch.js';

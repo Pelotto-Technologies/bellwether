@@ -57,6 +57,27 @@ villager. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `rev
    hook from `bellwether install` tags it on session start.
 3. **Names.** `herdr agent rename` to something containing a role word (`reviewer-2`), or
    a pane title with one. Needs no install.
+4. **Orchestration workspaces.** The first pane of a workspace whose label contains
+   `Orchestration` (for example `myrepo Orchestration`) is the `orchestrator`, unless a
+   tag or name above says otherwise. Needs no install and no rename.
+
+### Start an orchestrator in one command
+
+`bellwether orchestrate` opens a new Herdr workspace named `<folder> Orchestration` in the
+current directory, tags pane 1 as the orchestrator and types your agent command into it:
+
+```sh
+cd ~/src/myrepo
+bellwether orchestrate -- copilot --autopilot --agent manwe
+bellwether orchestrate --session overlay-dev --label "api Orchestration" -- claude
+```
+
+Options: `--cwd` (default: current directory), `--label` (default `<folder> Orchestration`),
+`--role` (default `orchestrator`), `--session` or `--socket` (which Herdr), `--timeout <ms>`
+(how long to wait for the agent, default 60000). Once Herdr detects the agent, the role tag
+is applied again and, if the agent has no name yet, it is named `orchestrator-<repo>`. Leave
+off the command to just create the workspace and tag pane 1. On the map, an orchestrator
+always stands at its repo's settlement, even before it has spawned any workers.
 
 ### Fellowships: orchestrators and worktrees
 
@@ -92,8 +113,9 @@ To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md`
 
 Settlements gain a building for every four agents in the repo and camps gain a tent per two members, with a small pop when something new is built.
 
-In the desktop overlay, **Ctrl+Alt+M** (Cmd+Alt+M on macOS) toggles strip and map from anywhere, and map mode has an **Exit map** button in the corner. Press `m` in the page to toggle strip and map mode. In map mode, click a glow to zoom into a party and read each member's role, agent, status and
-latest line. Esc zooms back out.
+In the desktop overlay, **Ctrl+Alt+M** (Cmd+Alt+M on macOS) toggles strip and map from anywhere, and map mode has an **Exit map** button in the corner. Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or an orchestrator) to zoom into a party and read each member's role, agent, status and
+latest line. Each member has a **close** button that closes its pane in Herdr after a confirm,
+which ends the agent. Esc zooms back out.
 
 ### Configure with `bellwether.toml`
 
@@ -253,6 +275,7 @@ bellwether run                       # live Herdr, overlay at http://127.0.0.1:7
 bellwether record session.jsonl --scrub
 bellwether replay session.jsonl --speed 4
 bellwether scrub in.jsonl out.jsonl  # hash repo/branch/labels, drop speech text
+bellwether orchestrate -- copilot --autopilot --agent manwe  # new "<repo> Orchestration" workspace
 ```
 
 `pnpm blog` builds a static, adapter-free bundle in `blog/`: the renderer plus the

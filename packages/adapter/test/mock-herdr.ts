@@ -30,6 +30,8 @@ export class MockHerdr {
   readonly requests: Array<{ method: string; params: any }> = [];
   /** Called right after a snapshot is served, to simulate races. */
   afterSnapshot?: () => void;
+  /** Per-method overrides: return a result object, or throw `{ code, message }` to send an error. */
+  handlers: Record<string, (params: any) => object | undefined> = {};
   private server = net.createServer((s) => this.onConn(s));
   private subs: Sub[] = [];
   private sockets = new Set<net.Socket>();
@@ -96,6 +98,14 @@ export class MockHerdr {
   private onRequest(sock: net.Socket, req: { id: string; method: string; params: any }): void {
     this.requests.push({ method: req.method, params: req.params });
     const reply = (o: object) => sock.write(JSON.stringify({ id: req.id, ...o }) + '\n');
+    const h = this.handlers[req.method];
+    if (h) {
+      try {
+        return void reply({ result: h(req.params) ?? { type: 'ok' } });
+      } catch (e: any) {
+        return void reply({ error: { code: e.code ?? 'error', message: e.message ?? String(e) } });
+      }
+    }
     if (req.method === 'session.snapshot') {
       reply({ result: { type: 'session_snapshot', snapshot: this.snapshot } });
       return void this.afterSnapshot?.();
@@ -114,7 +124,7 @@ export class MockHerdr {
       this.subs.push({ sock, id: req.id, types, panes });
       return void reply({ result: { type: 'subscription_started' } });
     }
-    if (/^(pane|agent)\.(focus|prompt|send_keys)$/.test(req.method)) return void reply({ result: { type: 'ok' } });
+    if (/^(pane|agent)\.(focus|prompt|send_keys|send_text|report_metadata|rename|close)$/.test(req.method)) return void reply({ result: { type: 'ok' } });
     reply({ error: { code: 'unknown_method', message: req.method } });
   }
 }

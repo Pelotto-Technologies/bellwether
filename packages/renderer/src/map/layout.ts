@@ -54,9 +54,10 @@ export function settlementName(key: string): string {
  * free cell on collision. Repos are placed in hash order so the result does not
  * depend on the order parties arrive in.
  */
-export function layoutMap(world: World): MapLayout {
+/** `extraKeys` adds settlements with no camps, for orchestrators standing alone at their repo. */
+export function layoutMap(world: World, extraKeys: string[] = []): MapLayout {
   const parties = Object.values(world.parties);
-  const keys = [...new Set(parties.map(repoKey))].sort((a, b) => hash01(a) - hash01(b) || a.localeCompare(b));
+  const keys = [...new Set([...parties.map(repoKey), ...extraKeys])].sort((a, b) => hash01(a) - hash01(b) || a.localeCompare(b));
   const cols = GRID_COLS;
   const rows = Math.max(4, Math.ceil((keys.length * 1.6) / cols));
   const cells = cols * rows;

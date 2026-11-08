@@ -53,7 +53,17 @@ export interface FellowshipView {
   tints: Map<string, string>;
 }
 
+export interface FellowshipOptions {
+  /**
+   * Lift an orchestrator out of its party even when nobody else is in its repo yet.
+   * Map mode uses this so the orchestrator always stands at the settlement (the root
+   * of its project) instead of camping like a worker; the strip keeps it as a party.
+   */
+  leadAlone?: boolean;
+}
+
 const cache = new WeakMap<World, FellowshipView>();
+const aloneCache = new WeakMap<World, FellowshipView>();
 
 function groupKey(p: Party): string {
   return `${p.session ?? ''}|${repoKey(p)}`;
@@ -65,15 +75,16 @@ function nameOf(key: string): string {
 }
 
 /** Cached per world object: the feed replaces the world on every delta. */
-export function groupFellowships(world: World): FellowshipView {
-  const hit = cache.get(world);
+export function groupFellowships(world: World, opts: FellowshipOptions = {}): FellowshipView {
+  const store = opts.leadAlone ? aloneCache : cache;
+  const hit = store.get(world);
   if (hit) return hit;
-  const view = compute(world);
-  cache.set(world, view);
+  const view = compute(world, !!opts.leadAlone);
+  store.set(world, view);
   return view;
 }
 
-function compute(world: World): FellowshipView {
+function compute(world: World, leadAlone: boolean): FellowshipView {
   const groups = new Map<string, Party[]>();
   for (const p of Object.values(world.parties)) groups.set(groupKey(p), [...(groups.get(groupKey(p)) ?? []), p]);
 
@@ -91,7 +102,7 @@ function compute(world: World): FellowshipView {
         .sort((a, b) => a.paneId.localeCompare(b.paneId))
         .map((member) => ({ partyId: p.id, member })),
     );
-    const led = leaders.length > 0 && all.length > leaders.length;
+    const led = leaders.length > 0 && (leadAlone || all.length > leaders.length);
 
     const kept: Party[] = [];
     for (const p of sorted) {

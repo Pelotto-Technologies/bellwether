@@ -17,7 +17,10 @@ export interface DeltaServerOptions {
   staticDir?: string;
   /** Served as `/config.json` so the renderer can pick the configured skin pack. */
   clientConfig?: Record<string, unknown>;
-  /** Also accept `prompt` and `sendKeys` client messages. Off by default; `focus` is always accepted. */
+  /**
+   * Also accept `prompt` and `sendKeys` client messages. Off by default; `focus` is
+   * always accepted, and `close` is accepted from the overlay's own origin.
+   */
   actions?: boolean;
   log?: (msg: string) => void;
 }
@@ -26,7 +29,23 @@ export interface DeltaServerOptions {
 export type ClientMessage =
   | { type: 'focus'; paneId: string }
   | { type: 'prompt'; paneId: string; text: string }
-  | { type: 'sendKeys'; paneId: string; keys: string[] };
+  | { type: 'sendKeys'; paneId: string; keys: string[] }
+  | { type: 'close'; paneId: string };
+
+/**
+ * Whether a WebSocket upgrade came from the overlay itself rather than some other
+ * web page in the user's browser: no Origin (Electron, OBS, scripts) or a loopback one.
+ * Closing panes is only accepted from such clients.
+ */
+export function isLocalOrigin(origin: string | undefined): boolean {
+  if (!origin || origin === 'null' || origin.startsWith('file:')) return true;
+  try {
+    const host = new URL(origin).hostname;
+    return host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
+  } catch {
+    return false;
+  }
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -116,10 +135,11 @@ export class DeltaServer {
       createReadStream(file).pipe(res);
     });
     this.wss = new WebSocketServer({ server: this.http, path: DELTA_PATH });
-    this.wss.on('connection', (ws) => {
+    this.wss.on('connection', (ws, req) => {
       this.clients.add(ws);
+      const local = isLocalOrigin(req.headers.origin);
       ws.on('close', () => this.clients.delete(ws));
-      ws.on('message', (data) => this.onClientMessage(String(data)));
+      ws.on('message', (data) => this.onClientMessage(String(data), local));
       ws.send(JSON.stringify(snapshotDelta(this.world)));
     });
   }
@@ -133,7 +153,7 @@ export class DeltaServer {
     source.on('delta', (d) => this.publish(d));
   }
 
-  private onClientMessage(raw: string): void {
+  private onClientMessage(raw: string, local = false): void {
     const action = this.action;
     let msg: Record<string, unknown>;
     try {
@@ -144,6 +164,10 @@ export class DeltaServer {
     if (!action || typeof msg.paneId !== 'string' || !msg.paneId) return;
     let run: Promise<void> | undefined;
     if (msg.type === 'focus') run = action.focus(msg.paneId);
+    else if (msg.type === 'close' && local) {
+      this.opts.log?.(`closing pane ${msg.paneId} (asked by the overlay)`);
+      run = action.close(msg.paneId);
+    }
     else if (this.opts.actions && msg.type === 'prompt' && typeof msg.text === 'string') run = action.prompt(msg.paneId, msg.text);
     else if (this.opts.actions && msg.type === 'sendKeys' && Array.isArray(msg.keys) && msg.keys.every((k) => typeof k === 'string')) {
       run = action.sendKeys(msg.paneId, msg.keys as string[]);
