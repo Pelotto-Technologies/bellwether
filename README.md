@@ -88,9 +88,10 @@ under each party's feet (`minimal = true`, or Labels in the tray menu):
 
 ### Crowds and multiple monitors
 
-When the strip fills up, parties step back into depth rows (up to four) and keep walking,
-passing behind each other instead of standing still. The back rows stand in the shade and
-the ground gets deeper to hold them:
+Parties roam the whole strip on a few depth rows, so they cross paths and pass behind each
+other; two parties on the same row bump and turn around. When the strip fills up, more rows
+open (up to four) and everyone keeps walking. The back rows stand in the shade and the
+ground gets deeper to hold them:
 
 ![A crowded strip: parties in four depth rows walking behind each other](docs/images/strip-crowd.gif)
 

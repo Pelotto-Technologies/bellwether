@@ -2,7 +2,7 @@ import { rollup, type Member, type Role, type Status } from '@bellwether/adapter
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
-import { assignRows, beaconAlpha, bob, hash01, layoutLanes, stepWalker, walkFrame, MAX_ROWS, SPEED, type Lane, type SpanView, type Walker } from '../sim.js';
+import { assignRows, beaconAlpha, bob, bumps, hash01, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
 import { DoubleTap } from '../doubletap.js';
@@ -333,18 +333,11 @@ export class StripScene {
       }
     }
     const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
-    const weights = Object.fromEntries(trains.map((t) => [t.id, Math.max(1, spanOf(t) / (figW * s * 3))]));
-    // Crowded: deal the groups out into depth rows, each with the full width to walk in.
-    const rowOf = assignRows(trains.map((t) => ({ id: t.id, span: spanOf(t) })), width - 32);
-    const lanes = new Map<string, Lane>();
+    // Everyone roams the whole strip (every monitor's worth when spanning). Groups are dealt into
+    // depth rows so they cross paths, passing behind each other; a crowd opens extra rows.
+    const rowOf = assignRows(trains.map((t) => ({ id: t.id, span: spanOf(t) })), width - 32, ROAM_ROWS);
+    const lane = { start: 16, end: width - 16 };
     const backRows = Math.max(0, ...rowOf.values());
-    for (let r = 0; r <= backRows; r++) {
-      const ids = trains.filter((t) => rowOf.get(t.id) === r).map((t) => t.id);
-      // Stagger the rows by a fraction of a lane so the back rows peek out between the front ones instead of lining up in columns.
-      const reach = backRows && ids.length ? (width - 32) / ids.length / 2 : 0;
-      const shift = backRows ? reach * (r / backRows) : 0;
-      for (const [id, lane] of layoutLanes(ids, width - reach, 16, weights)) lanes.set(id, { start: lane.start + shift, end: lane.end + shift });
-    }
     const ease = 1 - Math.exp(-3 * dt);
     this.groundDepth += (backRows - this.groundDepth) * ease;
     if (Math.abs(backRows - this.groundDepth) < 0.01) this.groundDepth = backRows;
@@ -375,8 +368,10 @@ export class StripScene {
       }
     }
 
+    // Step every walker first, then turn around whoever is walking into a neighbour in its own row.
+    const statusOf = new Map(trains.map((t) => [t.id, rollup(t.segments.flatMap((g) => g.members))]));
+    const leads = !this.span || this.span.offset === 0;
     for (const train of trains) {
-      const lane = lanes.get(train.id)!;
       const span = spanOf(train);
       let tv = this.trains.get(train.id);
       if (!tv) {
@@ -389,6 +384,23 @@ export class StripScene {
       }
       const shared = this.adopted?.get(train.id);
       if (shared) tv.walker = shared;
+      const status = statusOf.get(train.id)!;
+      tv.walker = stepWalker(tv.walker, status, lane, span, dt);
+      // Now and then a group changes its mind and wanders back. Only the lead window decides; the others follow it.
+      if (leads && SPEED[status] > 0 && Math.random() < dt / 20) tv.walker = { ...tv.walker, dir: tv.walker.dir === 1 ? -1 : 1 };
+    }
+    for (let r = 0; r <= backRows; r++) {
+      const row = trains
+        .filter((t) => rowOf.get(t.id) === r)
+        .map((t) => ({ id: t.id, x: this.trains.get(t.id)!.walker.x, dir: this.trains.get(t.id)!.walker.dir, span: spanOf(t), speed: SPEED[statusOf.get(t.id)!] }));
+      for (const id of bumps(row)) {
+        const tv = this.trains.get(id)!;
+        tv.walker = { ...tv.walker, dir: tv.walker.dir === 1 ? -1 : 1 };
+      }
+    }
+
+    for (const train of trains) {
+      const tv = this.trains.get(train.id)!;
       const row = rowOf.get(train.id) ?? 0;
       tv.depth += (row - tv.depth) * ease;
       if (Math.abs(row - tv.depth) < 0.01) tv.depth = row;
@@ -401,8 +413,7 @@ export class StripScene {
         if (root && root.parent !== rowLayer) rowLayer.addChild(root);
       }
       const trainGround = groundY - tv.depth * ROW_LIFT * s;
-      const status = rollup(train.segments.flatMap((g) => g.members));
-      tv.walker = stepWalker(tv.walker, status, lane, span, dt);
+      const status = statusOf.get(train.id)!;
       const moving = SPEED[status] > 0;
       const dir = tv.walker.dir;
       // The leader walks at the front: right end when heading right, left end when heading left.
