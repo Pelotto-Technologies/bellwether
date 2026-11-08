@@ -15,11 +15,13 @@ export function modeFromUrl(url: string): 'strip' | 'map' | undefined {
   }
 }
 
-export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack'>): string {
+export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale'>): string {
   const u = new URL(cfg.url);
   if (cfg.mode === 'map') u.searchParams.set('mode', 'map');
   else if (u.searchParams.has('mode')) u.searchParams.delete('mode');
   if (cfg.pack) u.searchParams.set('pack', cfg.pack);
   else if (u.searchParams.has('pack')) u.searchParams.delete('pack');
+  if (cfg.scale) u.searchParams.set('scale', String(cfg.scale));
+  else if (u.searchParams.has('scale')) u.searchParams.delete('scale');
   return u.toString();
 }

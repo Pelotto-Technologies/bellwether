@@ -36,7 +36,7 @@ describe('bounds', () => {
     expect(stripBounds(primary, 5000).height).toBe(1080);
   });
   it('map mode uses the work area', () => {
-    expect(windowBounds(primary, 'map', 160)).toEqual(primary.workArea);
+    expect(windowBounds(primary, 'map', 3)).toEqual(primary.workArea);
   });
   it('falls back to primary then first display', () => {
     expect(pickDisplay([second, primary], 2)?.id).toBe(2);
@@ -49,7 +49,7 @@ describe('bounds', () => {
 describe('config', () => {
   it('normalizes junk to defaults', () => {
     expect(normalizeConfig(null)).toEqual(DEFAULT_CONFIG);
-    expect(normalizeConfig({ mode: 'x', port: 'a', displayId: 'z', stripHeight: 1 })).toEqual(DEFAULT_CONFIG);
+    expect(normalizeConfig({ mode: 'x', port: 'a', displayId: 'z', scale: 9 })).toEqual(DEFAULT_CONFIG);
   });
   it('derives url from port unless url is given', () => {
     expect(normalizeConfig({ port: 9000 }).url).toBe('http://127.0.0.1:9000/?transparent');
@@ -104,7 +104,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -113,7 +113,7 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
   });
   it('offers skins and applies the choice to the renderer URL', () => {
     const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
@@ -170,5 +170,33 @@ describe('modeFromUrl', () => {
     expect(modeFromUrl('http://127.0.0.1:7341/?mode=strip')).toBe('strip');
     expect(modeFromUrl('http://127.0.0.1:7341/?transparent')).toBe('strip');
     expect(modeFromUrl('not a url')).toBeUndefined();
+  });
+});
+
+describe('strip size', () => {
+  it('sizes the window to the scale, never clipping the banner at 2, 3 or 4', async () => {
+    const { stripHeightFor } = await import('../src/bounds.js');
+    expect(stripHeightFor(3)).toBe(162);
+    expect(stripHeightFor(2)).toBeLessThan(stripHeightFor(3));
+    // Character, nameplate (about 14 art px) and banner all sit inside the window.
+    for (const s of [2, 3, 4]) expect(stripHeightFor(s)).toBeGreaterThanOrEqual((32 + 12) * s);
+    expect(windowBounds(primary, 'strip', 2).height).toBe(stripHeightFor(2));
+  });
+  it('validates scale and picks menu, then served, then 3', async () => {
+    const { effectiveScale } = await import('../src/config.js');
+    expect(normalizeConfig({ scale: 2 }).scale).toBe(2);
+    expect(normalizeConfig({ scale: 2.5 }).scale).toBeUndefined();
+    expect(effectiveScale({ scale: 2 }, 4)).toBe(2);
+    expect(effectiveScale({}, 4)).toBe(4);
+    expect(effectiveScale({}, 99)).toBe(3);
+  });
+  it('menu picks a size, reloads, and puts it in the renderer URL', () => {
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-scale', scale: 2 });
+    expect(r.cfg.scale).toBe(2);
+    expect(r.reload).toBe(true);
+    expect(rendererUrl(r.cfg)).toContain('scale=2');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('scale=');
+    const items = buildMenuModel(r.cfg, [primary], []);
+    expect(items.find((i) => i.kind === 'item' && i.label === 'Compact')).toMatchObject({ checked: true });
   });
 });

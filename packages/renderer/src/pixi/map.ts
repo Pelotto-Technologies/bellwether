@@ -13,7 +13,9 @@ import { isMoving, spawnWanderer, stepWanderer, type Bounds, type Wanderer } fro
 import { SPEED, beaconAlpha, bob, hash01, walkFrame } from '../sim.js';
 import { FRAME_NAMES, SPRITE_H, SPRITE_W, buildFrame, paletteFor, rasterize, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
+import { birthTime, prefersReducedMotion, spawnPose } from '../spawn.js';
 import { Figure } from './figure.js';
+import { drawPuff } from './spawnfx.js';
 import type { LoadedArt } from './pack.js';
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
@@ -33,6 +35,8 @@ interface MemberView {
   bg: Graphics;
   w: Wanderer;
   phase: number;
+  /** Scene time the member first appeared; arrival plays from here. */
+  born: number;
 }
 
 interface StepCtx {
@@ -68,6 +72,9 @@ export class MapScene {
   private actorLayer = new Container();
   private marks = new Graphics();
   private marksSig = '';
+  /** Arrival puffs, redrawn every frame. */
+  private fx = new Graphics();
+  private reduced = prefersReducedMotion();
   private waterSprites: { sprite: Sprite; a: Texture; b: Texture }[] = [];
   private parties = new Map<string, PartyView>();
   private leaders = new Map<string, MemberView>();
@@ -94,7 +101,7 @@ export class MapScene {
     private art: MapArt,
     private figures: LoadedArt | null = null,
   ) {
-    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer);
+    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer, this.fx);
     app.stage.addChild(this.world);
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
@@ -225,6 +232,7 @@ export class MapScene {
   update(dt: number, now: number): void {
     this.t += dt;
     this.dt = dt;
+    this.fx.clear();
     const fv = groupFellowships(this.feed.world);
     this.fellowships = fv;
     const world = fv.world;
@@ -279,7 +287,7 @@ export class MapScene {
     for (const [key, town] of this.towns) {
       const n = townSize(counts.get(key) ?? 0);
       const born = this.townBorn.get(key) ?? [];
-      while (born.length < n) born.push(this.primed ? this.t : -99);
+      while (born.length < n) born.push(birthTime(this.t, this.primed, this.reduced));
       this.townBorn.set(key, born);
       while (town.children.length < n) {
         const spr = new Sprite(this.art.prop('settlement'));
@@ -300,7 +308,7 @@ export class MapScene {
 
   private growCamp(view: PartyView, members: number): void {
     const n = campSize(members);
-    while (view.tentBorn.length < n) view.tentBorn.push(this.primed ? this.t : -99);
+    while (view.tentBorn.length < n) view.tentBorn.push(birthTime(this.t, this.primed, this.reduced));
     while (view.tents.length < n - 1) {
       const t = new Sprite(this.art.prop('camp'));
       t.anchor.set(0.5, 1);
@@ -310,6 +318,8 @@ export class MapScene {
     const slots = campSlots(n);
     view.camp.position.set(slots[0]!.x, slots[0]!.y);
     view.camp.scale.set(pop(this.t - view.tentBorn[0]!));
+    // A new camp (a new worktree or workspace) lands in a ring of sparks; a new tent gets its own smaller one.
+    view.tentBorn.forEach((born, i) => drawPuff(this.fx, view.root.x + (slots[i] ?? slots[0]!).x, view.root.y + (slots[i] ?? slots[0]!).y, this.t - born, 0xe8c547, 1, i === 0 ? 26 : 14));
     view.tents.forEach((t, i) => {
       t.position.set(slots[i + 1]!.x, slots[i + 1]!.y);
       t.scale.set(pop(this.t - view.tentBorn[i + 1]!));
@@ -373,7 +383,7 @@ export class MapScene {
     const bubble = new Container();
     bubble.addChild(bg, text);
     this.actorLayer.addChild(figure ? figure.container : sprite, bubble);
-    return { sprite, ...(figure ? { figure } : {}), bubble, text, bg, phase: hash01(paneId) * 10, w: spawnWanderer(wid, home, radius, this.bounds()) };
+    return { sprite, ...(figure ? { figure } : {}), bubble, text, bg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced), w: spawnWanderer(wid, home, radius, this.bounds()) };
   }
 
   private destroyMember(mv: MemberView): void {
@@ -468,6 +478,7 @@ export class MapScene {
       mv.sprite.tint = m.status === 'blocked' ? 0xffd0d0 : ctx.tint ? hexNum(mixHex('#ffffff', ctx.tint, 0.55)) : 0xffffff;
     }
 
+    this.arrive(mv, mv.figure ? mv.figure.container : mv.sprite, ctx.status);
     mv.bubble.visible = !!say;
     if (say) {
       if (mv.text.text !== say) {
@@ -480,6 +491,18 @@ export class MapScene {
       mv.bubble.scale.set(this.textScale);
       mv.bubble.position.set(mv.w.x - (mv.bg.width * this.textScale) / 2, mv.w.y - figH - mv.bg.height * this.textScale - 2);
     }
+  }
+
+  /** Beam a new member in and puff sparks in its status colour at its feet. */
+  private arrive(mv: MemberView, body: { alpha: number; scale: { x: number; y: number }; y: number }, status: Status): void {
+    const age = this.t - mv.born;
+    const pose = spawnPose(age);
+    if (pose.alpha >= 1 && pose.lift === 0) return;
+    body.alpha *= pose.alpha;
+    body.scale.x *= pose.sx;
+    body.scale.y *= pose.sy;
+    body.y -= pose.lift;
+    drawPuff(this.fx, mv.w.x, mv.w.y, age, hexNum(this.theme.palette[status]), 1, 10);
   }
 
   private updatePanel(now: number): void {

@@ -4,6 +4,7 @@ import type { Mode, ShellConfig } from './config.js';
 export type MenuAction =
   | { type: 'toggle-mode' }
   | { type: 'pick-display'; id: number }
+  | { type: 'pick-scale'; scale: number | undefined }
   | { type: 'pick-pack'; pack: string | undefined }
   | { type: 'pick-session'; session: string | undefined }
   | { type: 'quit' };
@@ -19,11 +20,18 @@ export const BUILTIN_PACKS: readonly { name: string; label: string }[] = [
   { name: 'wayfarers', label: 'Wayfarers' },
 ];
 
+/** Strip sizes offered in the tray; the number is the art pixel scale. */
+export const SIZES: readonly { scale: number; label: string }[] = [
+  { scale: 2, label: 'Compact' },
+  { scale: 3, label: 'Normal' },
+  { scale: 4, label: 'Large' },
+];
+
 const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale'> & { pack?: string },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -34,6 +42,10 @@ export function buildMenuModel(
   return [
     { kind: 'item', label: `Mode: ${modeLabel(cfg.mode)}`, enabled: false },
     { kind: 'item', label: `Switch to ${modeLabel(other)}`, action: { type: 'toggle-mode' } },
+    { kind: 'separator' },
+    { kind: 'item', label: 'Size', enabled: false },
+    { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.scale, action: { type: 'pick-scale', scale: undefined } },
+    ...SIZES.map<MenuItem>((z) => ({ kind: 'item', label: z.label, checked: z.scale === cfg.scale, action: { type: 'pick-scale', scale: z.scale } })),
     { kind: 'separator' },
     { kind: 'item', label: 'Skin', enabled: false },
     { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.pack, action: { type: 'pick-pack', pack: undefined } },
@@ -67,6 +79,12 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       return { cfg: { ...cfg, mode: cfg.mode === 'strip' ? 'map' : 'strip' }, restartAdapter: false, reload: true };
     case 'pick-display':
       return { cfg: { ...cfg, displayId: action.id }, restartAdapter: false, reload: false };
+    case 'pick-scale': {
+      const next = { ...cfg };
+      if (action.scale) next.scale = action.scale;
+      else delete next.scale;
+      return { cfg: next, restartAdapter: false, reload: cfg.scale !== action.scale };
+    }
     case 'pick-pack': {
       const next = { ...cfg };
       if (action.pack) next.pack = action.pack;

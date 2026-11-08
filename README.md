@@ -101,6 +101,7 @@ Create `bellwether.toml` in the directory you run from (it is gitignored):
 ```toml
 source = "live"          # "live" for real Herdr, "mock" for fake agents
 pack = "aesir"           # neutral | aesir | wayfarers
+scale = 2                # strip size, 1 to 6 (default 3; 2 is compact)
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
@@ -111,7 +112,7 @@ sessions = "all"         # or ["default", "overlay-dev"]
 Everything also has a flag or environment variable: `--pack aesir` or
 `BELLWETHER_PACK=aesir`, `--session <name>` or `--all`, `BELLWETHER_SOURCE=live`,
 `--port`. Run the adapter with `--help` for the full list. In the page URL, `?pack=`,
-`?scale=` (1 to 6) and `?mode=map` override the config.
+`?scale=` (1 to 6) and `?mode=map` override the config. The desktop overlay's tray menu has a Size section (Compact, Normal, Large). New agents and worktrees play a short arrival animation; it is skipped when the OS asks for reduced motion.
 
 ### Record and share a replay
 

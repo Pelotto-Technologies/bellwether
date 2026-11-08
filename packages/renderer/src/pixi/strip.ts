@@ -6,6 +6,8 @@ import { beaconAlpha, bob, hash01, layoutLanes, memberX, stepWalker, walkFrame, 
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import type { Theme } from '../theme.js';
 import { DoubleTap } from '../doubletap.js';
+import { birthTime, prefersReducedMotion, spawnPose, type SpawnPose } from '../spawn.js';
+import { drawPuff } from './spawnfx.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
@@ -22,6 +24,8 @@ interface MemberView {
   bubbleText: Text;
   bubbleBg: Graphics;
   phase: number;
+  /** Scene time the member first appeared; arrival plays from here. */
+  born: number;
 }
 
 /** One nameplate's worth of characters: a party, or a fellowship's leaders. */
@@ -70,6 +74,7 @@ interface PartyView {
   chip: Graphics;
   members: Map<string, MemberView>;
   dir: 1 | -1;
+  born: number;
 }
 
 /** Colour of a leader's banner pole, tether and nameplate chip. */
@@ -92,6 +97,11 @@ export class StripScene {
   private ground = new Graphics();
   private layer = new Container();
   private t = 0;
+  /** Arrival puffs, redrawn every frame on top of the characters. */
+  private fx = new Graphics();
+  /** False until the first world arrives, so what already exists does not play an arrival. */
+  private primed = false;
+  private reduced = prefersReducedMotion();
 
   private doubleTap = new DoubleTap();
 
@@ -102,8 +112,9 @@ export class StripScene {
     private scale: number,
     private art: LoadedArt | null = null,
   ) {
-    app.stage.addChild(this.ground, this.layer);
+    app.stage.addChild(this.ground, this.layer, this.fx);
     this.ground.eventMode = 'none';
+    this.fx.eventMode = 'none';
   }
 
   private groundTiles: Sprite[] = [];
@@ -158,7 +169,7 @@ export class StripScene {
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24 } });
     const bubble = new Container();
-    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10 };
+    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
     if (this.art) {
       const ui = this.art.art.ui;
       const sl = ui.bubble.slice;
@@ -205,7 +216,8 @@ export class StripScene {
     const chip = new Graphics();
     root.addChild(chip, label);
     this.layer.addChild(root);
-    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1 };
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
+    root.alpha = this.primed && !this.reduced ? 0 : 1;
     this.parties.set(id, view);
     return view;
   }
@@ -235,6 +247,7 @@ export class StripScene {
 
   update(dt: number, now: number): void {
     this.t += dt;
+    this.fx.clear();
     const { width, height } = this.app.screen;
     const s = this.scale;
     const art = this.art?.art;
@@ -346,6 +359,7 @@ export class StripScene {
 
       for (const { seg, fig0, fig1 } of extents) {
         const view = this.parties.get(seg.id)!;
+        view.root.alpha = spawnPose(this.t - view.born).alpha;
         const center = (fig0 + fig1) / 2;
         view.label.text = seg.label;
         if (view.plate) {
@@ -375,6 +389,20 @@ export class StripScene {
       }
       this.drawTrain(tv, train, extents, dir, groundY, figW, figH, s);
     }
+    if (trains.length) this.primed = true;
+  }
+
+  /** Beam a new member in (fade, stretch, drop) and puff sparks in the party's status colour at its feet. */
+  private arrive(mv: MemberView, body: { alpha: number; scale: { x: number; y: number }; y: number }, cx: number, groundY: number, status: Status): void {
+    const age = this.t - mv.born;
+    const pose: SpawnPose = spawnPose(age);
+    if (pose.alpha >= 1 && pose.lift === 0) return;
+    const s = this.scale;
+    body.alpha *= pose.alpha;
+    body.scale.x *= pose.sx;
+    body.scale.y *= pose.sy;
+    body.y -= pose.lift * s;
+    drawPuff(this.fx, cx, groundY, age, hexNum(this.theme.palette[status]), s);
   }
 
   /** A coloured bar under a nameplate in the party's fellowship tint (gold for a leader). */
@@ -425,6 +453,7 @@ export class StripScene {
     const dir = view.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
     mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
+    this.arrive(mv, mv.figure!.container, cx, groundY, seg.status);
 
     mv.bubble.visible = !!text;
     if (text) {
@@ -457,6 +486,7 @@ export class StripScene {
     mv.sprite.position.set(cx, y);
     mv.sprite.alpha = m.status === 'idle' || m.status === 'unknown' ? 0.85 : 1;
     mv.sprite.tint = seg.tint ? hexNum(mixHex('#ffffff', seg.tint, 0.55)) : 0xffffff;
+    this.arrive(mv, mv.sprite, cx, groundY, seg.status);
 
     mv.glow.clear();
     if (isBeacon) {

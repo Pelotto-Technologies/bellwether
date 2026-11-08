@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { type DisplayInfo, pickDisplay, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
-import { configPath, loadConfig, saveConfig, type ShellConfig } from './config.js';
+import { configPath, effectiveScale, loadConfig, saveConfig, validScale, type ShellConfig } from './config.js';
 import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
 import { applyAction, buildMenuModel, type MenuAction, type MenuItem } from './tray-menu.js';
 import { errorPage, waitForReady } from './ready.js';
@@ -16,6 +16,8 @@ let win: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let adapter: ChildProcess | undefined;
 let sessions: string[] = [];
+/** Scale served by the adapter from bellwether.toml; the window height follows it unless the tray overrides. */
+let servedScale: number | undefined;
 const paths = adapterPaths();
 
 function displays(): DisplayInfo[] {
@@ -68,6 +70,15 @@ async function startAdapter(): Promise<void> {
   });
 }
 
+async function refreshServedScale(): Promise<void> {
+  try {
+    const res = await fetch(new URL('config.json', cfg.url).toString(), { signal: AbortSignal.timeout(1000) });
+    servedScale = res.ok ? validScale(((await res.json()) as { scale?: unknown }).scale) : undefined;
+  } catch {
+    servedScale = undefined;
+  }
+}
+
 async function refreshSessions(): Promise<void> {
   try {
     // Loaded lazily: protocol knowledge stays in the adapter package.
@@ -82,7 +93,7 @@ function placeWindow(): void {
   if (!win) return;
   const d = pickDisplay(displays(), cfg.displayId);
   if (!d) return;
-  win.setBounds(windowBounds(d, cfg.mode, cfg.stripHeight));
+  win.setBounds(windowBounds(d, cfg.mode, effectiveScale(cfg, servedScale)));
   win.setAlwaysOnTop(true, 'screen-saver');
   // Map mode needs clicks; strip mode lets them fall through to whatever is underneath.
   if (cfg.mode === 'map') win.setIgnoreMouseEvents(false);
@@ -199,6 +210,7 @@ if (!app.requestSingleInstanceLock()) {
     cfg = await loadConfig(configPath(app.getPath('userData')));
     await Promise.all([startAdapter(), refreshSessions()]);
     await waitForReady(() => reachable(cfg.url));
+    await refreshServedScale();
     createWindow();
     if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(join(assetsDir(), 'icon.png')));
     tray = new Tray(trayIcon());

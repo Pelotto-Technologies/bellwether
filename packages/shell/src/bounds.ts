@@ -15,7 +15,15 @@ export interface DisplayInfo {
   primary?: boolean;
 }
 
-export const DEFAULT_STRIP_HEIGHT = 160;
+/** Characters are 24x32 art pixels; the strip also holds a nameplate and a banner above them. */
+const CHARACTER_H = 32;
+
+/** Window height the strip needs at an art `scale`: character, nameplate and banner, plus a small margin. Gives 162 at scale 3. */
+export function stripHeightFor(scale: number): number {
+  return Math.ceil((CHARACTER_H + 14) * scale + 24);
+}
+
+export const DEFAULT_STRIP_HEIGHT = stripHeightFor(3);
 
 /**
  * Window rectangle for the strip: the display's full width, pinned to the bottom edge.
@@ -34,8 +42,8 @@ export function mapBounds(display: DisplayInfo): Rect {
 }
 
 /** Bounds for the current mode. */
-export function windowBounds(display: DisplayInfo, mode: 'strip' | 'map', stripHeight: number): Rect {
-  return mode === 'map' ? mapBounds(display) : stripBounds(display, stripHeight);
+export function windowBounds(display: DisplayInfo, mode: 'strip' | 'map', scale: number): Rect {
+  return mode === 'map' ? mapBounds(display) : stripBounds(display, stripHeightFor(scale));
 }
 
 /** Find the display with `id`, else the primary one, else the first. */

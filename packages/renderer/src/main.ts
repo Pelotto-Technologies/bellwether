@@ -12,7 +12,6 @@ import { pickPack } from './select.js';
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') === 'map' ? 'map' : 'strip';
 const transparent = params.has('transparent');
-const scale = Math.max(1, Math.min(6, Number(params.get('scale') ?? 3)));
 document.body.classList.add(transparent ? 'transparent' : 'backdrop');
 if (mode === 'map') document.body.classList.add('map');
 
@@ -26,14 +25,14 @@ function deltaUrl(): string | null {
 }
 
 /** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
-async function configuredPack(): Promise<string | undefined> {
+async function servedConfig(): Promise<{ pack?: string; scale?: number }> {
   try {
     const res = await fetch('./config.json', { cache: 'no-store' });
-    if (!res.ok) return undefined;
-    const cfg = (await res.json()) as { pack?: unknown };
-    return typeof cfg.pack === 'string' ? cfg.pack : undefined;
+    if (!res.ok) return {};
+    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown };
+    return { ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}), ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}) };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -41,7 +40,10 @@ async function main() {
   const available = availablePacks();
   const requested = params.get('pack');
   if (requested && !available.includes(requested)) console.warn(`bellwether: unknown pack "${requested}", have ${available.join(', ')}`);
-  const packName = pickPack(available, requested, await configuredPack());
+  const served = await servedConfig();
+  const packName = pickPack(available, requested, served.pack);
+  // `?scale=` beats bellwether.toml; either way it is clamped to a whole number so pixels stay crisp.
+  const scale = Math.max(1, Math.min(6, Math.round(Number(params.get('scale') ?? served.scale ?? 3)) || 3));
   const pack = packData(packName);
   const theme = pack.theme;
   const art = await loadArt(pack);
