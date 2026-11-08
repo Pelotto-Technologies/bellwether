@@ -3,9 +3,10 @@
 // package is self-contained. Run by `prepack`. Publish from CI (clean checkout): the
 // renderer bundles every theme folder present, so a local build with private packs
 // would ship them.
-import { cpSync, existsSync, rmSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { absolutizeLinks } from './readme-links.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'packages/cli/runtime');
@@ -26,5 +27,5 @@ cpSync(join(root, 'packages/shell/dist'), join(out, 'shell/dist'), { recursive: 
 cpSync(join(root, 'packages/shell/assets'), join(out, 'shell/assets'), { recursive: true });
 cpSync(join(root, 'packages/shell/package.json'), join(out, 'shell/package.json'));
 cpSync(join(root, 'LICENSE'), join(root, 'packages/cli/LICENSE'));
-cpSync(join(root, 'README.md'), join(root, 'packages/cli/README.md'));
+writeFileSync(join(root, 'packages/cli/README.md'), absolutizeLinks(readFileSync(join(root, 'README.md'), 'utf8')));
 console.error('stage-runtime: staged adapter, renderer and shell into packages/cli/runtime');

@@ -5,19 +5,21 @@ shell is needed.
 
 ## 1. Start the page
 
-Mock agents (good for setting up the scene):
+Live Herdr agents, with the published CLI:
+
+```sh
+npm install -g @pelotto-tech/bellwether
+bellwether run   # serves the overlay on http://127.0.0.1:7341/
+```
+
+Mock agents from a checkout (good for setting up the scene):
 
 ```sh
 pnpm install
 pnpm mock        # builds, then serves adapter + renderer on http://127.0.0.1:7341/
 ```
 
-Live Herdr agents:
-
-```sh
-pnpm build
-node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist
-```
+From a checkout against live Herdr: `pnpm build && node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist`.
 
 `--all` watches every running Herdr session; use `--session <name>` for one. With
 `--serve`, the page and the delta WebSocket share one port (default 7341, change with
@@ -39,10 +41,12 @@ flags. `source = "live"` in `bellwether.toml` sets the default source.
 | Option | Effect |
 |---|---|
 | `?transparent` | No backdrop and no status chip. Use for OBS. |
-| `?pack=<name>` | Skin pack: `neutral` (default), `aesir`, `wayfarers`, or a private folder under `themes/`. Beats `pack` in `bellwether.toml`; unknown names fall back to `neutral`. |
+| `?pack=<name>` | Skin pack: `neutral` (default), `aesir`, `wayfarers`, `scifi`, or a private folder under `themes/`. Beats `pack` in `bellwether.toml`; unknown names fall back to `neutral`. |
 | `?scale=<1-6>` | Pixel scale, default 3. Characters are 24x32, so scale 3 is 72x96 pixels. Integer values keep the pixels sharp. |
 | `?source=mock` | Skip the adapter; run mock agents inside the page. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
+| `?minimal` | Icon-only labels: a status icon under each party instead of a nameplate. |
+| `?bubbles=0` | Hide chat bubbles. Press `b` in an interact window to toggle. |
 | `?mode=map` | Start in map mode instead of the strip. The default is the strip; press `m` to toggle. Map mode is not click-through, so the strip is usually what you want in OBS. |
 
 Options combine: `http://127.0.0.1:7341/?transparent&pack=aesir&scale=4`.

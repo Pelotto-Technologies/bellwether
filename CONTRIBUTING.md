@@ -1,7 +1,8 @@
 # Contributing
 
 Thanks for helping. Bellwether is a pixel overlay for Herdr; read `docs/PLAN.md` for the
-architecture before larger changes.
+architecture before larger changes and [docs/development.md](docs/development.md) for
+running it from source.
 
 ## Before you open a PR
 
@@ -30,10 +31,16 @@ Behavior changes come with tests. CI runs on Ubuntu and Windows.
 
 ## Themes
 
-`themes/neutral`, `themes/aesir` and `themes/wayfarers` are the public packs. Do not
+`themes/neutral`, `themes/aesir`, `themes/wayfarers` and `themes/scifi` are the public packs. Do not
 commit any other folder under `themes/`; private skins are gitignored and must not be
 referenced from core code, prompts or tests. New public art must be original. See
 [docs/themes.md](docs/themes.md) for the pack format.
+
+## Docs images
+
+If your change is visible, regenerate the README screenshots and GIFs with
+`node tools/docshots/shoot.mjs` (after `pnpm --filter @bellwether/renderer build`). See
+[docs/development.md](docs/development.md).
 
 ## License
 
