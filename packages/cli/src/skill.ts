@@ -26,6 +26,13 @@ On start, tag your own pane once:
 "\${HERDR_BIN_PATH:-herdr}" pane report-metadata "$HERDR_PANE_ID" --source bellwether --token role=<role>
 \`\`\`
 
+## If you orchestrate a project
+
+Tag your own pane \`orchestrator\`. Nothing else is needed: Bellwether groups every
+worktree and agent in the same repo under you and gives each worktree its own colour
+automatically. Run from the project's own workspace, and create worktrees with Herdr's
+worktree commands so they share your repo.
+
 ## If you coordinate other agents
 
 When you start a member in a pane, tag that pane with its role, or split the pane with

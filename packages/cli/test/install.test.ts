@@ -65,6 +65,7 @@ describe('install', () => {
       const skill = readFileSync(join(dir, 'skills', 'bellwether', 'SKILL.md'), 'utf8');
       expect(skill).toContain('name: bellwether');
       expect(skill).toContain('`architect`');
+      expect(skill).toContain('If you orchestrate a project');
       const sh = readFileSync(join(dir, 'hooks', 'bellwether-role.sh'), 'utf8');
       expect(sh).toContain('report-metadata "$HERDR_PANE_ID" --source bellwether');
       expect(existsSync(join(dir, 'hooks', 'bellwether-role.ps1'))).toBe(true);

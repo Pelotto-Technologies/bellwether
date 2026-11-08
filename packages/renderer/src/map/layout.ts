@@ -87,13 +87,18 @@ export function layoutMap(world: World): MapLayout {
       camps.set(p.id, {
         partyId: p.id,
         settlementKey: s.key,
-        tile: { x: Math.round(s.tile.x + Math.cos(angle) * r * 1.5), y: Math.round(s.tile.y + Math.sin(angle) * r) },
+        tile: clampTile(Math.round(s.tile.x + Math.cos(angle) * r * 1.5), Math.round(s.tile.y + Math.sin(angle) * r), cols * CELL_W, rows * CELL_H),
       });
     });
   }
 
   const signature = [...settlements.map((s) => `${s.key}@${s.tile.x},${s.tile.y}`), ...[...camps.values()].map((c) => `${c.partyId}@${c.tile.x},${c.tile.y}`)].join('|');
   return { cols, rows, w: cols * CELL_W, h: rows * CELL_H, settlements, camps, signature };
+}
+
+/** Keeps a camp a few tiles inside the map so it is never drawn on or past the edge. */
+function clampTile(x: number, y: number, w: number, h: number): Pt {
+  return { x: Math.min(w - 3, Math.max(2, x)), y: Math.min(h - 2, Math.max(3, y)) };
 }
 
 export function tileToWorld(t: Pt): Pt {

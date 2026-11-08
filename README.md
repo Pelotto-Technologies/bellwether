@@ -57,6 +57,24 @@ villager. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `rev
 3. **Names.** `herdr agent rename` to something containing a role word (`reviewer-2`), or
    a pane title with one. Needs no install.
 
+### Fellowships: orchestrators and worktrees
+
+Parties that share a project (same Herdr session and repo) form a **fellowship**, worked
+out from what Herdr already reports, so **no extra agent instructions are needed**:
+
+- An `orchestrator` whose repo has other agents *leads* them. It leaves its own party and
+  walks at the front of the group on the strip, carrying a banner striped in every
+  worktree's tint, with a gold tether along the ground. On the map it stands at the
+  project's settlement with the banner and trails to each camp. An orchestrator with
+  nobody else in its repo stays a party of its own.
+- Every worktree in a fellowship (or in any repo with two or more parties) gets its own
+  tint on its characters' cloaks, its nameplate and its ground tether, so three
+  worktrees with three agents each are easy to tell apart.
+
+For this to work, the orchestrator's pane needs the `orchestrator` role (tag, `HERDR_ROLE`,
+or a name containing it) and its Herdr workspace must be in the same repo as the
+worktrees it spawns, which is the case when it creates them with Herdr's worktree commands.
+
 To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md` /
 `.github/copilot-instructions.md` for Copilot):
 
@@ -71,8 +89,9 @@ To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md`
 | A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
 | A desktop overlay | `bellwether overlay` (Electron, transparent, always on top, click-through). The first run installs Electron into `~/.bellwether/electron` (about 100 MB, once). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
 
-Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or a dot
-on the minimap) to zoom into a party and read each member's role, agent, status and
+Settlements gain a building for every four agents in the repo and camps gain a tent per two members, with a small pop when something new is built.
+
+Press `m` in the page to toggle strip and map mode. In map mode, click a glow to zoom into a party and read each member's role, agent, status and
 latest line. Esc zooms back out.
 
 ### Configure with `bellwether.toml`
@@ -163,7 +182,7 @@ blocked ones stand still. When a member speaks (a `say` token, or an inferred ha
 from a teammate who just finished) it walks over to a teammate, or to a party camped at
 the same settlement, and the speech bubble shows.
 
-- Click a glow, or a dot on the minimap in the corner, to zoom into that party. A panel
+- Click a glow to zoom into that party. A panel
   lists its members with role, agent, status and their latest line. Esc, the panel's
   close button, or clicking empty ground zooms back out.
 - The pack's map tileset and props (settlements, camps, campfires, glow) are used; pick

@@ -1,12 +1,12 @@
 import { MockGenerator, type Member, type Party, type World } from '@bellwether/adapter/core';
 import { describe, expect, it } from 'vitest';
-import { fitZoom, minimapBox, minimapToWorld, nearestParty, screenToWorld, stepCamera, worldToScreen } from '../src/map/camera.js';
+import { fitZoom, nearestParty, screenToWorld, stepCamera, worldToScreen } from '../src/map/camera.js';
 import { inferHandoff, pickPartner } from '../src/map/chatter.js';
 import { describeParty, ago } from '../src/map/detail.js';
 import { layoutMap, settlementName, TILE } from '../src/map/layout.js';
 import { sliceTileset } from '../src/map/tileset.js';
 import { autotileMask, buildTerrain, groundTileName } from '../src/map/terrain.js';
-import { spawnWanderer, stepWanderer } from '../src/map/wander.js';
+import { spawnWanderer, stepWanderer, type Bounds } from '../src/map/wander.js';
 
 const member = (paneId: string, over: Partial<Member> = {}): Member => ({ paneId, agent: 'claude', role: 'implementer', status: 'idle', lastChange: 0, ...over });
 const party = (id: string, repo: string, members: Member[], over: Partial<Party> = {}): Party => ({
@@ -117,15 +117,6 @@ describe('camera', () => {
     }
     expect(c).toEqual(target);
   });
-  it('minimap box stays on screen and maps clicks back to world', () => {
-    const box = minimapBox({ w: 1536, h: 768 }, screen);
-    expect(box.x + box.w).toBeLessThanOrEqual(screen.w);
-    expect(box.y + box.h).toBeLessThanOrEqual(screen.h);
-    expect(minimapToWorld(box, { x: 0, y: 0 })).toBeNull();
-    const w = minimapToWorld(box, { x: box.x + box.w / 2, y: box.y + box.h / 2 })!;
-    expect(w.x).toBeCloseTo(768);
-    expect(w.y).toBeCloseTo(384);
-  });
   it('finds the nearest party within a radius', () => {
     const pts = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 50, y: 0 }];
     expect(nearestParty(pts, { x: 40, y: 0 }, 20)).toBe('b');
@@ -196,5 +187,40 @@ describe('describeParty', () => {
     if (w.kind !== 'snapshot') throw new Error('expected snapshot');
     expect(layoutMap(w.world).camps.size).toBe(Object.keys(w.world.parties).length);
     expect(TILE).toBe(16);
+  });
+});
+
+describe('map edges', () => {
+  const bounds: Bounds = { x0: 8, y0: 16, x1: 120, y1: 90 };
+
+  it('keeps wanderers inside the bounds even when home sits on the edge', () => {
+    const home = { x: 4, y: 88 };
+    let w = spawnWanderer('edge', home, 30, bounds);
+    for (let i = 0; i < 2000; i++) {
+      w = stepWanderer(w, 'edge', 'working', home, 30, 0.05, undefined, bounds);
+      expect(w.x).toBeGreaterThanOrEqual(bounds.x0);
+      expect(w.x).toBeLessThanOrEqual(bounds.x1);
+      expect(w.y).toBeGreaterThanOrEqual(bounds.y0);
+      expect(w.y).toBeLessThanOrEqual(bounds.y1);
+    }
+  });
+
+  it('does not chase a conversation partner off the map', () => {
+    const home = { x: 60, y: 50 };
+    let w = spawnWanderer('m', home, 20, bounds);
+    for (let i = 0; i < 400; i++) w = stepWanderer(w, 'm', 'idle', home, 20, 0.05, { x: 500, y: -40 }, bounds);
+    expect(w.x).toBeLessThanOrEqual(bounds.x1);
+    expect(w.y).toBeGreaterThanOrEqual(bounds.y0);
+  });
+
+  it('places every camp inside the map for many repos and worktrees', () => {
+    const ps = Array.from({ length: 30 }, (_, i) => party(`p${i}`, `/r/repo${i % 7}`, [member(`m${i}`)]));
+    const l = layoutMap(worldOf(...ps));
+    for (const c of l.camps.values()) {
+      expect(c.tile.x).toBeGreaterThanOrEqual(2);
+      expect(c.tile.x).toBeLessThanOrEqual(l.w - 3);
+      expect(c.tile.y).toBeGreaterThanOrEqual(3);
+      expect(c.tile.y).toBeLessThanOrEqual(l.h - 2);
+    }
   });
 });
