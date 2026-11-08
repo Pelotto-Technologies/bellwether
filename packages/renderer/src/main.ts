@@ -14,6 +14,7 @@ const mode = params.get('mode') === 'map' ? 'map' : 'strip';
 const transparent = params.has('transparent');
 const scale = Math.max(1, Math.min(6, Number(params.get('scale') ?? 3)));
 document.body.classList.add(transparent ? 'transparent' : 'backdrop');
+if (mode === 'map') document.body.classList.add('map');
 
 function deltaUrl(): string | null {
   if (params.get('source') === 'mock') return null;

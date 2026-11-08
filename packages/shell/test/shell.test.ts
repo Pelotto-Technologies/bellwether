@@ -9,7 +9,7 @@ import { errorPage, waitForReady } from '../src/ready.js';
 import { existsSync } from 'node:fs';
 import { adapterPaths, assetsDir } from '../src/paths.js';
 import { applyAction, buildMenuModel } from '../src/tray-menu.js';
-import { rendererUrl } from '../src/url.js';
+import { modeFromUrl, rendererUrl } from '../src/url.js';
 
 const second: DisplayInfo = {
   id: 2,
@@ -161,5 +161,14 @@ describe('assets', () => {
     for (const f of ['icon.png', 'icon.ico', 'icon.icns', 'tray.png', 'tray@2x.png', 'trayTemplate.png', 'trayTemplate@2x.png']) {
       expect(existsSync(join(dir, f)), f).toBe(true);
     }
+  });
+});
+
+describe('modeFromUrl', () => {
+  it('reads the mode a navigation asks for', () => {
+    expect(modeFromUrl('http://127.0.0.1:7341/?mode=map')).toBe('map');
+    expect(modeFromUrl('http://127.0.0.1:7341/?mode=strip')).toBe('strip');
+    expect(modeFromUrl('http://127.0.0.1:7341/?transparent')).toBe('strip');
+    expect(modeFromUrl('not a url')).toBeUndefined();
   });
 });

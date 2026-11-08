@@ -23,12 +23,20 @@
       #detail ul { list-style: none; margin: 0; padding: 0; }
       #detail li { margin: 6px 0; }
       #detail .line { opacity: .75; }
+      #exit-map {
+        position: fixed; bottom: 12px; left: 12px; padding: 4px 10px; border-radius: 4px; display: none;
+        font: 12px ui-monospace, monospace; color: #e8ecf6; background: rgba(12,15,24,.88);
+        border: 1px solid rgba(255,255,255,.3); text-decoration: none;
+      }
+      body.map #exit-map { display: block; }
+      #exit-map:hover, #exit-map:focus-visible { background: rgba(40,48,72,.95); outline: 1px solid #fff; }
       #detail-close { position: absolute; top: 6px; right: 8px; cursor: pointer; background: none; border: 0; color: inherit; font: inherit; }
       .st.working { color: #3ddc84; } .st.done { color: #ffd23f; } .st.blocked { color: #ff4d4d; }
       .st.idle { color: #d8d8d8; } .st.unknown { color: #7a7a7a; }
     </style>
   </head>
   <body>
+    <a id="exit-map" href="?mode=strip" title="Back to the strip (m)">Exit map</a>
     <div id="chip">connecting…</div>
     <div id="detail" hidden><button id="detail-close" title="Back to the map (Esc)">✕</button><div id="detail-body"></div></div>
     <script type="module" src="/src/main.ts"></script>
