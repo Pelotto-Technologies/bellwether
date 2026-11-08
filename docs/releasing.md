@@ -11,7 +11,7 @@ push to `main`, `.github/workflows/release.yml` reads that version and checks wh
    `themes/aesir` and `themes/wayfarers`. Private theme folders are never included: the
    workflow copies those three by name.
 3. Creates the tag on the merge commit and a GitHub Release with the generated notes and
-   both archives (`softprops/action-gh-release@v2`).
+   both archives (`softprops/action-gh-release@v3`).
 4. Publishes to npm (below), in the same workflow, because releases created with
    `GITHUB_TOKEN` do not trigger other workflows.
 
