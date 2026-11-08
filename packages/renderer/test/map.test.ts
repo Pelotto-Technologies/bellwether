@@ -154,7 +154,7 @@ describe('chatter', () => {
     const after = party('a', '/r/x', [doneM, startM]);
     const h = inferHandoff(before, after, startM)!;
     expect(h.from.paneId).toBe('1');
-    expect(h.text).toContain('implementer');
+    expect(h.text).toBe('Over to you');
     expect(inferHandoff(before, after, { ...startM, lastChange: 60_000 })).toBeUndefined();
     expect(inferHandoff(before, after, doneM)).toBeUndefined();
   });

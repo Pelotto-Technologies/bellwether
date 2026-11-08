@@ -470,7 +470,7 @@ export class StripScene {
     const text = this.feed.say(sayParty, m.paneId, now);
     const dir = view.dir;
     const y = groundY + bob(m.status, this.t, mv.phase);
-    mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: !!text, t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
+    mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: this.feed.talking(sayParty, m.paneId, now), t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
     this.arrive(mv, mv.figure!.container, cx, groundY, seg.status);
 
     mv.bubble.visible = !!text;

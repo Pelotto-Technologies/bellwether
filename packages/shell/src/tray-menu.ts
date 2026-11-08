@@ -5,6 +5,7 @@ export type MenuAction =
   | { type: 'toggle-mode' }
   | { type: 'pick-display'; id: number }
   | { type: 'pick-labels'; minimal: boolean | undefined }
+  | { type: 'pick-bubbles'; bubbles: boolean | undefined }
   | { type: 'pick-scale'; scale: number | undefined }
   | { type: 'pick-pack'; pack: string | undefined }
   | { type: 'pick-session'; session: string | undefined }
@@ -34,7 +35,7 @@ const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles'> & { pack?: string },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -54,6 +55,11 @@ export function buildMenuModel(
     { kind: 'item', label: 'Default (bellwether.toml)', checked: cfg.minimal === undefined, action: { type: 'pick-labels', minimal: undefined } },
     { kind: 'item', label: 'Full labels', checked: cfg.minimal === false, action: { type: 'pick-labels', minimal: false } },
     { kind: 'item', label: 'Icon only', checked: cfg.minimal === true, action: { type: 'pick-labels', minimal: true } },
+    { kind: 'separator' },
+    { kind: 'item', label: 'Chat bubbles', enabled: false },
+    { kind: 'item', label: 'Default (bellwether.toml)', checked: cfg.bubbles === undefined, action: { type: 'pick-bubbles', bubbles: undefined } },
+    { kind: 'item', label: 'Show', checked: cfg.bubbles === true, action: { type: 'pick-bubbles', bubbles: true } },
+    { kind: 'item', label: 'Hide', checked: cfg.bubbles === false, action: { type: 'pick-bubbles', bubbles: false } },
     { kind: 'separator' },
     { kind: 'item', label: 'Skin', enabled: false },
     { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.pack, action: { type: 'pick-pack', pack: undefined } },
@@ -92,6 +98,12 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       if (action.minimal === undefined) delete next.minimal;
       else next.minimal = action.minimal;
       return { cfg: next, restartAdapter: false, reload: cfg.minimal !== action.minimal };
+    }
+    case 'pick-bubbles': {
+      const next = { ...cfg };
+      if (action.bubbles === undefined) delete next.bubbles;
+      else next.bubbles = action.bubbles;
+      return { cfg: next, restartAdapter: false, reload: cfg.bubbles !== action.bubbles };
     }
     case 'pick-scale': {
       const next = { ...cfg };

@@ -1,7 +1,10 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync, chmodSync, readdirSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { AGENT_TARGETS, type AgentContext, type AgentTarget } from './agents/index.js';
+import { AGENT_TARGETS, type AgentContext, type AgentTarget, type ToolHookCommand } from './agents/index.js';
+import { posixPath } from './agents/paths.js';
+import { SAY_MARKER } from './hook/say.js';
 import { readJsonObject, writeJsonObject } from './json-file.js';
 import { HOOK_BASENAME, hookPs1, hookSh, skillMarkdown } from './skill.js';
 
@@ -50,11 +53,23 @@ export function detect(ctx: AgentContext, targets = AGENT_TARGETS): DetectResult
 }
 
 /**
- * Install the skill pack and SessionStart role hook for each target whose config dir
+ * The pre-tool message hook: this Node running this CLI's `hook say`. Absolute paths,
+ * so it works without `bellwether` on the agent's PATH. Re-run install after moving Node.
+ * The trailing comment is the marker uninstall looks for.
+ */
+export function sayHookCommand(node = process.execPath, main = fileURLToPath(new URL('./main.js', import.meta.url))): ToolHookCommand {
+  return {
+    posix: `"${posixPath(node)}" "${posixPath(main)}" hook say # ${SAY_MARKER}`,
+    powershell: `& "${node}" "${main}" hook say # ${SAY_MARKER}`,
+  };
+}
+
+/**
+ * Install the skill pack, the SessionStart role hook and the PreToolUse message hook for each target whose config dir
  * exists. Idempotent: an existing Bellwether entry is replaced, never duplicated.
  * Entries written by Herdr or the user are left alone.
  */
-export function install(ctx: AgentContext, targets = AGENT_TARGETS): Outcome[] {
+export function install(ctx: AgentContext, targets = AGENT_TARGETS, toolHook: ToolHookCommand = sayHookCommand()): Outcome[] {
   return targets.map((t) => {
     const p = pathsFor(t, ctx);
     if (!existsSync(p.configDir)) {
@@ -68,8 +83,9 @@ export function install(ctx: AgentContext, targets = AGENT_TARGETS): Outcome[] {
       // chmod is a no-op on Windows; the hook is invoked through `sh` anyway.
     }
     writeFile(p.hookPs1, hookPs1());
-    const clean = t.removeSessionStartHook(readJsonObject(p.settings));
-    writeJsonObject(p.settings, t.addSessionStartHook(clean, { sh: p.hookSh, ps1: p.hookPs1 }));
+    const clean = t.removeToolHook(t.removeSessionStartHook(readJsonObject(p.settings)));
+    const withStart = t.addSessionStartHook(clean, { sh: p.hookSh, ps1: p.hookPs1 });
+    writeJsonObject(p.settings, t.addToolHook(withStart, toolHook));
     return { id: t.id, displayName: t.displayName, status: 'installed', paths: p };
   });
 }
@@ -83,7 +99,7 @@ export function uninstall(ctx: AgentContext, targets = AGENT_TARGETS): Outcome[]
     }
     if (existsSync(p.settings)) {
       const before = readJsonObject(p.settings);
-      const after = t.removeSessionStartHook(before);
+      const after = t.removeToolHook(t.removeSessionStartHook(before));
       if (after !== before) writeJsonObject(p.settings, after);
     }
     rmSync(join(p.configDir, 'skills', 'bellwether'), { recursive: true, force: true });

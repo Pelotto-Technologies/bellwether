@@ -50,6 +50,10 @@ export interface Member {
   status: Status;
   title?: string;
   say?: string;
+  /** Pane id the current `say` is addressed to, when it is a message to another agent. */
+  sayTo?: string;
+  /** Changes with every message, so a repeated line still raises a new bubble. */
+  sayId?: string;
   lastChange: number;
 }
 
@@ -58,7 +62,7 @@ export type Delta =
   | { t: number; kind: 'member'; partyId: string; member: Member }
   | { t: number; kind: 'party'; party: Party }
   | { t: number; kind: 'removed'; partyId: string; paneId?: string }
-  | { t: number; kind: 'say'; partyId: string; paneId: string; text: string };
+  | { t: number; kind: 'say'; partyId: string; paneId: string; text: string; to?: { partyId: string; paneId: string } };
 
 export function isStatus(value: unknown): value is Status {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);

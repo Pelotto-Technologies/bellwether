@@ -135,7 +135,9 @@ sessions = "all"         # or ["default", "overlay-dev"]
 Everything also has a flag or environment variable: `--pack aesir` or
 `BELLWETHER_PACK=aesir`, `--session <name>` or `--all`, `BELLWETHER_SOURCE=live`,
 `--port`. Run the adapter with `--help` for the full list. In the page URL, `?pack=`,
-`?scale=` (1 to 6) and `?mode=map` override the config. The desktop overlay's tray menu has a Size section (Tiny, Compact, Normal, Large) and a Labels section (full nameplate above, or icon only below the feet; `minimal = true` in bellwether.toml). New agents and worktrees play a short arrival animation; it is skipped when the OS asks for reduced motion.
+`?scale=` (1 to 6) and `?mode=map` override the config. The desktop overlay's tray menu has a Size section (Tiny, Compact, Normal, Large) and a Labels section (full nameplate above, or icon only below the feet; `minimal = true` in bellwether.toml), and a Chat bubbles section to show or hide speech bubbles (`bubbles = false` in bellwether.toml, `?bubbles=0`, or press `b` in the page).
+
+**Agents talking to each other.** Herdr raises no event when one agent prompts another, so `bellwether install` also adds a pre-tool hook to Claude Code and Copilot CLI. When an agent runs `herdr agent prompt <agent> "..."`, `herdr pane run` or `herdr pane send-text` into another agent's pane, the hook tags the sender's pane with the first line of the message and who it is for, and the overlay shows it as a bubble addressed `@<role>`. Re-run `bellwether install` after upgrading to get the hook. New agents and worktrees play a short arrival animation; it is skipped when the OS asks for reduced motion.
 
 ### Record and share a replay
 
@@ -204,7 +206,8 @@ party camps beside its repo's settlement, with a glow in its rolled-up status co
 (green working, yellow done, red pulsing blocked). Members wander around the camp;
 blocked ones stand still. When a member speaks (a `say` token, or an inferred hand-off
 from a teammate who just finished) it walks over to a teammate, or to a party camped at
-the same settlement, and the speech bubble shows.
+the same settlement, and the speech bubble shows. A message one agent sends another
+walks (or, for an orchestrator, rides) straight to the agent it is for.
 
 - Click a glow to zoom into that party. A panel
   lists its members with role, agent, status and their latest line. Esc, the panel's

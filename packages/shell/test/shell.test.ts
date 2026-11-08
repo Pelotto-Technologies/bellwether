@@ -104,7 +104,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -113,7 +113,7 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
   });
   it('offers skins and applies the choice to the renderer URL', () => {
     const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
@@ -210,5 +210,22 @@ describe('labels', () => {
     expect(rendererUrl(applyAction(r.cfg, { type: 'pick-labels', minimal: false }).cfg)).toContain('minimal=0');
     expect(rendererUrl(applyAction(r.cfg, { type: 'pick-labels', minimal: undefined }).cfg)).not.toContain('minimal');
     expect(normalizeConfig({ minimal: 'x' }).minimal).toBeUndefined();
+  });
+});
+
+describe('chat bubbles', () => {
+  it('menu shows or hides bubbles and passes it to the renderer', () => {
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-bubbles', bubbles: false });
+    expect(r.cfg.bubbles).toBe(false);
+    expect(r.reload).toBe(true);
+    expect(r.restartAdapter).toBe(false);
+    expect(rendererUrl(r.cfg)).toContain('bubbles=0');
+    expect(rendererUrl(applyAction(r.cfg, { type: 'pick-bubbles', bubbles: true }).cfg)).toContain('bubbles=1');
+    expect(rendererUrl(applyAction(r.cfg, { type: 'pick-bubbles', bubbles: undefined }).cfg)).not.toContain('bubbles');
+    expect(applyAction(r.cfg, { type: 'pick-bubbles', bubbles: false }).reload).toBe(false);
+    expect(normalizeConfig({ bubbles: 'x' }).bubbles).toBeUndefined();
+    expect(normalizeConfig({ bubbles: false }).bubbles).toBe(false);
+    const items = buildMenuModel({ ...DEFAULT_CONFIG, bubbles: false }, [], []);
+    expect(items.find((i) => i.kind === 'item' && i.label === 'Hide')).toMatchObject({ checked: true });
   });
 });

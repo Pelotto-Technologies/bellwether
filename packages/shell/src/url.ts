@@ -15,7 +15,7 @@ export function modeFromUrl(url: string): 'strip' | 'map' | undefined {
   }
 }
 
-export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal'>): string {
+export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal' | 'bubbles'>): string {
   const u = new URL(cfg.url);
   if (cfg.mode === 'map') u.searchParams.set('mode', 'map');
   else if (u.searchParams.has('mode')) u.searchParams.delete('mode');
@@ -25,5 +25,7 @@ export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'sc
   else if (u.searchParams.has('scale')) u.searchParams.delete('scale');
   if (cfg.minimal !== undefined) u.searchParams.set('minimal', cfg.minimal ? '1' : '0');
   else if (u.searchParams.has('minimal')) u.searchParams.delete('minimal');
+  if (cfg.bubbles !== undefined) u.searchParams.set('bubbles', cfg.bubbles ? '1' : '0');
+  else if (u.searchParams.has('bubbles')) u.searchParams.delete('bubbles');
   return u.toString();
 }

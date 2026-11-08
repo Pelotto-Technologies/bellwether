@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AGENT_TARGETS, detect, install, uninstall, findTarget, type AgentContext } from '../src/index.js';
+import { sayHookCommand } from '../src/install.js';
 
 let root: string;
 let claudeDir: string;
@@ -100,6 +101,19 @@ describe('install', () => {
     install(ctx());
     expect(readJson(join(claudeDir, 'settings.json')).hooks.SessionStart).toHaveLength(1);
     expect(readJson(join(copilotDir, 'settings.json')).hooks.SessionStart).toHaveLength(1);
+    expect(readJson(join(claudeDir, 'settings.json')).hooks.PreToolUse).toHaveLength(1);
+    expect(readJson(join(copilotDir, 'settings.json')).hooks.PreToolUse).toHaveLength(1);
+  });
+
+  it('adds a PreToolUse message hook that runs this CLI with absolute paths', () => {
+    const hook = sayHookCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\npm\\bellwether\\dist\\main.js');
+    expect(hook.posix).toBe('"C:/Program Files/nodejs/node.exe" "C:/npm/bellwether/dist/main.js" hook say # bellwether-say');
+    expect(hook.powershell).toBe('& "C:\\Program Files\\nodejs\\node.exe" "C:\\npm\\bellwether\\dist\\main.js" hook say # bellwether-say');
+    install(ctx(), undefined, hook);
+    const c = readJson(join(claudeDir, 'settings.json')).hooks.PreToolUse;
+    expect(c).toEqual([{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: hook.posix, timeout: 10 }] }]);
+    const k = readJson(join(copilotDir, 'settings.json')).hooks.PreToolUse;
+    expect(k).toEqual([{ type: 'command', bash: hook.posix, powershell: hook.powershell, timeoutSec: 10 }]);
   });
 
   it('skips an agent whose config dir is missing', () => {

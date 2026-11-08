@@ -1,12 +1,26 @@
 import { applyDelta, emptyWorld, MockSource, type Delta, type World } from '@bellwether/adapter/core';
 
+/** Longest line a bubble shows, so neighbouring bubbles stay readable. */
+const MAX_LINE = 48;
+
+export interface Bubble {
+  text: string;
+  until: number;
+  /** Who the line is addressed to, when it is a message to another agent. */
+  to?: { partyId: string; paneId: string } | undefined;
+  /** Inferred by the renderer: no Herdr token backs it, so member updates never clear it. */
+  local: boolean;
+}
+
 /**
- * Holds the renderer's copy of the world and when each speech bubble expires.
+ * Holds the renderer's copy of the world and the speech bubbles currently showing.
  * The renderer only ever sees Deltas; it never talks to Herdr.
  */
 export class FeedState {
   world: World = emptyWorld();
-  private sayUntil = new Map<string, number>();
+  private bubbles = new Map<string, Bubble>();
+  /** Hide every bubble (the "chat bubbles" setting). Characters still walk over to talk. */
+  bubblesOn = true;
   /** Set by the page: asks the adapter to focus a pane in Herdr (double-click a member). */
   onFocus: ((paneId: string) => void) | undefined;
   /** Set by the page: asks the adapter to close a pane in Herdr (the panel's close button). */
@@ -14,20 +28,48 @@ export class FeedState {
 
   constructor(private sayTtlMs: number) {}
 
-  apply(delta: Delta, now: number): void {
+  apply(delta: Delta, now: number, local = false): void {
     this.world = applyDelta(this.world, delta);
-    if (delta.kind === 'say') this.sayUntil.set(`${delta.partyId}/${delta.paneId}`, now + this.sayTtlMs);
+    if (delta.kind === 'say') this.bubbles.set(`${delta.partyId}/${delta.paneId}`, { text: delta.text, until: now + this.sayTtlMs, to: delta.to, local });
     if (delta.kind === 'member' && delta.member.say === undefined) {
-      this.sayUntil.delete(`${delta.partyId}/${delta.member.paneId}`);
+      // The say token expired or was cleared in Herdr.
+      const key = `${delta.partyId}/${delta.member.paneId}`;
+      if (this.bubbles.get(key)?.local === false) this.bubbles.delete(key);
     }
-    if (delta.kind === 'snapshot') this.sayUntil.clear();
+    if (delta.kind === 'snapshot') this.bubbles.clear();
   }
 
-  /** Speech text if the bubble is still within its TTL. */
+  private live(partyId: string, paneId: string, now: number): Bubble | undefined {
+    const b = this.bubbles.get(`${partyId}/${paneId}`);
+    if (!b || now > b.until) return undefined;
+    return b;
+  }
+
+  /** Speech text if the bubble is still within its TTL and bubbles are on. */
   say(partyId: string, paneId: string, now: number): string | undefined {
-    const until = this.sayUntil.get(`${partyId}/${paneId}`);
-    if (until === undefined || now > until) return undefined;
-    return this.world.parties[partyId]?.members[paneId]?.say;
+    if (!this.bubblesOn) return undefined;
+    const b = this.live(partyId, paneId, now);
+    if (!b) return undefined;
+    // A message names its listener, so a reader can tell who is being spoken to.
+    const role = b.to && this.world.parties[b.to.partyId]?.members[b.to.paneId]?.role;
+    const line = role ? `@${role} ${b.text}` : b.text;
+    return line.length > MAX_LINE ? line.slice(0, MAX_LINE - 1).trimEnd() + '…' : line;
+  }
+
+  /** Whether a live message from someone else is addressed to this member. */
+  addressedTo(partyId: string, paneId: string, now: number): boolean {
+    for (const b of this.bubbles.values()) if (now <= b.until && b.to?.partyId === partyId && b.to.paneId === paneId) return true;
+    return false;
+  }
+
+  /** Who a live line is addressed to, whether or not bubbles are shown. */
+  sayTo(partyId: string, paneId: string, now: number): { partyId: string; paneId: string } | undefined {
+    return this.live(partyId, paneId, now)?.to;
+  }
+
+  /** Whether the member is mid-conversation (talking, bubble shown or not). */
+  talking(partyId: string, paneId: string, now: number): boolean {
+    return this.live(partyId, paneId, now) !== undefined;
   }
 }
 

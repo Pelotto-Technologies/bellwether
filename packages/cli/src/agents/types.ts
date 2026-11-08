@@ -14,6 +14,12 @@ export interface HookPaths {
   ps1: string;
 }
 
+/** The pre-tool message hook, as a command line for each shell. */
+export interface ToolHookCommand {
+  posix: string;
+  powershell: string;
+}
+
 /**
  * One coding agent the installer can integrate with. `id` is the value Herdr puts in
  * the `agent` field for this agent. This is the only place in Bellwether that knows
@@ -29,4 +35,8 @@ export interface AgentTarget {
   addSessionStartHook(settings: JsonObject, hook: HookPaths): JsonObject;
   /** Return settings with every Bellwether entry removed and all other entries untouched. */
   removeSessionStartHook(settings: JsonObject): JsonObject;
+  /** Return settings with Bellwether's PreToolUse message hook added. Assumes none is present. */
+  addToolHook(settings: JsonObject, hook: ToolHookCommand): JsonObject;
+  /** Return settings with Bellwether's PreToolUse entries removed and all other entries untouched. */
+  removeToolHook(settings: JsonObject): JsonObject;
 }

@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { asArray, asObject, mentions, type Json, type JsonObject } from '../json-file.js';
+import { SAY_MARKER } from '../hook/say.js';
 import { HOOK_BASENAME } from '../skill.js';
 import { posixPath } from './paths.js';
 import type { AgentTarget } from './types.js';
@@ -28,32 +29,49 @@ export const claude: AgentTarget = {
   },
 
   removeSessionStartHook(settings) {
+    return removeNested(settings, 'SessionStart', HOOK_BASENAME);
+  },
+
+  addToolHook(settings, hook) {
     const hooks = asObject(settings.hooks);
-    if (!Array.isArray(hooks.SessionStart)) return settings;
-    const groups: Json[] = [];
-    let changed = false;
-    for (const group of hooks.SessionStart) {
-      const g = asObject(group);
-      if (!Array.isArray(g.hooks)) {
-        if (mentions(group, HOOK_BASENAME)) changed = true;
-        else groups.push(group);
-        continue;
-      }
-      const inner = g.hooks.filter((h) => !mentions(h, HOOK_BASENAME));
-      if (inner.length === g.hooks.length) groups.push(group);
-      else {
-        changed = true;
-        if (inner.length > 0) groups.push({ ...g, hooks: inner });
-      }
-    }
-    if (!changed) return settings;
-    return pruneEvent(settings, hooks, groups);
+    const groups = asArray(hooks.PreToolUse);
+    const entry: JsonObject = { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: hook.posix, timeout: 10 }] };
+    return { ...settings, hooks: { ...hooks, PreToolUse: [...groups, entry] } };
+  },
+
+  removeToolHook(settings) {
+    return removeNested(settings, 'PreToolUse', SAY_MARKER);
   },
 };
 
-export function pruneEvent(settings: JsonObject, hooks: JsonObject, entries: Json[]): JsonObject {
-  const nextHooks: JsonObject = { ...hooks, SessionStart: entries };
-  if (entries.length === 0) delete nextHooks.SessionStart;
+/** Drop every hook mentioning `marker` from a nested `hooks[event]` group list. */
+function removeNested(settings: JsonObject, event: string, marker: string): JsonObject {
+  const hooks = asObject(settings.hooks);
+  const list = hooks[event];
+  if (!Array.isArray(list)) return settings;
+  const groups: Json[] = [];
+  let changed = false;
+  for (const group of list) {
+    const g = asObject(group);
+    if (!Array.isArray(g.hooks)) {
+      if (mentions(group, marker)) changed = true;
+      else groups.push(group);
+      continue;
+    }
+    const inner = g.hooks.filter((h) => !mentions(h, marker));
+    if (inner.length === g.hooks.length) groups.push(group);
+    else {
+      changed = true;
+      if (inner.length > 0) groups.push({ ...g, hooks: inner });
+    }
+  }
+  if (!changed) return settings;
+  return pruneEvent(settings, hooks, groups, event);
+}
+
+export function pruneEvent(settings: JsonObject, hooks: JsonObject, entries: Json[], event = 'SessionStart'): JsonObject {
+  const nextHooks: JsonObject = { ...hooks, [event]: entries };
+  if (entries.length === 0) delete nextHooks[event];
   const next: JsonObject = { ...settings, hooks: nextHooks };
   if (Object.keys(nextHooks).length === 0) delete next.hooks;
   return next;
