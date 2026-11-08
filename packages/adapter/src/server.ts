@@ -1,6 +1,6 @@
 import { createReadStream, realpathSync, statSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Action } from './actions.js';
 import type { WorldSource } from './source.js';
@@ -58,12 +58,14 @@ export function resolveStaticFile(dir: string, url: string): string | 'forbidden
   }
   const candidate = resolve(root, '.' + (urlPath.startsWith('/') ? urlPath : '/' + urlPath));
   if (candidate !== root && !candidate.startsWith(root + sep)) return 'forbidden';
+  const inside = (p: string): boolean => p === root || p.startsWith(root + sep);
   try {
-    let real = realpathSync(candidate);
-    if (real !== root && !real.startsWith(root + sep)) return 'forbidden';
-    if (statSync(real).isDirectory()) real = realpathSync(join(real, 'index.html'));
-    if (real !== root && !real.startsWith(root + sep)) return 'forbidden';
-    return statSync(real).isFile() ? real : undefined;
+    let target = candidate;
+    if (statSync(target).isDirectory()) target = resolve(target, 'index.html');
+    if (!inside(target)) return 'forbidden';
+    // Symlink check: the real location must also be inside the real root.
+    if (!inside(realpathSync(target))) return 'forbidden';
+    return statSync(target).isFile() ? target : undefined;
   } catch {
     return undefined;
   }
