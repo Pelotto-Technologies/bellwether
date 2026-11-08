@@ -16,6 +16,18 @@ const party = (id: string, repo: string | undefined, members: Member[], session 
 const worldOf = (...ps: Party[]): World => ({ machine: 'local', parties: Object.fromEntries(ps.map((p) => [p.id, p])) });
 
 describe('groupFellowships', () => {
+  it('with leadAlone, a lone orchestrator still leads its repo (map mode stands it at the settlement)', () => {
+    const w = worldOf(party('default/w1', 'api', [member('p1', 'orchestrator')]));
+    expect(groupFellowships(w).fellowships).toHaveLength(0);
+    const v = groupFellowships(w, { leadAlone: true });
+    expect(Object.keys(v.world.parties)).toEqual([]);
+    expect(v.fellowships).toHaveLength(1);
+    expect(v.fellowships[0]!.leaders[0]!.partyId).toBe('default/w1');
+    expect(v.fellowships[0]!.partyIds).toEqual([]);
+    // Cached separately from the default grouping.
+    expect(groupFellowships(w).fellowships).toHaveLength(0);
+  });
+
   it('lifts an orchestrator out of its own party to lead the repo it works in', () => {
     const w = worldOf(
       party('default/w1', 'api', [member('p1', 'orchestrator')]),

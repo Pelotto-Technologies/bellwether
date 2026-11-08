@@ -5,7 +5,7 @@ import { parseSourceConfig } from '../src/config.js';
 import { HerdrSessionSource } from '../src/herdr/source.js';
 import { MockSource } from '../src/mock.js';
 import { ReplaySource } from '../src/recording.js';
-import { DELTA_PATH, DeltaServer } from '../src/server.js';
+import { DELTA_PATH, DeltaServer, isLocalOrigin } from '../src/server.js';
 import { MockHerdr, until } from './mock-herdr.js';
 
 let herdr: MockHerdr;
@@ -28,24 +28,26 @@ afterEach(async () => {
 
 const calls = () => herdr.requests.filter((r) => /^(pane|agent)\./.test(r.method));
 
-async function connect(actions: boolean): Promise<WebSocket> {
+async function connect(actions: boolean, origin?: string): Promise<WebSocket> {
   server = new DeltaServer({ port: 0, actions });
   server.attach(source);
   const port = await server.listen();
-  const ws = new WebSocket(`ws://127.0.0.1:${port}${DELTA_PATH}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${DELTA_PATH}`, origin ? { origin } : {});
   await new Promise((r) => ws.once('open', r));
   return ws;
 }
 
 describe('Action on the live source', () => {
-  it('maps to pane.focus, agent.prompt and agent.send_keys', async () => {
+  it('maps to pane.focus, agent.prompt, agent.send_keys and pane.close', async () => {
     await source.actions.focus('w1:p3');
     await source.actions.prompt('w1:p3', 'hello');
     await source.actions.sendKeys('w1:p3', ['Enter']);
+    await source.actions.close('w1:p3');
     expect(calls()).toEqual([
       { method: 'pane.focus', params: { pane_id: 'w1:p3' } },
       { method: 'agent.prompt', params: { target: 'w1:p3', text: 'hello' } },
       { method: 'agent.send_keys', params: { target: 'w1:p3', keys: ['Enter'] } },
+      { method: 'pane.close', params: { pane_id: 'w1:p3' } },
     ]);
   });
 });
@@ -81,12 +83,37 @@ describe('DeltaServer client messages', () => {
     ws.close();
   });
 
+  it('forwards close from the overlay itself, without the actions flag', async () => {
+    const ws = await connect(false, 'http://127.0.0.1:7341');
+    ws.send(JSON.stringify({ type: 'close', paneId: 'w1:p3' }));
+    await until(() => calls().length >= 1);
+    expect(calls()).toEqual([{ method: 'pane.close', params: { pane_id: 'w1:p3' } }]);
+    ws.close();
+  });
+
+  it('ignores close from another web page', async () => {
+    const ws = await connect(true, 'https://evil.example');
+    ws.send(JSON.stringify({ type: 'close', paneId: 'w1:p3' }));
+    ws.send(JSON.stringify({ type: 'focus', paneId: 'w1:p3' }));
+    await until(() => calls().length >= 1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls().map((c) => c.method)).toEqual(['pane.focus']);
+    ws.close();
+  });
+
   it('survives an unknown pane', async () => {
     const ws = await connect(true);
     const { HerdrSource } = await import('../src/herdr/source.js');
     await expect(new HerdrSource().actions.focus('w9:p9')).rejects.toThrow(/no pane/);
     ws.send(JSON.stringify({ type: 'focus', paneId: 5 }));
     ws.close();
+  });
+});
+
+describe('isLocalOrigin', () => {
+  it('accepts no origin and loopback hosts, rejects the rest', () => {
+    for (const o of [undefined, 'null', 'file://', 'http://127.0.0.1:7341', 'http://localhost:5173', 'http://[::1]:7341']) expect(isLocalOrigin(o)).toBe(true);
+    for (const o of ['https://evil.example', 'http://127.0.0.1.evil.example', 'garbage']) expect(isLocalOrigin(o)).toBe(false);
   });
 });
 

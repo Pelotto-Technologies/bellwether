@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { createSource, loadSourceConfig } from './config.js';
+import { launchOrchestrator } from './herdr/launch.js';
 import { MockSource } from './mock.js';
 import { recordTo, ReplaySource } from './recording.js';
 import { scrubDelta, scrubFile } from './scrub.js';
@@ -29,7 +30,12 @@ Output:
   --actions            let the overlay send prompts and keys to agents (focus is always allowed)
   --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
-  -h, --help`;
+  -h, --help
+
+Orchestrate (create a Herdr workspace, tag pane 1, type the command into it, then exit):
+  --orchestrate [--cwd <dir>] [--label <text>] [--role <role>] [--session <name>] [--socket <path>]
+                [--timeout <ms>] [-- <command...>]
+                       args with spaces are wrapped in double quotes; default role orchestrator`;
 
 const { values, positionals } = parseArgs({
   options: {
@@ -52,6 +58,11 @@ const { values, positionals } = parseArgs({
     print: { type: 'boolean' },
     'exit-with-parent': { type: 'boolean' },
     pack: { type: 'string' },
+    orchestrate: { type: 'boolean' },
+    cwd: { type: 'string' },
+    label: { type: 'string' },
+    role: { type: 'string' },
+    timeout: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
   allowPositionals: true,
@@ -80,6 +91,30 @@ if (values['scrub-file']) {
 }
 
 const log = (m: string) => process.stderr.write(m + '\n');
+
+if (values.orchestrate) {
+  try {
+    const r = await launchOrchestrator({
+      session: values.session,
+      socket: values.socket,
+      cwd: values.cwd,
+      label: values.label,
+      role: values.role,
+      command: positionals,
+      timeoutMs: values.timeout ? Number(values.timeout) : undefined,
+      log,
+    });
+    console.log(`workspace "${r.label}" created, pane ${r.paneId}, role ${r.role}`);
+    if (r.commandLine) console.log(`ran: ${r.commandLine}`);
+    else console.log('no command given; type one into the pane yourself');
+    if (r.agent) console.log(`agent detected: ${r.agent}${r.agentName ? ` (named ${r.agentName})` : ''}`);
+    else if (r.timedOut) console.log('agent not detected before the timeout (workspace and pane still exist)');
+    process.exit(0);
+  } catch (err) {
+    log(`bellwether-adapter: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
 
 async function pickSource(): Promise<WorldSource> {
   if (values.replay) {

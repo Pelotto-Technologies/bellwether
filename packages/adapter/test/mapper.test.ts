@@ -109,3 +109,42 @@ describe('diffParties', () => {
     expect(ds[1]).toEqual({ t: 2, kind: 'say', partyId: 'default/w1', paneId: 'w1:p4', text: 'On it' });
   });
 });
+
+describe('orchestration workspaces', () => {
+  function snap(label: string, panes: Array<{ id: string; agent?: string; tokens?: Record<string, string>; name?: string }>) {
+    const base = loadSnapshot();
+    const ws = { ...base.workspaces[0]!, workspace_id: 'w9', label };
+    const recs = panes.map((p) => ({ ...base.panes[0]!, pane_id: p.id, workspace_id: 'w9', agent: p.agent ?? null, title: null, tokens: p.tokens ?? {} }));
+    const agents = panes.filter((p) => p.agent).map((p) => ({ ...recs.find((r) => r.pane_id === p.id)!, name: p.name ?? null }));
+    return { ...base, workspaces: [ws], panes: recs, agents };
+  }
+
+  it('makes the first pane of an "<repo> Orchestration" workspace the orchestrator', () => {
+    const parties = partiesFromSnapshot(snap('bellwether Orchestration', [{ id: 'w9:p1', agent: 'copilot' }, { id: 'w9:p2', agent: 'claude' }]), ctx);
+    const ms = parties['default/w9']!.members;
+    expect(ms['w9:p1']!.role).toBe('orchestrator');
+    expect(ms['w9:p2']!.role).toBe('generic');
+  });
+
+  it('counts pane 1 even before it has an agent, and leaves other workspaces alone', () => {
+    const shellFirst = partiesFromSnapshot(snap('api Orchestration', [{ id: 'w9:p1' }, { id: 'w9:p2', agent: 'claude' }]), ctx);
+    expect(shellFirst['default/w9']!.members['w9:p2']!.role).toBe('generic');
+    const plain = partiesFromSnapshot(snap('api', [{ id: 'w9:p1', agent: 'claude' }]), ctx);
+    expect(plain['default/w9']!.members['w9:p1']!.role).toBe('generic');
+  });
+
+  it('a role token or a role name still wins', () => {
+    const parties = partiesFromSnapshot(snap('api orchestration', [{ id: 'w9:p1', agent: 'claude', tokens: { role: 'reviewer' } }]), ctx);
+    expect(parties['default/w9']!.members['w9:p1']!.role).toBe('reviewer');
+    const named = partiesFromSnapshot(snap('api orchestration', [{ id: 'w9:p1', agent: 'claude', name: 'architect' }]), ctx);
+    expect(named['default/w9']!.members['w9:p1']!.role).toBe('architect');
+  });
+});
+
+describe('agent leaving its pane', () => {
+  it('asks for a re-read instead of keeping a stale member', () => {
+    const parties = partiesFromSnapshot(loadSnapshot(), ctx);
+    const ev = { pane_id: 'w1:p3', workspace_id: 'w1', agent_status: 'unknown', agent: null } as unknown as AgentStatusChanged;
+    expect(applyStatusChange(parties, ev, ctx)).toBeUndefined();
+  });
+});

@@ -9,6 +9,8 @@ export class FeedState {
   private sayUntil = new Map<string, number>();
   /** Set by the page: asks the adapter to focus a pane in Herdr (double-click a member). */
   onFocus: ((paneId: string) => void) | undefined;
+  /** Set by the page: asks the adapter to close a pane in Herdr (the panel's close button). */
+  onClose: ((paneId: string) => void) | undefined;
 
   constructor(private sayTtlMs: number) {}
 

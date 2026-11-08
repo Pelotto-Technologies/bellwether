@@ -84,6 +84,7 @@ async function main() {
   else {
     const handle = connectFeed(deltaUrl(), onDelta, onMode);
     feed.onFocus = (paneId) => handle.send?.({ type: 'focus', paneId });
+    feed.onClose = (paneId) => handle.send?.({ type: 'close', paneId });
   }
 
   app.ticker.add((ticker) => scene.update(ticker.deltaMS / 1000, performance.now()));

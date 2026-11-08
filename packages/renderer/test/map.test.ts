@@ -21,6 +21,14 @@ const party = (id: string, repo: string, members: Member[], over: Partial<Party>
 });
 const worldOf = (...ps: Party[]): World => ({ machine: 'local', parties: Object.fromEntries(ps.map((p) => [p.id, p])) });
 
+describe('layoutMap extra settlements', () => {
+  it('adds a settlement with no camps for a repo that only has a leader', () => {
+    const l = layoutMap(worldOf(party('a', '/r/alpha', [member('1')])), ['/r/solo']);
+    expect(l.settlements.map((s) => s.name).sort()).toEqual(['alpha', 'solo']);
+    expect(l.camps.size).toBe(1);
+  });
+});
+
 describe('layoutMap', () => {
   const w = worldOf(party('a', '/r/alpha', [member('1')]), party('b', '/r/alpha', [member('2')]), party('c', '/r/beta', [member('3')]));
 

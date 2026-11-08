@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type RunCommand = 'run' | 'record' | 'replay' | 'scrub';
+export type RunCommand = 'run' | 'record' | 'replay' | 'scrub' | 'orchestrate';
 
-export const RUN_COMMANDS: RunCommand[] = ['run', 'record', 'replay', 'scrub'];
+export const RUN_COMMANDS: RunCommand[] = ['run', 'record', 'replay', 'scrub', 'orchestrate'];
 
 /** Maps `bellwether <cmd> ...` onto adapter flags. Pure, so it is easy to test. */
 export function adapterArgs(cmd: RunCommand, rest: string[], serveDir?: string): string[] {
@@ -23,6 +23,9 @@ export function adapterArgs(cmd: RunCommand, rest: string[], serveDir?: string):
       if (!file || file.startsWith('-')) throw new Error('usage: bellwether replay <file.jsonl> [--speed n] [adapter flags]');
       return [...serve, '--replay', file, ...more];
     }
+    case 'orchestrate':
+      // No --serve: this command only talks to Herdr and exits. Flags and `-- <command>` pass through.
+      return ['--orchestrate', ...rest];
     case 'scrub': {
       const [input, output] = rest;
       if (!input || !output) throw new Error('usage: bellwether scrub <in.jsonl> <out.jsonl>');

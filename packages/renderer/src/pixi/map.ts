@@ -89,6 +89,8 @@ export class MapScene {
   private waterSprites: { sprite: Sprite; a: Texture; b: Texture }[] = [];
   private parties = new Map<string, PartyView>();
   private leaders = new Map<string, MemberView>();
+  /** Leader view id to the Herdr workspace its pane lives in, so a click on a leader opens that workspace. */
+  private leaderParty = new Map<string, string>();
   private fellowships: FellowshipView = groupFellowships({ machine: 'local', parties: {} });
   private settlementViews: Container[] = [];
   private towns = new Map<string, Container>();
@@ -121,6 +123,17 @@ export class MapScene {
       if (e.key === 'Escape') this.setFocus(undefined);
     });
     document.getElementById('detail-close')?.addEventListener('click', () => this.setFocus(undefined));
+    // Close-pane buttons in the panel: ends the agent in Herdr, after a confirm.
+    this.panel?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement | null)?.closest?.('button[data-close]') as HTMLButtonElement | null;
+      if (!btn) return;
+      e.stopPropagation();
+      const paneId = btn.dataset.close!;
+      if (!window.confirm(`Close pane ${paneId} in Herdr? This ends the agent running in it.`)) return;
+      this.feed.onClose?.(paneId);
+      btn.disabled = true;
+      btn.textContent = 'closing…';
+    });
   }
 
   get focusedParty(): string | undefined {
@@ -148,6 +161,11 @@ export class MapScene {
   private click(sx: number, sy: number): void {
     const screen = this.screenSize();
     const points = [...this.layout.camps.keys()].map((id) => ({ id, ...this.partyPoint(id)! }));
+    // Leaders are clickable too: they open the workspace their pane lives in.
+    for (const [id, mv] of this.leaders) {
+      const partyId = this.leaderParty.get(id);
+      if (partyId) points.push({ id: partyId, x: mv.w.x, y: mv.w.y });
+    }
     const w = screenToWorld(this.cam, screen, { x: sx, y: sy });
     // Hit radius is generous so a glow is easy to click, even at overview zoom.
     this.setFocus(nearestParty(points, { x: w.x, y: w.y - 10 }, Math.max(18, 28 / this.cam.zoom * 2)));
@@ -247,15 +265,16 @@ export class MapScene {
     this.t += dt;
     this.dt = dt;
     this.fx.clear();
-    const fv = groupFellowships(this.feed.world);
+    const fv = groupFellowships(this.feed.world, { leadAlone: true });
     this.fellowships = fv;
     const world = fv.world;
-    const layout = layoutMap(world);
+    const layout = layoutMap(world, fv.fellowships.map((f) => f.key.slice(f.key.indexOf('|') + 1)));
     if (layout.signature !== this.layout.signature || !this.terrainLayer.children.length) {
       this.rebuild(layout);
       this.cam = { cx: this.mapPx().w / 2, cy: this.mapPx().h / 2, zoom: fitZoom(this.mapPx(), this.screenSize()) };
     }
-    if (this.focus && !world.parties[this.focus]) this.setFocus(undefined);
+    // Focus is on the raw world: a leader's own workspace has no camp but can still be opened.
+    if (this.focus && !this.feed.world.parties[this.focus]) this.setFocus(undefined);
 
     const screen = this.screenSize();
     const target: Camera = this.focus
@@ -276,6 +295,10 @@ export class MapScene {
 
     for (const [id, v] of this.parties) {
       if (!world.parties[id]) {
+        // Member bodies live on the actor layer, not under the camp, so they go separately.
+        // Leaving them behind is what made ghosts: a lone agent renamed to orchestrator
+        // left its camp, and its old body stood frozen where the camp had been.
+        for (const mv of v.members.values()) this.destroyMember(mv);
         v.root.destroy({ children: true });
         this.parties.delete(id);
       }
@@ -289,8 +312,13 @@ export class MapScene {
   }
 
   private camFocus(id: string) {
-    const p = this.partyPoint(id)!;
+    const p = this.partyPoint(id) ?? this.leaderPoint(id) ?? { x: this.mapPx().w / 2, y: this.mapPx().h / 2 };
     return { cx: p.x, cy: p.y - 8 };
+  }
+
+  private leaderPoint(partyId: string) {
+    for (const [id, mv] of this.leaders) if (this.leaderParty.get(id) === partyId) return { x: mv.w.x, y: mv.w.y };
+    return undefined;
   }
 
   /** One more building in a repo's settlement for every four agents; new ones pop in. */
@@ -388,9 +416,7 @@ export class MapScene {
     const members = Object.values(party.members).sort((a, b) => a.paneId.localeCompare(b.paneId));
     for (const [paneId, mv] of view.members) {
       if (!party.members[paneId]) {
-        if (mv.figure) mv.figure.destroy();
-        else mv.sprite.destroy();
-        mv.bubble.destroy({ children: true });
+        this.destroyMember(mv);
         view.members.delete(paneId);
       }
     }
@@ -446,6 +472,7 @@ export class MapScene {
       for (const l of f.leaders) {
         const id = `${f.key}/${l.member.paneId}`;
         live.add(id);
+        this.leaderParty.set(id, l.partyId);
         let mv = this.leaders.get(id);
         if (!mv) {
           mv = this.makeMember(l.member.paneId, `lead/${id}`, home, LEADER_RADIUS, true);
@@ -462,6 +489,7 @@ export class MapScene {
       if (live.has(id)) continue;
       this.destroyMember(mv);
       this.leaders.delete(id);
+      this.leaderParty.delete(id);
     }
   }
 
@@ -486,6 +514,8 @@ export class MapScene {
           g.rect(Math.round(from.x + (to.x - from.x) * t) - 1, Math.round(from.y - 2 + (to.y - from.y - 2) * t) - 1, 2, 2).fill({ color: hexNum(color), alpha: 0.85 });
         }
       }
+      // An orchestrator alone in its repo gets no banner until it has camps to lead.
+      if (!f.partyIds.length) continue;
       // Banner pole beside the settlement, flag striped in the tint of every camp it leads.
       const bx = Math.round(from.x + 22);
       const by = Math.round(from.y);
@@ -587,7 +617,7 @@ export class MapScene {
     const camp = this.layout.camps.get(party.id);
     const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now);
     const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p><ul>${d.rows
-      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><br><span class="line">${esc(r.line)}</span></li>`)
+      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button><br><span class="line">${esc(r.line)}</span></li>`)
       .join('')}</ul>`;
     const body = this.panel.querySelector('#detail-body');
     if (body && body.innerHTML !== html) body.innerHTML = html;

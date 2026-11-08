@@ -15,6 +15,8 @@ commands:
   run         serve the overlay from live Herdr (adapter flags pass through)
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
+  orchestrate [--cwd D] [--label L] [--role R] [--session S] [--timeout MS] [-- CMD...]
+              new Herdr workspace, pane 1 tagged with a role and running CMD
   scrub I O   rewrite a recording with repo, branch and label names hashed
 
 agents: ${AGENT_TARGETS.map((t) => t.id).join(', ')} (default: all present)`;
@@ -43,7 +45,7 @@ function main(argv: string[]): number {
   const [cmd, ...rest] = argv;
   if (cmd && (RUN_COMMANDS as string[]).includes(cmd)) {
     const rt = locateRuntime();
-    const args = adapterArgs(cmd as RunCommand, rest, cmd === 'scrub' ? undefined : rt.rendererDist);
+    const args = adapterArgs(cmd as RunCommand, rest, cmd === 'scrub' || cmd === 'orchestrate' ? undefined : rt.rendererDist);
     return spawnSync(process.execPath, [rt.adapterBin, ...args], { stdio: 'inherit' }).status ?? 1;
   }
   if (cmd === 'overlay') return launchOverlay(rest);
