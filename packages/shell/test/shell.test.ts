@@ -6,7 +6,8 @@ import { adapterArgs } from '../src/adapter-args.js';
 import { type DisplayInfo, pickDisplay, stripBounds, windowBounds } from '../src/bounds.js';
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
 import { errorPage, waitForReady } from '../src/ready.js';
-import { adapterPaths } from '../src/paths.js';
+import { existsSync } from 'node:fs';
+import { adapterPaths, assetsDir } from '../src/paths.js';
 import { applyAction, buildMenuModel } from '../src/tray-menu.js';
 import { rendererUrl } from '../src/url.js';
 
@@ -151,5 +152,14 @@ describe('ready', () => {
   });
   it('builds a visible error page', () => {
     expect(decodeURIComponent(errorPage('http://x/<b>'))).toContain('cannot reach http://x/b');
+  });
+});
+
+describe('assets', () => {
+  it('ships the icons the tray and dock load', () => {
+    const dir = assetsDir();
+    for (const f of ['icon.png', 'icon.ico', 'icon.icns', 'tray.png', 'tray@2x.png', 'trayTemplate.png', 'trayTemplate@2x.png']) {
+      expect(existsSync(join(dir, f)), f).toBe(true);
+    }
   });
 });

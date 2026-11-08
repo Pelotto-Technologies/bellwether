@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/logo.png" alt="Bellwether" width="420"></p>
+
 # Bellwether
 
 **A pixel-art overlay for [Herdr](https://herdr.dev). See your AI coding agents as a party of tiny characters.**

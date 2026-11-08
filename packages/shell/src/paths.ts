@@ -26,3 +26,8 @@ export function adapterPaths(root: string = repoRoot(), env: NodeJS.ProcessEnv =
 export function missingBuilds(p: AdapterPaths): string[] {
   return [p.bin, join(p.rendererDir, 'index.html')].filter((f) => !existsSync(f));
 }
+
+/** Icons and tray images shipped with the shell (packages/shell/assets, or runtime/shell/assets once staged). */
+export function assetsDir(from: string = dirname(fileURLToPath(import.meta.url))): string {
+  return resolve(from, '..', 'assets');
+}
