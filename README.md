@@ -1,30 +1,32 @@
 <p align="center"><img src="docs/brand/logo.png" alt="Bellwether" width="420"></p>
 
-# Bellwether
+<p align="center">
+  <b>Your AI coding agents, as a party of tiny pixel characters.</b><br>
+  A desktop and stream overlay for <a href="https://herdr.dev">Herdr</a>.
+</p>
 
-**A pixel-art overlay for [Herdr](https://herdr.dev). See your AI coding agents as a party of tiny characters.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@pelotto-tech/bellwether"><img alt="npm" src="https://img.shields.io/npm/v/@pelotto-tech/bellwether?color=3ddc84"></a>
+  <a href="https://github.com/Pelotto-Technologies/bellwether/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pelotto-Technologies/bellwether/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+</p>
 
-Each Herdr worktree workspace becomes a party of pixel characters walking along the
-bottom of your screen. One of them carries a beacon whose light shows the party's status:
-green for working, yellow for done, pulsing red for blocked. Switch to map mode and every
-repo is a settlement on a pixel world, with a glow where its party is camped. Think
-Stream Avatars, but the cast is your agents (Claude Code, GitHub Copilot CLI, and anything
-else Herdr recognizes).
+![Agents arriving, handing off work and getting unblocked on the strip](docs/images/strip-story.gif)
 
-![Strip mode, Aesir pack](docs/images/aesir-strip.png)
+You run a handful of agents in Herdr: an orchestrator, a few implementers in their own
+worktrees, a reviewer. Bellwether turns each of them into a little character walking along
+the bottom of your screen, grouped into parties by workspace. At a glance you can see who is
+working, who is done, who is stuck waiting on you, and who just told whom to do what.
 
-Use it as a click-through always-on-top desktop overlay, or as a browser page for OBS.
-Skins are swappable theme packs; the core only knows roles (`architect`, `implementer`,
-`reviewer`, ...), never characters.
+It works with Claude Code, GitHub Copilot CLI and anything else Herdr recognizes, and it
+comes in four art styles.
 
-| Pack | Strip | Map |
-|---|---|---|
-| **Workshop Crew** (`neutral`, default) | ![](docs/images/neutral-strip.png) | ![](docs/images/neutral-map.png) |
-| **Aesir** (`aesir`) | ![](docs/images/aesir-strip.png) | ![](docs/images/aesir-map.png) |
-| **Wayfarers** (`wayfarers`) | ![](docs/images/wayfarers-strip.png) | ![](docs/images/wayfarers-map.png) |
-| **Deep Space** (`scifi`) | ![](docs/images/scifi-strip.png) | ![](docs/images/scifi-map.png) |
-
-Screenshots come from the built-in mock agents (`pnpm mock`).
+- [Quickstart](#quickstart)
+- [A tour](#a-tour): reading the strip, sizes, map mode, agents talking, fellowships
+- [Skins](#skins): Workshop Crew, Aesir, Wayfarers, Deep Space
+- [Giving agents a role](#giving-agents-a-role)
+- [Where to show it](#where-to-show-it): desktop, OBS, browser
+- [Configuration](#configuration) and [CLI reference](#cli-reference)
 
 ## Quickstart
 
@@ -33,69 +35,156 @@ You need Node 20+ and [Herdr](https://herdr.dev) running with at least one agent
 ```sh
 npm install -g @pelotto-tech/bellwether
 
-bellwether agents      # which coding agents were found
-bellwether install     # tag panes with roles (Claude Code and Copilot CLI)
-bellwether run         # serve the overlay from live Herdr (browser / OBS)
-bellwether overlay     # or: the desktop overlay with a tray menu
+bellwether install     # role tags and chat hooks for Claude Code and Copilot CLI
+bellwether overlay     # the desktop overlay, with a tray menu
 ```
 
-Open <http://127.0.0.1:7341/>. That is the whole loop: start your agents in Herdr, and
-a party appears per workspace.
+That is the whole loop: start agents in Herdr and a party appears for each workspace. The
+first `bellwether overlay` downloads Electron into `~/.bellwether/electron` (about 100 MB,
+once). Prefer a browser tab or OBS? `bellwether run` serves the same overlay at
+<http://127.0.0.1:7341/>.
 
-Want to look before you connect anything? From a checkout, `pnpm install && pnpm mock`
-serves fake agents on the same port.
+Want to look before connecting anything? From a checkout, `pnpm install && pnpm mock` serves
+fake agents on the same port.
 
-### Give panes a role
+Already installed? After upgrading, run `bellwether install` again so your agents get the
+newest hooks (chat bubbles need the one added in 0.1.11).
 
-Roles decide which character a pane gets. A pane with no role shows as the `generic`
-villager. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`,
-`researcher`, `writer`, `ops`, `generic`. Three ways to set one, checked in this order:
+## A tour
 
-1. **Tag the pane.** The agent runs
-   `herdr pane report-metadata "$HERDR_PANE_ID" --source bellwether --token role=reviewer`.
-2. **`HERDR_ROLE`.** Start the pane with `HERDR_ROLE=architect` in its environment. The
-   hook from `bellwether install` tags it on session start.
-3. **Names.** `herdr agent rename` to something containing a role word (`reviewer-2`), or
-   a pane title with one. Needs no install.
-4. **Orchestration workspaces.** The first pane of a workspace whose label contains
-   `Orchestration` (for example `myrepo Orchestration`) is the `orchestrator`, unless a
-   tag or name above says otherwise. Needs no install and no rename.
+### Reading the strip
 
-### Start an orchestrator in one command
+![Strip mode with the Aesir skin](docs/images/aesir-strip.png)
 
-`bellwether orchestrate` opens a new Herdr workspace named `<folder> Orchestration` in the
-current directory, tags pane 1 as the orchestrator and types your agent command into it:
+- **Each nameplate is a party**: one Herdr workspace, labelled `workspace · branch`. The icon
+  on the left is the party's overall status.
+- **One member carries a beacon** whose light is the party's status: green working, yellow
+  done, pulsing red blocked, white idle, grey unknown. Working members walk, blocked ones
+  stop and raise a hand, finished ones wave, idle ones blink.
+- **Worktrees get a tint.** When a repo has several parties, each worktree gets its own
+  colour on cloaks, nameplate underline and ground tether, so `atlas · auth` and
+  `atlas · search` are easy to tell apart.
+- **The orchestrator leads.** An `orchestrator` with other agents in its repo walks in front
+  carrying a banner striped in every worktree's colour (`★ atlas` above).
+- **Speech bubbles** show what agents say, including messages one agent sends another
+  (`@implementer Add ranking tests`).
 
-```sh
-cd ~/src/myrepo
-bellwether orchestrate -- copilot --autopilot --agent manwe
-bellwether orchestrate --session overlay-dev --label "api Orchestration" -- claude
-```
+New agents and worktrees arrive with a short spawn animation (skipped when your OS asks for
+reduced motion). Double-click a member in a browser tab to jump Herdr to that pane.
 
-Options: `--cwd` (default: current directory), `--label` (default `<folder> Orchestration`),
-`--role` (default `orchestrator`), `--session` or `--socket` (which Herdr), `--timeout <ms>`
-(how long to wait for the agent, default 60000). Once Herdr detects the agent, the role tag
-is applied again and, if the agent has no name yet, it is named `orchestrator-<repo>`. Leave
-off the command to just create the workspace and tag pane 1. On the map, an orchestrator
-always stands at its repo's settlement, even before it has spawned any workers.
+### Sizes and labels
+
+Pick a size from the tray menu (Tiny, Compact, Normal, Large), with `scale` in
+`bellwether.toml`, or `?scale=1` to `6` in the URL.
+
+| Tiny | Large |
+|---|---|
+| ![Tiny strip](docs/images/strip-tiny.png) | ![Large strip](docs/images/strip-large.png) |
+
+For a quieter strip, **Icon only** labels drop the nameplates and put a small status icon
+under each party's feet (`minimal = true`, or Labels in the tray menu):
+
+![Icon-only labels](docs/images/strip-minimal.png)
+
+### Map mode
+
+Press **Ctrl+Alt+M** (Cmd+Alt+M on macOS) anywhere, `m` in the page, or pick it in the tray
+menu. Every repo becomes a settlement on a pixel world, each party camps beside its repo
+with a glow in its status colour, and roads join it all up.
+
+![The whole map](docs/images/map-overview.png)
+
+Click a glow, or an orchestrator, to zoom in. A panel lists every member with role, agent,
+status and latest line, and each member has a **close** button that closes its pane in
+Herdr after a confirm. Esc, the ✕ or a click on empty ground zooms back out, and the
+**Exit map** button returns to the strip.
+
+![Zoomed into a settlement with the detail panel open](docs/images/map-detail.png)
+
+Orchestrators stand at their repo's settlement and **ride a mount** out to each new
+worktree they spawn, with a trail back home. Settlements gain a building for every four
+agents and camps gain a tent for every two members, with a small pop as each goes up.
+
+![An orchestrator riding out as new worktrees arrive](docs/images/map-story.gif)
+
+### Agents talking to each other
+
+Herdr raises no event when one agent prompts another, so `bellwether install` adds a small
+pre-tool hook to Claude Code and Copilot CLI. When an agent runs `herdr agent prompt`,
+`herdr pane run` or `herdr pane send-text` into another agent's pane, the hook tags the
+sender with the first line of the message and who it is for. The overlay shows it as a
+bubble addressed `@<role>`, and in map mode the speaker walks (or rides) over to the
+listener. Finished hand-offs between teammates are inferred too.
+
+Too chatty? Hide bubbles from the tray menu, with `bubbles = false`, `?bubbles=0`, or by
+pressing `b` in the page.
 
 ### Fellowships: orchestrators and worktrees
 
-Parties that share a project (same Herdr session and repo) form a **fellowship**, worked
-out from what Herdr already reports, so **no extra agent instructions are needed**:
+Parties that share a Herdr session and repo form a **fellowship**. Bellwether works this out
+from what Herdr already reports, so agents need no extra instructions. It only needs the
+orchestrator's pane to have the `orchestrator` role, and its worktrees to be created in the
+same repo (which Herdr's worktree commands do).
 
-- An `orchestrator` whose repo has other agents *leads* them. It leaves its own party and
-  walks at the front of the group on the strip, carrying a banner striped in every
-  worktree's tint, with a gold tether along the ground. On the map it stands at the
-  project's settlement with the banner and trails to each camp. An orchestrator with
-  nobody else in its repo stays a party of its own.
-- Every worktree in a fellowship (or in any repo with two or more parties) gets its own
-  tint on its characters' cloaks, its nameplate and its ground tether, so three
-  worktrees with three agents each are easy to tell apart.
+## Skins
 
-For this to work, the orchestrator's pane needs the `orchestrator` role (tag, `HERDR_ROLE`,
-or a name containing it) and its Herdr workspace must be in the same repo as the
-worktrees it spawns, which is the case when it creates them with Herdr's worktree commands.
+Skins are theme packs. The core only knows roles (`architect`, `reviewer`, ...); each pack
+decides what a role looks like. Pick one in the tray menu, with `pack = "..."` in
+`bellwether.toml`, `--pack`, or `?pack=`. All four are original art under Apache-2.0.
+
+Each line-up below shows the nine roles in order: orchestrator, coordinator, architect,
+implementer, reviewer, researcher, writer, ops, generic.
+
+### Workshop Crew (`neutral`, default)
+
+A friendly crew of builders, scribes and surveyors in a workshop town.
+
+![Workshop Crew cast](docs/images/neutral-cast.png)
+![Workshop Crew strip](docs/images/neutral-strip.png)
+![Workshop Crew map](docs/images/neutral-map.png)
+
+### Aesir (`aesir`)
+
+Gods and folk of the northern sagas, with rune-lit staves, longhouses and a fjord-side map.
+
+![Aesir cast](docs/images/aesir-cast.png)
+![Aesir strip](docs/images/aesir-strip.png)
+![Aesir map](docs/images/aesir-map.png)
+
+### Wayfarers (`wayfarers`)
+
+An original fantasy quest party setting out from a hill country of burrow houses.
+
+![Wayfarers cast](docs/images/wayfarers-cast.png)
+![Wayfarers strip](docs/images/wayfarers-strip.png)
+![Wayfarers map](docs/images/wayfarers-map.png)
+
+### Deep Space (`scifi`)
+
+A sci-fi survey crew working a glass-domed outpost on a violet-mossed alien world.
+
+![Deep Space cast](docs/images/scifi-cast.png)
+![Deep Space strip](docs/images/scifi-strip.png)
+![Deep Space map](docs/images/scifi-map.png)
+
+Want your own? Any other folder under `themes/` is a private pack that stays out of git.
+See [writing a skin pack](docs/themes.md).
+
+## Giving agents a role
+
+Roles decide which character a pane gets: `orchestrator`, `coordinator`, `architect`,
+`implementer`, `reviewer`, `researcher`, `writer`, `ops`, or `generic` (the default). They
+are checked in this order:
+
+1. **A pane tag.** The agent runs
+   `herdr pane report-metadata "$HERDR_PANE_ID" --source bellwether --token role=reviewer`.
+   The skill that `bellwether install` adds teaches agents to do this themselves.
+2. **`HERDR_ROLE`.** Start the pane with `HERDR_ROLE=architect`; the installed hook tags it
+   when the session starts.
+3. **Names.** An agent name (`herdr agent rename`) or pane title containing a role word,
+   such as `reviewer-2`. Needs no install.
+4. **Orchestration workspaces.** The first pane of a workspace whose label contains
+   `Orchestration` is the `orchestrator`.
 
 To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md` /
 `.github/copilot-instructions.md` for Copilot):
@@ -103,28 +192,55 @@ To have agents tag themselves, add this to `~/.claude/CLAUDE.md` (or `AGENTS.md`
 > When `HERDR_ENV=1`, use the `bellwether` skill at session start: tag your pane with
 > your role. Orchestrators tag each pane they spawn with that member's role.
 
-### Pick your surface
+### Start an orchestrator in one command
+
+`bellwether orchestrate` opens a new Herdr workspace named `<folder> Orchestration` in the
+current directory, tags pane 1 as the orchestrator and starts your agent in it:
+
+```sh
+cd ~/src/myrepo
+bellwether orchestrate -- claude
+bellwether orchestrate --session overlay-dev --label "api Orchestration" -- copilot --autopilot
+```
+
+Options: `--cwd` (default: current directory), `--label` (default `<folder> Orchestration`),
+`--role` (default `orchestrator`), `--session` or `--socket` (which Herdr), and `--timeout <ms>`
+(how long to wait for the agent, default 60000). Once Herdr detects the agent, the role tag is
+applied again and an unnamed agent is named `orchestrator-<repo>`. Leave off the command to
+just create the workspace and tag pane 1.
+
+## Where to show it
 
 | You want | Do this |
 |---|---|
-| A browser tab | Open `http://127.0.0.1:7341/` |
-| A stream overlay | OBS Browser Source on `http://127.0.0.1:7341/?transparent`, see [docs/obs.md](docs/obs.md) |
-| A desktop overlay | `bellwether overlay` (Electron, transparent, always on top, click-through). The first run installs Electron into `~/.bellwether/electron` (about 100 MB, once). The tray icon has **Monitor** and **Skin** pickers, a strip/map switch, and a Herdr session picker. |
+| A desktop overlay | `bellwether overlay`: transparent, frameless, always on top and click-through, pinned to the bottom of one monitor. |
+| A stream overlay | `bellwether run`, then an OBS Browser Source on `http://127.0.0.1:7341/?transparent`. See the [OBS guide](docs/obs.md). |
+| A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
-Settlements gain a building for every four agents in the repo and camps gain a tent per two members, with a small pop when something new is built.
+The desktop overlay's **tray menu** has everything in one place: switch strip and map,
+Size, Labels, Chat bubbles, Skin, Monitor, Herdr Session (all, or one), and Quit. Choices are
+remembered between runs.
 
-In the desktop overlay, **Ctrl+Alt+M** (Cmd+Alt+M on macOS) toggles strip and map from anywhere, and map mode has an **Exit map** button in the corner. Press `m` in the page to toggle strip and map mode. In map mode, click a glow (or an orchestrator) to zoom into a party and read each member's role, agent, status and
-latest line. Each member has a **close** button that closes its pane in Herdr after a confirm,
-which ends the agent. Esc zooms back out.
+### Keyboard
 
-### Configure with `bellwether.toml`
+| Key | Where | Does |
+|---|---|---|
+| Ctrl+Alt+M (Cmd+Alt+M) | anywhere, desktop overlay | toggle strip and map |
+| `m` | page | toggle strip and map |
+| `b` | page | show or hide chat bubbles |
+| Esc | map | zoom back out |
+| double-click a member | strip, browser | focus that pane in Herdr |
 
-Create `bellwether.toml` in the directory you run from (it is gitignored):
+## Configuration
+
+Put a `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
 source = "live"          # "live" for real Herdr, "mock" for fake agents
-pack = "aesir"           # neutral | aesir | wayfarers | scifi
-scale = 2                # strip size, 1 to 6 (default 3; 2 is compact)
+pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
+scale = 2                # strip size, 1 to 6 (default 3)
+minimal = false          # true: icon-only labels
+bubbles = true           # false hides chat bubbles
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
@@ -132,12 +248,53 @@ sessions = "all"         # or ["default", "overlay-dev"]
 # socket = "..."         # explicit socket or pipe path
 ```
 
-Everything also has a flag or environment variable: `--pack aesir` or
-`BELLWETHER_PACK=aesir`, `--session <name>` or `--all`, `BELLWETHER_SOURCE=live`,
-`--port`. Run the adapter with `--help` for the full list. In the page URL, `?pack=`,
-`?scale=` (1 to 6) and `?mode=map` override the config. The desktop overlay's tray menu has a Size section (Tiny, Compact, Normal, Large) and a Labels section (full nameplate above, or icon only below the feet; `minimal = true` in bellwether.toml), and a Chat bubbles section to show or hide speech bubbles (`bubbles = false` in bellwether.toml, `?bubbles=0`, or press `b` in the page).
+Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=live`, `--port`), and the tray menu or
+page URL overrides those:
 
-**Agents talking to each other.** Herdr raises no event when one agent prompts another, so `bellwether install` also adds a pre-tool hook to Claude Code and Copilot CLI. When an agent runs `herdr agent prompt <agent> "..."`, `herdr pane run` or `herdr pane send-text` into another agent's pane, the hook tags the sender's pane with the first line of the message and who it is for, and the overlay shows it as a bubble addressed `@<role>`. Re-run `bellwether install` after upgrading to get the hook. New agents and worktrees play a short arrival animation; it is skipped when the OS asks for reduced motion.
+| URL option | Effect |
+|---|---|
+| `?pack=aesir` | Skin pack. |
+| `?scale=4` | Pixel scale, 1 to 6. |
+| `?mode=map` | Start in map mode. |
+| `?minimal` | Icon-only labels (`?minimal=0` for full). |
+| `?bubbles=0` | Hide chat bubbles. |
+| `?transparent` | No backdrop or status chip, for OBS. |
+| `?source=mock` | Mock agents inside the page, no adapter. |
+| `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
+
+## CLI reference
+
+| Command | Does |
+|---|---|
+| `bellwether agents` | Show which coding agents are on PATH and which config dirs exist. |
+| `bellwether install [--agent claude\|copilot]` | Add the skill, role hook and message hook to each present agent. Safe to re-run. |
+| `bellwether uninstall` | Remove only what `install` wrote. |
+| `bellwether overlay` | Open the desktop overlay. |
+| `bellwether run` | Serve the overlay from live Herdr on port 7341. |
+| `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
+| `bellwether record F [--scrub]` | Run live and append deltas to `F`. |
+| `bellwether replay F [--speed n]` | Serve the overlay from a recording. |
+| `bellwether scrub IN OUT` | Rewrite a recording with repo, branch and label names hashed and speech removed. |
+
+`run`, `record` and `replay` pass adapter flags through; `--help` lists them.
+
+### What `install` writes
+
+| | Claude Code | GitHub Copilot CLI |
+|---|---|---|
+| Config dir | `~/.claude` or `$CLAUDE_CONFIG_DIR` | `~/.copilot` or `$COPILOT_HOME` |
+| Skill | `skills/bellwether/SKILL.md` | `skills/bellwether/SKILL.md` |
+| Hooks | role tag on session start, message tag before `herdr` sends | the same |
+| `settings.json` | `SessionStart` and `PreToolUse` entries | `SessionStart` and `PreToolUse` entries |
+
+Herdr's own entries and anything you added stay untouched, and running it twice changes
+nothing. A missing config dir is skipped, not created, so start each agent once first. Let
+Herdr detect your agents with `herdr integration install claude` (or `copilot`). Older
+Copilot CLI builds without skills ignore the skill; the hooks still work.
+
+The adapter itself is agent-agnostic: it reads Herdr's `agent` field and draws `claude`,
+`copilot`, `codex` and anything else the same way.
 
 ### Record and share a replay
 
@@ -146,230 +303,22 @@ bellwether record session.jsonl --scrub   # hashes repo, branch and labels
 bellwether replay session.jsonl --speed 4
 ```
 
-Never publish a recording without `--scrub`.
+Never publish a recording without `--scrub`. `pnpm blog` builds a static, adapter-free page
+that plays a scrubbed recording, for embedding in a blog post.
 
-More: [writing a skin pack](docs/themes.md), [OBS guide](docs/obs.md),
-[architecture and plan](docs/PLAN.md).
+## More
 
----
+- [Writing a skin pack](docs/themes.md)
+- [Using Bellwether in OBS](docs/obs.md)
+- [Development: running from source, layout, adapter flags](docs/development.md)
+- [Architecture and plan](docs/PLAN.md)
+- [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)
 
-# Reference
-
-## Run from source
-
-Needs Node 20+ and pnpm (`corepack enable` gives you the pinned version).
-
-```sh
-pnpm install
-pnpm mock        # build, then serve mock agents + the overlay on one port
-```
-
-Open <http://127.0.0.1:7341/>. Parties of pixel agents walk along the bottom of the
-window; the party label and the beacon's light show the rolled-up status (green
-working, yellow done, red pulsing blocked, white idle, grey unknown). Blocked members
-stop and hop, and speech bubbles show `say` lines.
-
-For development with hot reload:
-
-```sh
-pnpm dev         # adapter mock server on :7341 and Vite on :5173
-```
-
-Open <http://127.0.0.1:5173/>. If the adapter is not reachable the page falls back to an
-in-browser mock and says so in the corner chip.
-
-Page options (query string):
-
-| Option | Effect |
-|---|---|
-| `?transparent` | No backdrop or chip. Use this for an OBS browser source. |
-| `?pack=aesir` | Skin pack: `neutral` (Workshop Crew, default), `aesir`, `wayfarers`, `scifi` (Deep Space), or a private folder under `themes/`. Overrides `pack` in `bellwether.toml`. |
-| `?scale=4` | Pixel scale, 1 to 6 (default 3). |
-| `?source=mock` | Skip the adapter and run the mock in the browser. |
-| `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
-
-Characters come from the skin pack's 24x32 sprite sheets: each role has its own sheet,
-members walk while working, raise a hand when blocked, wave when done, talk while a
-speech bubble is up, and blink when idle. The beacon's status light and each cloak are
-tinted through the sheet's masks, and bubbles and party nameplates use the pack's UI
-pieces. A pack without `art.json` falls back to procedural figures from `theme.json`.
-
-Pick a pack with `pack = "aesir"` in `bellwether.toml`, `--pack aesir` or
-`BELLWETHER_PACK=aesir` on the adapter (it serves the choice as `/config.json`), or
-`?pack=` in the URL. Unknown names fall back to `neutral`.
-
-### Map mode
-
-`?mode=map` (or press `m` to toggle with strip mode) shows a pixel world. Each repo is a
-settlement placed by hashing its path into a grid, so it stays put between runs. Each
-party camps beside its repo's settlement, with a glow in its rolled-up status colour
-(green working, yellow done, red pulsing blocked). Members wander around the camp;
-blocked ones stand still. When a member speaks (a `say` token, or an inferred hand-off
-from a teammate who just finished) it walks over to a teammate, or to a party camped at
-the same settlement, and the speech bubble shows. A message one agent sends another
-walks (or, for an orchestrator, rides) straight to the agent it is for.
-
-- Click a glow to zoom into that party. A panel
-  lists its members with role, agent, status and their latest line. Esc, the panel's
-  close button, or clicking empty ground zooms back out.
-- The pack's map tileset and props (settlements, camps, campfires, glow) are used; pick
-  the pack as above.
-
-Layout, terrain, camera, chatter and wandering are pure modules under
-`packages/renderer/src/map/` with tests; `src/pixi/map.ts` is the thin Pixi scene.
-
-To watch your real Herdr agents instead, run the adapter against the live socket:
-
-```sh
-pnpm build
-node packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist
-```
-
-Adapter flags (`--help` for all): `--live` / `--mock` / `--replay <file.jsonl>`,
-`--session <name>` or `--all`, `--socket <path>`, `--record <file.jsonl>` (add `--scrub`, or `scrub = true` in `bellwether.toml`, to hash repo, branch and workspace labels and strip `say` text and pane titles), `--scrub-file <in.jsonl> <out.jsonl>`, `--actions` (or `actions = true`: let the overlay prompt and send keys to agents; focus is always allowed), `--print`,
-`--port`, `--serve <dir>`, `--pack <name>`. `source = "live"` in `bellwether.toml` or
-`BELLWETHER_SOURCE=live` sets the default.
-
-## Overlay on your desktop
-
-`packages/shell` wraps the strip in a transparent, frameless, always-on-top,
-click-through Electron window the width of one monitor, pinned to its bottom edge.
-
-```sh
-pnpm install     # downloads the Electron binary (CI skips it with ELECTRON_SKIP_BINARY_DOWNLOAD=1)
-pnpm shell       # builds adapter and renderer, then launches the overlay
-```
-
-The shell attaches to an adapter already serving `http://127.0.0.1:7341/` or, if none
-answers, spawns `packages/adapter/dist/bin.js --live --all --serve packages/renderer/dist`.
-The tray icon menu has: switch strip/map (reloads with `?mode=map`), pick skin (reloads
-with `?pack=`), pick monitor, pick
-Herdr session (restarts a spawned adapter with `--session`), and quit. Choices persist in
-`shell.json` in Electron's userData folder. Set `BELLWETHER_ADAPTER_BIN` or
-`BELLWETHER_RENDERER_DIR` to point at other builds.
-
-Guides: [using the page in OBS](docs/obs.md), [writing a skin pack](docs/themes.md).
-
-Checks, the same ones CI runs:
-
-```sh
-pnpm typecheck && pnpm test && pnpm build
-```
-
-Double-click a member in strip mode (browser or OBS interact window) to jump the Herdr TUI to that pane. The overlay window is click-through, so this is for the browser view; `--actions` also enables `prompt` and `sendKeys` messages from clients.
-
-## CLI and replay
-
-Once published, install the CLI with `npm install -g @pelotto-tech/bellwether` and use `bellwether <cmd>` directly. It bundles the adapter, overlay page and desktop shell (`bellwether overlay`); Electron itself is fetched on first use. `pnpm shell` does the same from a checkout.
-
-From a source checkout the `bellwether` binary is not on your PATH. Run it through pnpm
-(it builds on first use; `BELLWETHER_REBUILD=1` forces a rebuild):
-
-```sh
-pnpm bellwether run
-pnpm bellwether install
-```
-
-Everywhere below, `bellwether <cmd>` means `pnpm bellwether <cmd>` unless you have linked it
-globally with `pnpm build && cd packages/cli && pnpm link --global`.
-
-```sh
-bellwether run                       # live Herdr, overlay at http://127.0.0.1:7341/
-bellwether record session.jsonl --scrub
-bellwether replay session.jsonl --speed 4
-bellwether scrub in.jsonl out.jsonl  # hash repo/branch/labels, drop speech text
-bellwether orchestrate -- copilot --autopilot --agent manwe  # new "<repo> Orchestration" workspace
-```
-
-`pnpm blog` builds a static, adapter-free bundle in `blog/`: the renderer plus the
-scrubbed demo recording in `docs/demo/`. Host it anywhere and embed
-`embed.html?pack=aesir&scale=3`, or point `?replay=<url>&speed=2` at your own scrubbed
-recording. Never publish an unscrubbed recording.
-
-## Layout
-
-```
-packages/adapter    world model, mock source, WebSocket server, recorder/replayer; Herdr client next
-packages/renderer   PixiJS strip and map modes and the theme loader (web page)
-packages/shell      Electron overlay window + tray
-packages/cli        bellwether install | uninstall | run | record | replay | scrub
-themes/neutral      ships with the repo
-themes/<private>    your own skins, gitignored
-docs/               plan and research artifacts
-```
-
-## Data sources
-
-The adapter reads from a mock source (default) or live Herdr. Pick one in
-`bellwether.toml` (gitignored) or with `BELLWETHER_SOURCE=mock|live`:
-
-```toml
-source = "live"
-[herdr]
-sessions = "all"        # every running session; or ["default", "overlay-dev"]
-# socket = "..."        # explicit socket or pipe path
-```
-
-`pnpm --filter @bellwether/adapter build && node packages/adapter/dist/bin.js --live --session overlay-dev`
-prints deltas as JSON lines.
-
-## Research artifacts
-
-`docs/research/` holds the verified protocol details this project rests on: the Herdr
-TUI API schema (protocol 22), herdr-core's OpenRPC schema, the raw named-pipe probe
-scripts, and a captured `working` → `idle` event log from a real agent pane.
-
-## Supported agents
-
-Claude Code and GitHub Copilot CLI are first-class targets for the installer. The
-adapter itself is agent-agnostic: it reads Herdr's `agent` field (`claude`, `copilot`,
-`codex`, ...) and draws every agent the same way, so anything Herdr recognizes shows up.
-Only the installer (`packages/cli`) knows agents apart.
-
-### Setup
-
-1. Let Herdr detect each agent and resume its sessions:
-
-   ```sh
-   herdr integration install claude
-   herdr integration install copilot
-   ```
-
-2. Install Bellwether's role tagging for every agent it finds:
-
-   ```sh
-   bellwether agents       # what is on PATH and which config dirs exist
-   bellwether install      # all present agents
-   bellwether install --agent copilot   # or just one
-   ```
-
-   For each agent whose config dir exists, this writes:
-
-   | | Claude Code | GitHub Copilot CLI |
-   |---|---|---|
-   | Config dir | `~/.claude` or `$CLAUDE_CONFIG_DIR` | `~/.copilot` or `$COPILOT_HOME` |
-   | Skill pack | `skills/bellwether/SKILL.md` | `skills/bellwether/SKILL.md` |
-   | Role hook | `hooks/bellwether-role.sh` (+ `.ps1`) | `hooks/bellwether-role.sh` (+ `.ps1`) |
-   | `settings.json` | `SessionStart` group with a `command` hook | flat `SessionStart` entry with `bash` and `powershell` |
-
-   Herdr's own entries and anything you added stay untouched. Running it twice changes
-   nothing. A missing config dir is skipped, not created: start the agent once first.
-
-3. Give panes a role. Either split a pane with `HERDR_ROLE=<role>` in its environment
-   (the hook tags it on session start), or let the agent follow the skill pack and tag
-   itself. Roles: `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`,
-   `researcher`, `writer`, `ops`, `generic`.
-
-`bellwether uninstall` removes only what `install` wrote.
-
-Older Copilot CLI builds without skills support ignore the skill pack; the hook still
-works. Paste the contents of `SKILL.md` into `AGENTS.md` or
-`.github/copilot-instructions.md` if you want the instructions there.
+The screenshots and GIFs in this README are rendered from scripted, made-up agent feeds by
+`node tools/docshots/shoot.mjs`.
 
 ## License
 
 Apache License 2.0, the same as Herdr. Copyright 2026 Pelotto Technologies. See
-[LICENSE](LICENSE). The public skin packs (`neutral`, `aesir`, `wayfarers`, `scifi`) are original
-art under the same license.
-
-Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+[LICENSE](LICENSE). The public skin packs (`neutral`, `aesir`, `wayfarers`, `scifi`) are
+original art under the same license.
