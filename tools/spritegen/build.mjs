@@ -11,8 +11,9 @@ import * as Wd from './world.mjs';
 import neutral from './packs/neutral.mjs';
 import aesir from './packs/aesir.mjs';
 import wayfarers from './packs/wayfarers.mjs';
+import scifi from './packs/scifi.mjs';
 
-export const PACKS = [neutral, aesir, wayfarers];
+export const PACKS = [neutral, aesir, wayfarers, scifi];
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const THEMES_DIR = path.resolve(here, '../../themes');
 
@@ -63,6 +64,24 @@ WORLD_STYLE.wayfarers = {
     ui: { p: '#fbf6ea', P: '#e8dfca', w: '#fbf6ea', W: '#e0d6c0' },
   },
   minimap: { grass: '#74b850', path: '#a87b4f', water: '#4a9ad9', tree: '#367838', building: '#e8c44a', background: '#1a1410' },
+};
+WORLD_STYLE.scifi = {
+  ...WORLD_STYLE.neutral,
+  building: 'dome',
+  palette: {
+    ...WORLD_STYLE.neutral.palette,
+    o: '#0c1020', g: '#3e8478', G: '#62b89a', h: '#2c6460', f: '#5ae8ff', F: '#ff6ad0',
+    d: '#7a6a8e', D: '#5a4c70', p: '#9a8cae', P: '#4a3e62',
+    L: '#7a4aa8', K: '#4a2a78', J: '#a678d8', t: '#5a4e6e', T: '#3e3450',
+    u: '#2a62d8', v: '#5aa4ff', W: '#d0f4ff', s: '#c8d4e4', a: '#ffb23a',
+    r: '#aab4c8', R: '#d6deec', q: '#5e667c', y: '#8af0ff', Y: '#2ab4d0',
+  },
+  overrides: {
+    settlement: { k: '#2a3048', K: '#1a2036', q: '#4a526a' },
+    mount: { b: '#aab4c4', B: '#7a8498', y: '#3ad0e8', Y: '#1a90b0', t: '#3ad0e8', m: '#3ad0e8', k: '#2a2f3c' },
+    ui: { p: '#f2fbff', P: '#cfe6f2', w: '#f2fbff', W: '#c4dcea', n: '#1e3a5a', N: '#12243a' },
+  },
+  minimap: { grass: '#3e8478', path: '#7a6a8e', water: '#2a62d8', tree: '#4a2a78', building: '#8af0ff', background: '#0c1020' },
 };
 WORLD_STYLE.neutral.overrides.mount = { t: '#4a2e1c', m: '#4a2e1c', y: '#3a6ab8', Y: '#2a4e8a' };
 WORLD_STYLE.neutral.overrides.ui = { p: '#ffffff', P: '#e0e0e0' };

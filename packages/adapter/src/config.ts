@@ -28,7 +28,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  *
  * ```toml
  * source = "live"            # or "mock"
- * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, or a private theme folder
+ * pack = "aesir"             # skin pack: neutral, aesir, wayfarers, scifi, or a private theme folder
  * scrub = true               # hash labels and strip say text in recordings
  * actions = true             # let the overlay prompt and send keys to agents (focus is always on)
  * [herdr]
