@@ -61,3 +61,12 @@ describe('minimal labels', () => {
     expect(() => parseSourceConfig('minimal = "yes"')).toThrow(/minimal/);
   });
 });
+
+describe('bubbles', () => {
+  it('reads bubbles = false from toml and carries it only when false', () => {
+    expect(parseSourceConfig('bubbles = false').bubbles).toBe(false);
+    expect(parseSourceConfig('bubbles = true').bubbles).toBeUndefined();
+    expect(parseSourceConfig('source = "mock"').bubbles).toBeUndefined();
+    expect(() => parseSourceConfig('bubbles = "no"')).toThrow(/bubbles/);
+  });
+});

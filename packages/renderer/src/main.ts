@@ -25,12 +25,17 @@ function deltaUrl(): string | null {
 }
 
 /** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
-async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean }> {
+async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean; bubbles?: boolean }> {
   try {
     const res = await fetch('./config.json', { cache: 'no-store' });
     if (!res.ok) return {};
-    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown; minimal?: unknown };
-    return { ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}), ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}), ...(typeof cfg.minimal === 'boolean' ? { minimal: cfg.minimal } : {}) };
+    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown; minimal?: unknown; bubbles?: unknown };
+    return {
+      ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}),
+      ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}),
+      ...(typeof cfg.minimal === 'boolean' ? { minimal: cfg.minimal } : {}),
+      ...(typeof cfg.bubbles === 'boolean' ? { bubbles: cfg.bubbles } : {}),
+    };
   } catch {
     return {};
   }
@@ -53,11 +58,17 @@ async function main() {
   document.body.appendChild(app.canvas);
 
   const feed = new FeedState(theme.sayTtlMs);
+  // Chat bubbles: `?bubbles=0` beats bellwether.toml (`bubbles = false`); B flips them for this page.
+  feed.bubblesOn = params.has('bubbles') ? params.get('bubbles') !== '0' : served.bubbles !== false;
   const scene =
     mode === 'map'
       ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
       : new StripScene(app, theme, feed, scale, art, minimal);
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'b' || e.key === 'B') {
+      feed.bubblesOn = !feed.bubblesOn;
+      return;
+    }
     if (e.key !== 'm' && e.key !== 'M') return;
     const next = new URLSearchParams(location.search);
     next.set('mode', mode === 'map' ? 'strip' : 'map');
@@ -69,10 +80,11 @@ async function main() {
     const before = d.kind === 'member' ? feed.world.parties[d.partyId] : undefined;
     feed.apply(d, performance.now());
     // Inferred chatter: a hand-off reads as the finished member saying something.
-    if (d.kind === 'member' && before) {
+    // A real message to this member already explains why it started; no need to guess one.
+    if (d.kind === 'member' && before && !feed.addressedTo(d.partyId, d.member.paneId, performance.now())) {
       const after = feed.world.parties[d.partyId];
       const hand = after && inferHandoff(before, after, d.member);
-      if (hand) feed.apply({ t: d.t, kind: 'say', partyId: d.partyId, paneId: hand.from.paneId, text: hand.text }, performance.now());
+      if (hand) feed.apply({ t: d.t, kind: 'say', partyId: d.partyId, paneId: hand.from.paneId, text: hand.text, to: { partyId: d.partyId, paneId: d.member.paneId } }, performance.now(), true);
     }
   };
   const onMode = (mode: FeedMode) => {

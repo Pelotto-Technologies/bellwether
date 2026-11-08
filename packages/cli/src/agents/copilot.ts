@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { asArray, asObject, mentions, type JsonObject } from '../json-file.js';
+import { SAY_MARKER } from '../hook/say.js';
 import { HOOK_BASENAME } from '../skill.js';
 import { pruneEvent } from './claude.js';
 import { posixPath } from './paths.js';
@@ -37,5 +38,20 @@ export const copilot: AgentTarget = {
     const kept = hooks.SessionStart.filter((e) => !mentions(e, HOOK_BASENAME));
     if (kept.length === hooks.SessionStart.length) return settings;
     return pruneEvent(settings, hooks, kept);
+  },
+
+  addToolHook(settings, hook) {
+    const hooks = asObject(settings.hooks);
+    const entries = asArray(hooks.PreToolUse);
+    const entry: JsonObject = { type: 'command', bash: hook.posix, powershell: hook.powershell, timeoutSec: 10 };
+    return { ...settings, hooks: { ...hooks, PreToolUse: [...entries, entry] } };
+  },
+
+  removeToolHook(settings) {
+    const hooks = asObject(settings.hooks);
+    if (!Array.isArray(hooks.PreToolUse)) return settings;
+    const kept = hooks.PreToolUse.filter((e) => !mentions(e, SAY_MARKER));
+    if (kept.length === hooks.PreToolUse.length) return settings;
+    return pruneEvent(settings, hooks, kept, 'PreToolUse');
   },
 };

@@ -148,3 +148,34 @@ describe('agent leaving its pane', () => {
     expect(applyStatusChange(parties, ev, ctx)).toBeUndefined();
   });
 });
+
+describe('messages between agents (say_to)', () => {
+  function snap(tokens: Record<string, string>) {
+    const s = loadSnapshot();
+    s.agents = s.agents.map((a) => (a.pane_id === 'w2:p1' ? { ...a, name: 'impl' } : a.pane_id === 'w1:p3' ? { ...a, tokens: { role: 'architect', ...tokens } } : a));
+    s.panes = s.panes.map((p) => (p.pane_id === 'w1:p3' ? { ...p, tokens: { role: 'architect', ...tokens } } : p));
+    return s;
+  }
+
+  it('resolves the target by agent name or pane id, across workspaces', () => {
+    expect(partiesFromSnapshot(snap({ say: 'Fix it', say_to: 'impl', say_id: 'a' }), ctx)['default/w1']!.members['w1:p3']).toMatchObject({ say: 'Fix it', sayTo: 'w2:p1', sayId: 'a' });
+    expect(partiesFromSnapshot(snap({ say: 'Fix it', say_to: 'w2:p1' }), ctx)['default/w1']!.members['w1:p3']!.sayTo).toBe('w2:p1');
+  });
+
+  it('drops a say sent to a pane without an agent (a shell command, not chatter)', () => {
+    const m = partiesFromSnapshot(snap({ say: 'npm test', say_to: 'w1:p1', say_id: 'a' }), ctx)['default/w1']!.members['w1:p3']!;
+    expect(m.say).toBeUndefined();
+    expect(m.sayTo).toBeUndefined();
+  });
+
+  it('emits a say delta addressed to the listener, again for a repeated line', () => {
+    const a = partiesFromSnapshot(snap({ say: 'Fix it', say_to: 'impl', say_id: 'a' }), ctx);
+    const b = partiesFromSnapshot(snap({ say: 'Fix it', say_to: 'impl', say_id: 'b' }), ctx);
+    const base = partiesFromSnapshot(snap({}), ctx);
+    expect(diffParties(base, a, 1).filter((d) => d.kind === 'say')).toEqual([
+      { t: 1, kind: 'say', partyId: 'default/w1', paneId: 'w1:p3', text: 'Fix it', to: { partyId: 'default/w2', paneId: 'w2:p1' } },
+    ]);
+    expect(diffParties(a, b, 2).filter((d) => d.kind === 'say')).toHaveLength(1);
+    expect(diffParties(a, a, 3)).toEqual([]);
+  });
+});

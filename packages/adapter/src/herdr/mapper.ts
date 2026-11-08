@@ -35,6 +35,7 @@ export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = f
   };
   if (pane.title) m.title = pane.title;
   if (tokens.say) m.say = tokens.say;
+  if (tokens.say && tokens.say_id) m.sayId = tokens.say_id;
   return m;
 }
 
@@ -90,6 +91,7 @@ export function partiesFromSnapshot(snap: SessionSnapshot, ctx: MapContext): Rec
     if (!ms) byWs.set(rec.workspace_id, (ms = {}));
     ms[m.paneId] = m;
   }
+  resolveSayTargets(snap, byWs);
   const out: Record<string, Party> = {};
   for (const ws of snap.workspaces) {
     // A workspace with no agents has nothing to show; it appears once an agent starts.
@@ -99,6 +101,42 @@ export function partiesFromSnapshot(snap: SessionSnapshot, ctx: MapContext): Rec
     out[p.id] = p;
   }
   return out;
+}
+
+/**
+ * A message hook writes `say_to` as the sender typed the target: a pane id, an agent
+ * name or a terminal id. Resolve it to a member's pane id. A `say` addressed to
+ * something that is not an agent (`herdr pane run w1:p4 "npm test"` into a shell)
+ * is not chatter, so it is dropped.
+ */
+function resolveSayTargets(snap: SessionSnapshot, byWs: Map<string, Record<string, Member>>): void {
+  const members = new Set<string>();
+  for (const ms of byWs.values()) for (const id of Object.keys(ms)) members.add(id);
+  const records = [...(snap.agents ?? []), ...(snap.panes ?? [])].filter((r) => members.has(r.pane_id));
+  const tokensOf = new Map<string, Record<string, string>>();
+  for (const r of [...(snap.agents ?? []), ...(snap.panes ?? [])]) if (!tokensOf.has(r.pane_id)) tokensOf.set(r.pane_id, r.tokens ?? {});
+  for (const ms of byWs.values()) {
+    for (const m of Object.values(ms)) {
+      const to = tokensOf.get(m.paneId)?.say_to;
+      if (!to || !m.say) continue;
+      const target = resolveTargetPane(to, records);
+      if (target && target !== m.paneId) m.sayTo = target;
+      else {
+        delete m.say;
+        delete m.sayId;
+      }
+    }
+  }
+}
+
+export function resolveTargetPane(target: string, records: Array<PaneInfo | AgentInfo>): string | undefined {
+  const t = target.trim();
+  const lower = t.toLowerCase();
+  return (
+    records.find((r) => r.pane_id === t)?.pane_id ??
+    records.find((r) => 'name' in r && typeof r.name === 'string' && r.name.toLowerCase() === lower)?.pane_id ??
+    records.find((r) => r.terminal_id === t)?.pane_id
+  );
 }
 
 /** Every pane id in the snapshot, for per-pane status subscriptions. */
@@ -129,7 +167,7 @@ export function applyStatusChange(
 }
 
 function sameMember(a: Member, b: Member): boolean {
-  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say;
+  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo;
 }
 
 function samePartyHeader(a: Party, b: Party): boolean {
@@ -147,19 +185,27 @@ function samePartyHeader(a: Party, b: Party): boolean {
 /** Deltas that turn `prev` into `next`. New parties and header changes send the whole party. */
 export function diffParties(prev: Record<string, Party>, next: Record<string, Party>, t: number): Delta[] {
   const out: Delta[] = [];
+  const owner = new Map<string, string>();
+  for (const p of Object.values(next)) for (const id of Object.keys(p.members)) owner.set(id, p.id);
+  const say = (partyId: string, m: Member): Delta => {
+    const d: Delta = { t, kind: 'say', partyId, paneId: m.paneId, text: m.say! };
+    const toParty = m.sayTo && owner.get(m.sayTo);
+    if (toParty) d.to = { partyId: toParty, paneId: m.sayTo! };
+    return d;
+  };
   for (const id of Object.keys(prev)) if (!next[id]) out.push({ t, kind: 'removed', partyId: id });
   for (const [id, np] of Object.entries(next)) {
     const op = prev[id];
     if (!op) {
       out.push({ t, kind: 'party', party: np });
-      for (const m of Object.values(np.members)) if (m.say) out.push({ t, kind: 'say', partyId: id, paneId: m.paneId, text: m.say });
+      for (const m of Object.values(np.members)) if (m.say) out.push(say(id, m));
       continue;
     }
     for (const paneId of Object.keys(op.members)) if (!np.members[paneId]) out.push({ t, kind: 'removed', partyId: id, paneId });
     for (const [paneId, nm] of Object.entries(np.members)) {
       const om = op.members[paneId];
       if (!om || !sameMember(om, nm)) out.push({ t, kind: 'member', partyId: id, member: nm });
-      if (nm.say && nm.say !== om?.say) out.push({ t, kind: 'say', partyId: id, paneId, text: nm.say });
+      if (nm.say && (nm.say !== om?.say || nm.sayId !== om?.sayId)) out.push(say(id, nm));
     }
     if (!samePartyHeader(op, np)) out.push({ t, kind: 'party', party: np });
   }

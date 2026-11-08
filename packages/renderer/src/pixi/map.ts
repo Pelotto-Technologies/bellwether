@@ -29,6 +29,8 @@ const HOME_RADIUS = 40;
 const FIGURE_SCALE = 0.75;
 /** Leaders stand around their settlement, closer in than camps. */
 const LEADER_RADIUS = 12;
+/** A member on foot walks over to talk only to someone this close, in world pixels. */
+const WALK_TO_TALK = 160;
 /** Keep characters this far inside the map edge, in world pixels. */
 const EDGE = 8;
 
@@ -531,14 +533,25 @@ export class MapScene {
 
   private stepMember(mv: MemberView, ctx: StepCtx, m: Member, home: { x: number; y: number }, radius: number, beacon: boolean, now: number): void {
     const say = this.feed.say(ctx.sayParty, m.paneId, now);
+    const talking = this.feed.talking(ctx.sayParty, m.paneId, now);
     // A speaker walks over to its partner; a listener holds still and turns to face them.
-    let meet = ctx.meetPoint;
-    if (say && !meet) {
-      const partner = pickPartner(this.fellowships.world, this.layout.camps, ctx.sayParty, m.paneId);
-      const pv = partner && this.parties.get(partner.partyId)?.members.get(partner.paneId);
-      if (pv && partner && !(partner.partyId === ctx.sayParty && partner.paneId === m.paneId)) meet = { x: pv.w.x, y: pv.w.y };
+    // A real message names its listener; an orchestrator rides out to a far camp, a member
+    // on foot only crosses to someone nearby. Without a named listener, pick a likely one.
+    let meet: { x: number; y: number } | undefined;
+    if (talking) {
+      const to = this.feed.sayTo(ctx.sayParty, m.paneId, now);
+      const tv = to && this.viewOf(to.partyId, to.paneId);
+      if (to) {
+        if (tv && tv !== mv && (mv.mount || Math.hypot(tv.w.x - mv.w.x, tv.w.y - mv.w.y) <= WALK_TO_TALK)) meet = { x: tv.w.x, y: tv.w.y };
+      } else {
+        meet = ctx.meetPoint;
+        if (!meet) {
+          const partner = pickPartner(this.fellowships.world, this.layout.camps, ctx.sayParty, m.paneId);
+          const pv = partner && this.parties.get(partner.partyId)?.members.get(partner.paneId);
+          if (pv && partner && !(partner.partyId === ctx.sayParty && partner.paneId === m.paneId)) meet = { x: pv.w.x, y: pv.w.y };
+        }
+      }
     }
-    if (!say) meet = undefined;
     let speed: number | undefined;
     const mount = mv.mount;
     if (ctx.summon) {
@@ -571,7 +584,7 @@ export class MapScene {
     }
     const figH = mv.figure ? this.figures!.art.character.h * FIGURE_SCALE : SPRITE_H;
     if (mv.figure) {
-      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking: !!say, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
+      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
     } else {
       const frame = FRAME_NAMES[walkFrame(moving, this.t, mv.phase)]!;
       mv.sprite.texture = this.frameTexture(m.role, frame, beacon);
@@ -593,6 +606,14 @@ export class MapScene {
       mv.bubble.scale.set(this.textScale);
       mv.bubble.position.set(mv.w.x - (mv.bg.width * this.textScale) / 2, mv.w.y - figH - mv.bg.height * this.textScale - 2);
     }
+  }
+
+  /** The character drawn for a pane: a camp member, or an orchestrator standing at its settlement. */
+  private viewOf(partyId: string, paneId: string): MemberView | undefined {
+    const camp = this.parties.get(partyId)?.members.get(paneId);
+    if (camp) return camp;
+    for (const [id, mv] of this.leaders) if (this.leaderParty.get(id) === partyId && id.endsWith(`/${paneId}`)) return mv;
+    return undefined;
   }
 
   /** Beam a new member in and puff sparks in its status colour at its feet. */

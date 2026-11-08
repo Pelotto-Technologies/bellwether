@@ -4,12 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { adapterArgs, locateRuntime, RUN_COMMANDS, type RunCommand } from './run.js';
 import { launchOverlay } from './overlay.js';
 import { detect, install, systemContext, uninstall, type Outcome } from './install.js';
+import { readFileSync } from 'node:fs';
+import { runSayHook } from './hook/say.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
 
 commands:
   agents      show which coding agents are present
-  install     write the skill pack and SessionStart role hook for each present agent
+  install     write the skill pack, role hook and message hook for each present agent
   uninstall   remove only what install wrote
   overlay     open the desktop overlay (click-through, always on top, tray menu)
   run         serve the overlay from live Herdr (adapter flags pass through)
@@ -49,6 +51,17 @@ function main(argv: string[]): number {
     return spawnSync(process.execPath, [rt.adapterBin, ...args], { stdio: 'inherit' }).status ?? 1;
   }
   if (cmd === 'overlay') return launchOverlay(rest);
+  if (cmd === 'hook' && rest[0] === 'say') {
+    // Called by the agent before each shell command. Never fails the tool call.
+    let stdin = '';
+    try {
+      stdin = readFileSync(0, 'utf8');
+    } catch {
+      return 0;
+    }
+    runSayHook({ stdin, env: process.env, run: (bin, args) => void spawnSync(bin, args, { stdio: 'ignore', timeout: 3000, windowsHide: true }) });
+    return 0;
+  }
   const ctx = systemContext();
   const targets = selectTargets(rest);
   switch (cmd) {

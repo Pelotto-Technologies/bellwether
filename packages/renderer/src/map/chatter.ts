@@ -46,5 +46,5 @@ export function inferHandoff(before: Party | undefined, after: Party, changed: M
     .filter((m) => m.paneId !== changed.paneId && (m.status === 'done' || m.status === 'idle') && changed.lastChange - m.lastChange >= 0 && changed.lastChange - m.lastChange <= maxGapMs)
     .sort((a, b) => b.lastChange - a.lastChange)[0];
   if (!from) return undefined;
-  return { from, text: `Over to you, ${changed.role}` };
+  return { from, text: "Over to you" };
 }

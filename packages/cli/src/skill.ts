@@ -38,7 +38,12 @@ worktree commands so they share your repo.
 When you start a member in a pane, tag that pane with its role, or split the pane with
 \`HERDR_ROLE=<role>\` in its environment and the installed hook tags it for you.
 
-When you hand a member work, you may set a short speech line (under 60 characters,
+Messages you send another agent with \`herdr agent prompt\`, \`herdr pane run\` or
+\`herdr pane send-text\` show up as speech bubbles on their own: the installed hook
+tags your pane before the command runs. Keep the first line of a message short and
+free of secrets; it is what the bubble shows.
+
+For anything else, you may set a short speech line yourself (under 60 characters,
 never secrets, paths or customer data):
 
 \`\`\`sh
