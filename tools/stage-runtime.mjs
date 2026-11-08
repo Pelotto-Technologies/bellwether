@@ -23,6 +23,7 @@ cpSync(join(root, 'packages/adapter/package.json'), join(out, 'adapter/package.j
 cpSync(join(root, 'packages/renderer/dist'), join(out, 'renderer/dist'), { recursive: true });
 mkdirSync(join(out, 'shell'), { recursive: true });
 cpSync(join(root, 'packages/shell/dist'), join(out, 'shell/dist'), { recursive: true });
+cpSync(join(root, 'packages/shell/assets'), join(out, 'shell/assets'), { recursive: true });
 cpSync(join(root, 'packages/shell/package.json'), join(out, 'shell/package.json'));
 cpSync(join(root, 'LICENSE'), join(root, 'packages/cli/LICENSE'));
 cpSync(join(root, 'README.md'), join(root, 'packages/cli/README.md'));

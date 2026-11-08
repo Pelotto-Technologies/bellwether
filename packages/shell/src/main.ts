@@ -1,11 +1,12 @@
 // Thin Electron entry. All decisions live in the pure modules next to this file.
 import { type ChildProcess, spawn } from 'node:child_process';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { type DisplayInfo, pickDisplay, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
 import { configPath, loadConfig, saveConfig, type ShellConfig } from './config.js';
-import { adapterPaths, missingBuilds } from './paths.js';
+import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
 import { applyAction, buildMenuModel, type MenuAction, type MenuItem } from './tray-menu.js';
 import { errorPage, waitForReady } from './ready.js';
 import { rendererUrl } from './url.js';
@@ -148,11 +149,12 @@ async function dispatch(action: MenuAction): Promise<void> {
 }
 
 function trayIcon(): Electron.NativeImage {
-  // 16x16 solid amber square (BGRA); avoids shipping a binary asset.
-  const size = 16;
-  const buf = Buffer.alloc(size * size * 4);
-  for (let i = 0; i < size * size; i++) buf.set([0x2e, 0xa8, 0xf0, 0xff], i * 4);
-  return nativeImage.createFromBitmap(buf, { width: size, height: size });
+  const dir = assetsDir();
+  // macOS: the "Template" suffix makes Electron mark the image as a template, so the
+  // menu bar tints it for light and dark. Windows and Linux use the colour sheep.
+  const img = nativeImage.createFromPath(join(dir, process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png'));
+  if (process.platform === 'darwin') img.setTemplateImage(true);
+  return img;
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -169,6 +171,7 @@ if (!app.requestSingleInstanceLock()) {
     await Promise.all([startAdapter(), refreshSessions()]);
     await waitForReady(() => reachable(cfg.url));
     createWindow();
+    if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(join(assetsDir(), 'icon.png')));
     tray = new Tray(trayIcon());
     tray.setToolTip('Bellwether');
     tray.on('click', () => void refreshSessions().then(rebuildMenu));

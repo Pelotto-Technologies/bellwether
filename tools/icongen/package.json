@@ -1,0 +1,12 @@
+{
+  "name": "@bellwether/icongen",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "Generates the Bellwether app icon, tray icons and logo from code.",
+  "scripts": {
+    "icons": "node build.mjs",
+    "icons:check": "node build.mjs --check",
+    "test": "node --test"
+  }
+}
