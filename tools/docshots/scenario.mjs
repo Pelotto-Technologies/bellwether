@@ -98,4 +98,23 @@ export function castFeed() {
   return [{ t: T0, kind: 'snapshot', world: { machine: 'local', parties } }, { t: T0 + 600_000, kind: 'snapshot', world: { machine: 'local', parties } }];
 }
 
+/** A crowded strip: many small parties across made-up repos, enough to fill several depth rows. */
+export function crowdFeed(count = 32) {
+  const repos = ['atlas', 'pixel-web', 'infra', 'ledger', 'harbor', 'quill', 'orbit', 'sprout'];
+  const branches = ['auth', 'search', 'billing', 'docs', 'perf', 'i18n', 'cache', 'ci', 'export', 'onboarding'];
+  const roles = ['coordinator', 'architect', 'implementer', 'reviewer', 'researcher', 'writer', 'ops', 'implementer'];
+  const statuses = ['working', 'working', 'working', 'idle', 'done'];
+  const parties = {};
+  for (let i = 0; i < count; i++) {
+    const id = `k${i}`;
+    const repo = repos[i % repos.length];
+    const branch = branches[(i * 3) % branches.length];
+    const size = 1 + ((i * 7) % 3);
+    const ms = Array.from({ length: size }, (_, j) => member(`${id}:p${j}`, roles[(i + j * 3) % roles.length], 'claude', statuses[(i + j) % statuses.length]));
+    parties[id] = party(id, repo, `/src/${repo}-${i}`, branch, true, ms);
+  }
+  const world = { machine: 'local', parties };
+  return [{ t: T0, kind: 'snapshot', world }, { t: T0 + 600_000, kind: 'snapshot', world }];
+}
+
 export const toJsonl = (deltas) => deltas.map((x) => JSON.stringify(x)).join('\n') + '\n';

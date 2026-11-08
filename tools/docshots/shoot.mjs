@@ -7,7 +7,7 @@ import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { castFeed, stillFeed, storyFeed, toJsonl } from './scenario.mjs';
+import { castFeed, crowdFeed, stillFeed, storyFeed, toJsonl } from './scenario.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const dist = join(root, 'packages/renderer/dist');
@@ -18,7 +18,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const feeds = {
-  'still.jsonl': toJsonl(stillFeed()), 'story.jsonl': toJsonl(storyFeed()), 'cast.jsonl': toJsonl(castFeed()),
+  'still.jsonl': toJsonl(stillFeed()), 'story.jsonl': toJsonl(storyFeed()), 'cast.jsonl': toJsonl(castFeed()), 'crowd.jsonl': toJsonl(crowdFeed()), 'span.jsonl': toJsonl(crowdFeed(14)),
   // Map stills: an addressed message would walk the orchestrator away from its settlement.
   'map.jsonl': toJsonl(stillFeed({ addressed: false })),
 };
@@ -111,6 +111,46 @@ async function gif(name, query, { seconds = 12, w = 1280, h = 720, width, before
   console.log('wrote', name, `(${n} frames at ${fps.toFixed(1)} fps)`);
 }
 
+/**
+ * Spanning monitors: one page per monitor in a shared context (so they sync over BroadcastChannel),
+ * each showing its slice; frames are stitched side by side with a dark bezel between monitors.
+ */
+async function spanGif(name, query, { widths = [1280, 1920, 1280], h = 230, seconds = 10, width = 1800, rate = 8, colors = 96, trim = 2 } = {}) {
+  if (!name.includes(filter)) return;
+  rmSync(tmp, { recursive: true, force: true });
+  mkdirSync(tmp, { recursive: true });
+  const ctx = await browser.newContext({ deviceScaleFactor: 1 });
+  const total = widths.reduce((a, b) => a + b, 0);
+  const pages = [];
+  let offset = 0;
+  for (const w of widths) {
+    const page = await ctx.newPage();
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(`${base}/?${query}&span=${offset},${total}`);
+    await page.addStyleTag({ content: hideChip });
+    pages.push(page);
+    offset += w;
+  }
+  await pages[0].waitForTimeout(trim * 1000);
+  const start = Date.now();
+  let n = 0;
+  while (Date.now() - start < seconds * 1000) {
+    const id = String(n++).padStart(4, '0');
+    await Promise.all(pages.map((p, k) => p.screenshot({ path: join(tmp, `m${k}_${id}.png`) })));
+  }
+  const fps = (n / ((Date.now() - start) / 1000)).toFixed(2);
+  await ctx.close();
+  const gap = 24;
+  const inputs = widths.flatMap((_, k) => ['-framerate', fps, '-i', join(tmp, `m${k}_%04d.png`)]);
+  const pads = widths.map((w, k) => `[${k}:v]pad=${w + (k < widths.length - 1 ? gap : 0)}:${h}:0:0:color=0x28282e[p${k}]`).join(';');
+  const stack = `${widths.map((_, k) => `[p${k}]`).join('')}hstack=inputs=${widths.length},fps=${rate},scale=${width}:-1:flags=lanczos`;
+  const palette = join(tmp, 'palette.png');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', `${pads};${stack},palettegen=max_colors=${colors}`, palette]);
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-i', palette, '-filter_complex', `${pads};${stack}[x];[x][${widths.length}:v]paletteuse=dither=none:diff_mode=rectangle`, join(out, `${name}.gif`)]);
+  rmSync(tmp, { recursive: true, force: true });
+  console.log('wrote', name, `(${n} frames at ${fps} fps)`);
+}
+
 const STRIP = { w: 1600, h: 230 };
 for (const pack of PACKS) {
   await shot(`${pack}-cast`, `pack=${pack}&replay=/cast.jsonl`, { w: 1500, h: 160 });
@@ -130,6 +170,8 @@ await shot('strip-tiny', `pack=aesir&scale=1&replay=/still.jsonl`, { w: 1280, h:
 await shot('strip-large', `pack=aesir&scale=4&replay=/still.jsonl`, { w: 1280, h: 360 });
 await shot('strip-minimal', `pack=aesir&minimal&replay=/still.jsonl`, STRIP);
 await shot('map-detail', `pack=aesir&mode=map&replay=/map.jsonl`, { wait: 3000, before: async (p) => { await focusParty(p, 'atlas'); await p.waitForTimeout(1500); } });
+await gif('strip-crowd', `pack=aesir&replay=/crowd.jsonl`, { w: 1280, h: 230, seconds: 10, trim: 3, colors: 96, rate: 8 });
+await spanGif('strip-span', `pack=wayfarers&replay=/span.jsonl`);
 await gif('strip-story', `pack=wayfarers&replay=/story.jsonl`, { w: 1280, h: 230, seconds: 18, trim: 0.5 });
 await gif('map-story', `pack=aesir&mode=map&replay=/story.jsonl`, {
   w: 720,

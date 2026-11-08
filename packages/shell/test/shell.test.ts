@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { adapterArgs } from '../src/adapter-args.js';
-import { type DisplayInfo, pickDisplay, stripBounds, windowBounds } from '../src/bounds.js';
+import { type DisplayInfo, pickDisplay, spanLayout, stripBounds, stripHeightFor, windowBounds } from '../src/bounds.js';
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
 import { errorPage, waitForReady } from '../src/ready.js';
 import { existsSync } from 'node:fs';
@@ -176,7 +176,7 @@ describe('modeFromUrl', () => {
 describe('strip size', () => {
   it('sizes the window to the scale, never clipping the banner at 2, 3 or 4', async () => {
     const { stripHeightFor } = await import('../src/bounds.js');
-    expect(stripHeightFor(3)).toBe(162);
+    expect(stripHeightFor(3)).toBe(198);
     expect(stripHeightFor(2)).toBeLessThan(stripHeightFor(3));
     // Character, nameplate (about 14 art px) and banner all sit inside the window.
     for (const s of [1, 2, 3, 4]) expect(stripHeightFor(s)).toBeGreaterThanOrEqual((32 + 12) * s);
@@ -227,5 +227,42 @@ describe('chat bubbles', () => {
     expect(normalizeConfig({ bubbles: false }).bubbles).toBe(false);
     const items = buildMenuModel({ ...DEFAULT_CONFIG, bubbles: false }, [], []);
     expect(items.find((i) => i.kind === 'item' && i.label === 'Hide')).toMatchObject({ checked: true });
+  });
+});
+
+describe('span all monitors', () => {
+  const left: DisplayInfo = {
+    id: 3,
+    label: 'Left',
+    bounds: { x: -1280, y: 100, width: 1280, height: 1024 },
+    workArea: { x: -1280, y: 100, width: 1280, height: 984 },
+  };
+  it('lays one strip across every monitor, left to right, each window on its own bottom edge', () => {
+    const slices = spanLayout([second, primary, left], 3);
+    expect(slices.map((s) => s.displayId)).toEqual([3, 1, 2]);
+    expect(slices.map((s) => s.offset)).toEqual([0, 1280, 3200]);
+    expect(new Set(slices.map((s) => s.total))).toEqual(new Set([1280 + 1920 + 2560]));
+    const h = stripHeightFor(3);
+    expect(slices[0]!.bounds).toEqual({ x: -1280, y: 1124 - h, width: 1280, height: h });
+    expect(slices[2]!.bounds).toEqual({ x: 1920, y: 1240 - h, width: 2560, height: h });
+  });
+  it('is a tray option that only shows with more than one monitor, and survives a reload of the config', () => {
+    const label = 'Span all monitors (strip)';
+    const find = (m: ReturnType<typeof buildMenuModel>) => m.find((i) => i.kind === 'item' && i.label === label);
+    expect(find(buildMenuModel({ mode: 'strip' }, [primary], []))).toBeUndefined();
+    const off = find(buildMenuModel({ mode: 'strip' }, [primary, second], []));
+    expect(off).toMatchObject({ checked: false, action: { type: 'toggle-span' } });
+    const r = applyAction(DEFAULT_CONFIG, { type: 'toggle-span' });
+    expect(r.cfg.span).toBe(true);
+    expect(r.reload).toBe(true);
+    expect(find(buildMenuModel(r.cfg, [primary, second], []))).toMatchObject({ checked: true });
+    expect(normalizeConfig(JSON.parse(JSON.stringify(r.cfg))).span).toBe(true);
+    expect(applyAction(r.cfg, { type: 'toggle-span' }).cfg.span).toBeUndefined();
+    expect(normalizeConfig({ span: 'yes' }).span).toBeUndefined();
+  });
+  it('tells each strip window its slice, and never in map mode', () => {
+    expect(rendererUrl(DEFAULT_CONFIG, { offset: 1280, total: 5760 })).toContain('span=1280%2C5760');
+    expect(rendererUrl({ ...DEFAULT_CONFIG, mode: 'map' }, { offset: 1280, total: 5760 })).not.toContain('span');
+    expect(rendererUrl({ ...DEFAULT_CONFIG, url: 'http://x/?span=1,2' })).not.toContain('span');
   });
 });

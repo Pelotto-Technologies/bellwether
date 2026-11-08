@@ -8,6 +8,7 @@ import { MapScene } from './pixi/map.js';
 import { loadArt } from './pixi/pack.js';
 import { StripScene } from './pixi/strip.js';
 import { pickPack } from './select.js';
+import { parseSpan } from './sim.js';
 
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') === 'map' ? 'map' : 'strip';
@@ -50,6 +51,7 @@ async function main() {
   // `?scale=` beats bellwether.toml; either way it is clamped to a whole number so pixels stay crisp.
   const minimal = params.has('minimal') ? params.get('minimal') !== '0' : served.minimal === true;
   const scale = Math.max(1, Math.min(6, Math.round(Number(params.get('scale') ?? served.scale ?? 3)) || 3));
+  const span = parseSpan(params.get('span'));
   const pack = packData(packName);
   const theme = pack.theme;
   const art = await loadArt(pack);
@@ -63,7 +65,14 @@ async function main() {
   const scene =
     mode === 'map'
       ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
-      : new StripScene(app, theme, feed, scale, art, minimal);
+      : new StripScene(app, theme, feed, scale, art, minimal, span);
+  // Spanning monitors: one window per monitor, each showing its slice of one strip. The leftmost
+  // window leads and shares where everyone is walking, so a party crossing a seam lines up.
+  if (span && scene instanceof StripScene && typeof BroadcastChannel !== 'undefined') {
+    const channel = new BroadcastChannel('bellwether-strip');
+    if (span.offset === 0) setInterval(() => channel.postMessage(scene.walkers()), 100);
+    else channel.onmessage = (e: MessageEvent) => Array.isArray(e.data) && scene.adopt(e.data);
+  }
   window.addEventListener('keydown', (e) => {
     if (e.key === 'b' || e.key === 'B') {
       feed.bubblesOn = !feed.bubblesOn;

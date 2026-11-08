@@ -4,6 +4,7 @@ import type { Mode, ShellConfig } from './config.js';
 export type MenuAction =
   | { type: 'toggle-mode' }
   | { type: 'pick-display'; id: number }
+  | { type: 'toggle-span' }
   | { type: 'pick-labels'; minimal: boolean | undefined }
   | { type: 'pick-bubbles'; bubbles: boolean | undefined }
   | { type: 'pick-scale'; scale: number | undefined }
@@ -35,7 +36,7 @@ const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles' | 'span'> & { pack?: string },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -66,9 +67,13 @@ export function buildMenuModel(
     ...packs.map<MenuItem>((p) => ({ kind: 'item', label: p.label, checked: p.name === cfg.pack, action: { type: 'pick-pack', pack: p.name } })),
     { kind: 'separator' },
     { kind: 'item', label: 'Monitor', enabled: false },
+    ...(displays.length > 1
+      ? [{ kind: 'item', label: 'Span all monitors (strip)', checked: !!cfg.span, action: { type: 'toggle-span' } } satisfies MenuItem]
+      : []),
     ...displays.map<MenuItem>((d, i) => ({
       kind: 'item',
       label: `${i + 1}: ${d.label} (${d.bounds.width}x${d.bounds.height})${d.primary ? ' primary' : ''}`,
+      // While spanning, the strip uses every monitor; the pick still sets where map mode opens.
       checked: d.id === activeDisplay,
       action: { type: 'pick-display', id: d.id },
     })),
@@ -93,6 +98,12 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       return { cfg: { ...cfg, mode: cfg.mode === 'strip' ? 'map' : 'strip' }, restartAdapter: false, reload: true };
     case 'pick-display':
       return { cfg: { ...cfg, displayId: action.id }, restartAdapter: false, reload: false };
+    case 'toggle-span': {
+      const next = { ...cfg };
+      if (cfg.span) delete next.span;
+      else next.span = true;
+      return { cfg: next, restartAdapter: false, reload: true };
+    }
     case 'pick-labels': {
       const next = { ...cfg };
       if (action.minimal === undefined) delete next.minimal;

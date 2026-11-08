@@ -86,6 +86,23 @@ under each party's feet (`minimal = true`, or Labels in the tray menu):
 
 ![Icon-only labels](docs/images/strip-minimal.png)
 
+### Crowds and multiple monitors
+
+Parties roam the whole strip on a few depth rows, so they cross paths and pass behind each
+other; two parties on the same row bump and turn around. When the strip fills up, more rows
+open (up to four) and everyone keeps walking. The back rows stand in the shade and the
+ground gets deeper to hold them:
+
+![A crowded strip: parties in four depth rows walking behind each other](docs/images/strip-crowd.gif)
+
+Got more than one monitor? Tick **Span all monitors** under Monitor in the tray menu. The
+overlay puts a strip window on the bottom of every monitor and joins them into one long
+strip, so parties wander across the seams (here three monitors, 1280, 1920 and 1280 wide):
+
+![One strip spanning three monitors, parties crossing between them](docs/images/strip-span.gif)
+
+Browser tabs can do the same with `?span=<offset>,<total>` (CSS pixels).
+
 ### Map mode
 
 Press **Ctrl+Alt+M** (Cmd+Alt+M on macOS) anywhere, `m` in the page, or pick it in the tray
@@ -213,12 +230,12 @@ just create the workspace and tag pane 1.
 
 | You want | Do this |
 |---|---|
-| A desktop overlay | `bellwether overlay`: transparent, frameless, always on top and click-through, pinned to the bottom of one monitor. |
+| A desktop overlay | `bellwether overlay`: transparent, frameless, always on top and click-through, pinned to the bottom of one monitor, or spanning all of them. |
 | A stream overlay | `bellwether run`, then an OBS Browser Source on `http://127.0.0.1:7341/?transparent`. See the [OBS guide](docs/obs.md). |
 | A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
 The desktop overlay's **tray menu** has everything in one place: switch strip and map,
-Size, Labels, Chat bubbles, Skin, Monitor, Herdr Session (all, or one), and Quit. Choices are
+Size, Labels, Chat bubbles, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
 remembered between runs.
 
 ### Keyboard

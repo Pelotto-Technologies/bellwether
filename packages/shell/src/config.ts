@@ -20,6 +20,8 @@ export interface ShellConfig {
   scale?: number;
   /** Icon-only labels on the strip; undefined defers to bellwether.toml. */
   minimal?: boolean;
+  /** Strip spans every monitor (one window each, one shared strip); undefined or false means one monitor. */
+  span?: boolean;
   /** Speech bubbles shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   bubbles?: boolean;
 }
@@ -67,6 +69,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
   if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
+  if (r.span === true) out.span = true;
   const scale = validScale(r.scale);
   if (scale !== undefined) out.scale = scale;
   return out;

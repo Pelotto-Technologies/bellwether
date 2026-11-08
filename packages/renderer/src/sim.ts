@@ -83,3 +83,79 @@ export function hash01(s: string): number {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return ((h >>> 0) % 10000) / 10000;
 }
+
+/** At most this many depth rows; past it the back rows just get more crowded. */
+export const MAX_ROWS = 4;
+/** A row is full once its groups take this share of the width, so everyone keeps room to walk. */
+export const ROW_FILL = 0.6;
+
+/** Depth rows the strip always uses (when there are that many groups), so groups cross paths even when it is quiet. */
+export const ROAM_ROWS = 3;
+
+/**
+ * Splits walking groups into depth rows. Row 0 is the front; higher rows stand further back
+ * and are drawn behind, so groups in different rows walk past each other. At least
+ * `minRows` rows are used (never more than there are groups); when the groups would fill
+ * more than `fill` of the width, just enough extra rows are opened. Groups are dealt out,
+ * widest first, to the row with the least load. Ties go to the front.
+ */
+export function assignRows(groups: readonly { id: string; span: number }[], width: number, minRows = 1, fill = ROW_FILL, maxRows = MAX_ROWS): Map<string, number> {
+  const rows = new Map<string, number>();
+  const room = Math.max(1, width * fill);
+  const total = groups.reduce((n, g) => n + g.span, 0);
+  const count = Math.max(1, Math.min(maxRows, Math.max(Math.min(minRows, groups.length), Math.ceil(total / room))));
+  const load = new Array<number>(count).fill(0);
+  const order = [...groups].sort((a, b) => b.span - a.span || a.id.localeCompare(b.id));
+  for (const g of order) {
+    let best = 0;
+    for (let r = 1; r < count; r++) if (load[r]! < load[best]!) best = r;
+    load[best]! += g.span;
+    rows.set(g.id, best);
+  }
+  return rows;
+}
+
+/** A window's slice of a strip that spans several monitors, in CSS pixels. */
+export interface SpanView {
+  /** Left edge of this window within the whole strip. */
+  offset: number;
+  /** Width of the whole strip across every monitor. */
+  total: number;
+}
+
+/** Reads `?span=<offset>,<total>`; anything malformed means this window is the whole strip. */
+export function parseSpan(raw: string | null): SpanView | undefined {
+  if (!raw) return undefined;
+  const [o, t] = raw.split(',').map(Number);
+  if (o === undefined || t === undefined || !Number.isFinite(o) || !Number.isFinite(t) || o < 0 || t <= 0 || o >= t) return undefined;
+  return { offset: o, total: t };
+}
+
+/** A walking group as seen by its row neighbours. */
+export interface RowWalker {
+  id: string;
+  /** Left edge. */
+  x: number;
+  dir: 1 | -1;
+  span: number;
+  speed: number;
+}
+
+/**
+ * Groups in the same depth row do not walk through each other: when one closes on its
+ * neighbour, whoever is walking into the other turns around (both, head on). Groups that
+ * already overlap but are moving apart are left alone, so nobody jitters. Returns the ids to turn.
+ */
+export function bumps(row: readonly RowWalker[]): Set<string> {
+  const turn = new Set<string>();
+  const sorted = [...row].sort((a, b) => a.x - b.x || a.id.localeCompare(b.id));
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const a = sorted[i]!;
+    const b = sorted[i + 1]!;
+    if (a.x + a.span < b.x) continue;
+    if (a.dir * a.speed <= b.dir * b.speed) continue; // not closing
+    if (a.dir === 1 && a.speed > 0) turn.add(a.id);
+    if (b.dir === -1 && b.speed > 0) turn.add(b.id);
+  }
+  return turn;
+}
