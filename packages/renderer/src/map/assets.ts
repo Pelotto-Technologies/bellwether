@@ -11,6 +11,7 @@ export interface MapArt {
   tile(name: string): Texture;
   prop(name: string): Texture;
   hasTile(name: string): boolean;
+  hasProp(name: string): boolean;
 }
 
 // Eager so Vite bundles every public pack; a private local pack is picked up the same way.
@@ -46,5 +47,5 @@ export async function loadMapArt(pack: string): Promise<MapArt> {
     if (!v) throw new Error(`map art "${pack}" is missing "${n}"`);
     return v;
   };
-  return { tile: (n) => need(tiles, n), prop: (n) => need(props, n), hasTile: (n) => tiles.has(n) };
+  return { tile: (n) => need(tiles, n), prop: (n) => need(props, n), hasTile: (n) => tiles.has(n), hasProp: (n) => props.has(n) };
 }
