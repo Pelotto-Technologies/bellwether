@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { asArray, asObject, mentions, type JsonObject } from '../json-file.js';
-import { SAY_MARKER } from '../hook/say.js';
+import { COPILOT_HOOK_EVENTS } from '../hook/event.js';
+import { EVENT_MARKER, SAY_MARKER } from '../hook/say.js';
 import { HOOK_BASENAME } from '../skill.js';
 import { pruneEvent } from './claude.js';
 import { posixPath } from './paths.js';
@@ -53,5 +54,25 @@ export const copilot: AgentTarget = {
     const kept = hooks.PreToolUse.filter((e) => !mentions(e, SAY_MARKER));
     if (kept.length === hooks.PreToolUse.length) return settings;
     return pruneEvent(settings, hooks, kept, 'PreToolUse');
+  },
+
+  addEventHooks(settings, command) {
+    const hooks = asObject(settings.hooks);
+    const next: JsonObject = { ...hooks };
+    for (const name of Object.keys(COPILOT_HOOK_EVENTS)) {
+      const c = command('copilot', name);
+      next[name] = [...asArray(hooks[name]), { type: 'command', bash: c.posix, powershell: c.powershell, timeoutSec: 5 }];
+    }
+    return { ...settings, hooks: next };
+  },
+
+  removeEventHooks(settings) {
+    let out = settings;
+    for (const [name, list] of Object.entries(asObject(settings.hooks))) {
+      if (!Array.isArray(list)) continue;
+      const kept = list.filter((e) => !mentions(e, EVENT_MARKER));
+      if (kept.length !== list.length) out = pruneEvent(out, asObject(out.hooks), kept, name);
+    }
+    return out;
   },
 };

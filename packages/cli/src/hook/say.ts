@@ -3,6 +3,8 @@ import { bubbleText, parseSends } from './sends.js';
 
 /** Marker on the installed pre-tool hook command, so uninstall finds only ours. */
 export const SAY_MARKER = 'bellwether-say';
+/** Marker on installed activity-event hook commands (`install --events`). */
+export const EVENT_MARKER = 'bellwether-event';
 /** How long a message bubble token lives in Herdr. */
 export const SAY_TTL_MS = 15000;
 

@@ -3,19 +3,22 @@ import { AGENT_TARGETS, findTarget, type AgentTarget } from './agents/index.js';
 import { spawnSync } from 'node:child_process';
 import { adapterArgs, locateRuntime, RUN_COMMANDS, type RunCommand } from './run.js';
 import { launchOverlay } from './overlay.js';
-import { detect, install, systemContext, uninstall, type Outcome } from './install.js';
+import { detect, eventHookCommand, install, sayHookCommand, systemContext, uninstall, type Outcome } from './install.js';
 import { readFileSync } from 'node:fs';
 import { runSayHook } from './hook/say.js';
-import { runEventHook } from './hook/event.js';
+import { appendEvent, buildEmitEvent, eventsFile, parseFlags, runEventHook } from './hook/event.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
 
 commands:
   agents      show which coding agents are present
-  install     write the skill pack, role hook and message hook for each present agent
+  install     write the skill pack, role hook and message hook for each present agent;
+              --events also adds activity hooks so the overlay works without Herdr
   uninstall   remove only what install wrote
-  overlay     open the desktop overlay (click-through, always on top, tray menu); --hooks reads Claude Code sessions without Herdr
+  overlay     open the desktop overlay (click-through, always on top, tray menu); --hooks reads agent sessions without Herdr
   run         serve the overlay from live Herdr, or --hooks (adapter flags pass through)
+  emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop
+              [--session S --agent A --cwd D --role R --sub ID --sub-type T --tool T --detail TEXT]
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
   orchestrate [--cwd D] [--label L] [--role R] [--session S] [--timeout MS] [-- CMD...]
@@ -66,13 +69,23 @@ function main(argv: string[]): number {
   if (cmd === 'hook' && rest[0] === 'event') {
     // Called by the Claude Code plugin on session activity. Appends one line to a file; never fails the agent.
     try {
-      const i = rest.indexOf('--agent');
-      const agent = i >= 0 ? rest[i + 1] : undefined;
-      runEventHook({ stdin: readFileSync(0, 'utf8'), env: process.env, ...(agent ? { agent } : {}) });
+      const flags = parseFlags(rest.slice(1));
+      runEventHook({ stdin: readFileSync(0, 'utf8'), env: process.env, ...(flags.agent ? { agent: flags.agent } : {}), ...(flags.event ? { eventName: flags.event } : {}) });
     } catch {
       // swallow
     }
     return 0;
+  }
+  if (cmd === 'emit') {
+    try {
+      const flags = parseFlags(rest);
+      const line = buildEmitEvent(flags);
+      appendEvent(eventsFile(), line);
+      return 0;
+    } catch (err) {
+      console.error(`bellwether emit: ${(err as Error).message}`);
+      return 2;
+    }
   }
   const ctx = systemContext();
   const targets = selectTargets(rest);
@@ -84,7 +97,8 @@ function main(argv: string[]): number {
       }
       return 0;
     case 'install':
-      report(install(ctx, targets));
+      report(install(ctx, targets, sayHookCommand(), rest.includes('--events') ? eventHookCommand() : undefined));
+      if (rest.includes('--events')) console.log('\nActivity hooks added. Run `bellwether overlay --hooks` to watch them (no Herdr needed).');
       return 0;
     case 'uninstall':
       report(uninstall(ctx, targets));
