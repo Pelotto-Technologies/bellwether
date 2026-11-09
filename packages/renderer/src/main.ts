@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js';
 import type { Delta } from '@bellwether/adapter/core';
 import { connectFeed, FeedState, replayFeed, type FeedMode } from './feed.js';
+import { guardFrame } from './guard.js';
 import { inferHandoff } from './map/chatter.js';
 import { hasMapArt, loadMapArt } from './map/assets.js';
 import { availablePacks, packData } from './packs.js';
@@ -108,7 +109,7 @@ async function main() {
     feed.onClose = (paneId) => handle.send?.({ type: 'close', paneId });
   }
 
-  app.ticker.add((ticker) => scene.update(ticker.deltaMS / 1000, performance.now()));
+  app.ticker.add(guardFrame((ticker: { deltaMS: number }) => scene.update(ticker.deltaMS / 1000, performance.now())));
 }
 
 void main();
