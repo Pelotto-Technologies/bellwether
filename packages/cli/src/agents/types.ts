@@ -20,6 +20,9 @@ export interface ToolHookCommand {
   powershell: string;
 }
 
+/** Builds the activity-event hook command for one hook name, for each shell. */
+export type EventHookCommand = (agent: string, event: string) => ToolHookCommand;
+
 /**
  * One coding agent the installer can integrate with. `id` is the value Herdr puts in
  * the `agent` field for this agent. This is the only place in Bellwether that knows
@@ -39,4 +42,8 @@ export interface AgentTarget {
   addToolHook(settings: JsonObject, hook: ToolHookCommand): JsonObject;
   /** Return settings with Bellwether's PreToolUse entries removed and all other entries untouched. */
   removeToolHook(settings: JsonObject): JsonObject;
+  /** Return settings with an activity-event hook (`bellwether hook event`) on every event this agent has. Assumes none is present. */
+  addEventHooks(settings: JsonObject, command: EventHookCommand): JsonObject;
+  /** Return settings with every activity-event hook removed and all other entries untouched. */
+  removeEventHooks(settings: JsonObject): JsonObject;
 }

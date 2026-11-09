@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -44,6 +45,23 @@ export const EVENT_FOR_HOOK: Record<SupportedHookEvent, EventKind> = {
   SubagentStop: 'sub_stop',
   SessionEnd: 'end',
 };
+
+/**
+ * Copilot CLI names its hooks in camelCase and sends `sessionId`/`toolName`/`toolArgs`;
+ * its payload may not carry the event name, so the installed command passes `--event`.
+ * Unverified against a live Copilot CLI: unknown names are ignored, never fatal.
+ */
+export const COPILOT_HOOK_EVENTS: Record<string, SupportedHookEvent> = {
+  sessionStart: 'SessionStart',
+  userPromptSubmitted: 'UserPromptSubmit',
+  preToolUse: 'PreToolUse',
+  postToolUse: 'PostToolUse',
+  agentStop: 'Stop',
+  subagentStop: 'SubagentStop',
+  sessionEnd: 'SessionEnd',
+};
+
+export const EVENT_KINDS: readonly EventKind[] = ['start', 'prompt', 'tool', 'tool_done', 'wait', 'stop', 'end', 'sub_start', 'sub_stop'];
 
 export const MAX_DETAIL = 72;
 export const ROTATE_BYTES = 5 * 1024 * 1024;
@@ -93,26 +111,63 @@ export interface EventContext {
   env?: Record<string, string | undefined>;
   /** Written into the `agent` field. */
   agent?: string;
+  /** Hook name when the payload does not carry one (Copilot CLI: `--event preToolUse`). */
+  eventName?: string;
+}
+
+function parseMaybe(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Stable session id for agents whose hooks send none: one session per agent and folder. */
+export function fallbackSession(agent: string, cwd: string | undefined, env: Record<string, string | undefined>): string {
+  const fromEnv = str(env.BELLWETHER_SESSION);
+  if (fromEnv) return fromEnv;
+  return `${agent}-${createHash('sha1').update(cwd ?? '').digest('hex').slice(0, 8)}`;
+}
+
+/** An already-normalized line (the generic source: any tool pipes these in). Validated and clamped; undefined if unusable. */
+export function passThrough(p: Obj, now: number): NormalizedEvent | undefined {
+  if (p.v !== 1 || !EVENT_KINDS.includes(p.ev as EventKind)) return undefined;
+  const session = str(p.session);
+  if (!session) return undefined;
+  const out: NormalizedEvent = {
+    v: 1,
+    t: typeof p.t === 'number' && Number.isFinite(p.t) ? p.t : now,
+    agent: str(p.agent) ?? 'unknown',
+    ev: p.ev as EventKind,
+    session,
+  };
+  for (const k of ['cwd', 'sub', 'subType', 'tool', 'role'] as const) {
+    const v = str(p[k]);
+    if (v) out[k] = v;
+  }
+  const d = str(p.detail);
+  if (d) out.detail = shorten(d);
+  return out;
 }
 
 /** Map one hook payload to its normalized line, or undefined for events and payloads we do not track. */
 export function normalizeHookPayload(raw: unknown, ctx: EventContext = {}): NormalizedEvent | undefined {
   const p = obj(raw);
   if (!p) return undefined;
-  const name = p.hook_event_name;
+  const env = ctx.env ?? process.env;
+  const now = ctx.now ?? Date.now();
+  if (p.v === 1 && p.ev !== undefined) return passThrough(p, now);
+  const agent = ctx.agent ?? 'claude';
+  let name = str(p.hook_event_name) ?? str(p.hookEventName) ?? ctx.eventName;
+  if (name && Object.prototype.hasOwnProperty.call(COPILOT_HOOK_EVENTS, name)) name = COPILOT_HOOK_EVENTS[name]!;
   if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(EVENT_FOR_HOOK, name)) return undefined;
   const ev = EVENT_FOR_HOOK[name as SupportedHookEvent];
-  const session = str(p.session_id);
-  if (!session) return undefined;
-  const env = ctx.env ?? process.env;
-  const out: NormalizedEvent = {
-    v: 1,
-    t: ctx.now ?? Date.now(),
-    agent: ctx.agent ?? 'claude',
-    ev,
-    session,
-  };
   const cwd = str(p.cwd);
+  const session = str(p.session_id) ?? str(p.sessionId) ?? (agent !== 'claude' ? fallbackSession(agent, cwd, env) : undefined);
+  if (!session) return undefined;
+  const out: NormalizedEvent = { v: 1, t: now, agent, ev, session };
   if (cwd) out.cwd = cwd;
   const sub = str(p.agent_id);
   const subType = str(p.agent_type);
@@ -120,16 +175,60 @@ export function normalizeHookPayload(raw: unknown, ctx: EventContext = {}): Norm
   if (sub && subType) out.subType = subType;
   // A bare SubagentStart without an id cannot be tracked; the adapter skips it.
   if (ev === 'tool' || ev === 'tool_done') {
-    const tool = str(p.tool_name);
+    const tool = str(p.tool_name) ?? str(p.toolName);
     if (tool) out.tool = tool;
-    const detail = toolDetail(tool, p.tool_input);
+    const detail = toolDetail(tool, p.tool_input ?? parseMaybe(p.toolArgs ?? p.tool_args ?? p.toolInput));
     if (detail) out.detail = detail;
   } else if (ev === 'wait') {
     const msg = str(p.message);
     if (msg) out.detail = shorten(msg);
   }
-  const role = str(env.BELLWETHER_ROLE) ?? str(env.HERDR_ROLE);
+  let role = str(env.BELLWETHER_ROLE) ?? str(env.HERDR_ROLE);
+  // `claude --agent <name>` reports the agent's name at session start; the adapter maps it to a role.
+  if (!role && ev === 'start' && !sub && subType) role = subType;
   if (role) out.role = role.trim();
+  return out;
+}
+
+export interface EmitArgs {
+  [flag: string]: string | undefined;
+}
+
+/** Parse `--flag value` pairs (no positionals). Unknown flags are kept so callers can reject them. */
+export function parseFlags(args: string[]): EmitArgs {
+  const out: EmitArgs = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (!a.startsWith('--')) continue;
+    const next = args[i + 1];
+    if (next !== undefined && !next.startsWith('--')) {
+      out[a.slice(2)] = next;
+      i++;
+    } else out[a.slice(2)] = '';
+  }
+  return out;
+}
+
+/**
+ * `bellwether emit` for tools that are not Claude Code or Copilot: build one event from
+ * flags. `--ev` is required; the session defaults to $BELLWETHER_SESSION or one per
+ * agent and folder. Throws with a usable message on bad input.
+ */
+export function buildEmitEvent(flags: EmitArgs, env: Record<string, string | undefined> = process.env, cwd = process.cwd(), now = Date.now()): NormalizedEvent {
+  const ev = flags.ev as EventKind | undefined;
+  if (!ev || !EVENT_KINDS.includes(ev)) throw new Error(`--ev must be one of: ${EVENT_KINDS.join(', ')}`);
+  const agent = str(flags.agent) ?? 'generic';
+  const dir = str(flags.cwd) ?? cwd;
+  const out: NormalizedEvent = { v: 1, t: now, agent, ev, session: str(flags.session) ?? fallbackSession(agent, dir, env), cwd: dir };
+  const role = str(flags.role) ?? str(env.BELLWETHER_ROLE);
+  if (role) out.role = role.trim();
+  for (const [flag, key] of [['sub', 'sub'], ['sub-type', 'subType'], ['tool', 'tool']] as const) {
+    const v = str(flags[flag]);
+    if (v) out[key] = v;
+  }
+  const detail = str(flags.detail);
+  if (detail) out.detail = shorten(detail);
+  if ((ev === 'sub_start' || ev === 'sub_stop') && !out.sub) throw new Error(`--sub is required for ${ev}`);
   return out;
 }
 
@@ -153,6 +252,7 @@ export interface EventHookDeps {
   stdin: string;
   env: Record<string, string | undefined>;
   agent?: string;
+  eventName?: string;
   home?: string;
   now?: number;
   rotateBytes?: number;
@@ -162,7 +262,7 @@ export interface EventHookDeps {
 export function runEventHook(deps: EventHookDeps): NormalizedEvent | undefined {
   try {
     const raw: unknown = JSON.parse(deps.stdin);
-    const line = normalizeHookPayload(raw, { now: deps.now, env: deps.env, agent: deps.agent });
+    const line = normalizeHookPayload(raw, { now: deps.now, env: deps.env, agent: deps.agent, eventName: deps.eventName });
     if (!line) return undefined;
     appendEvent(eventsFile(deps.env, deps.home), line, deps.rotateBytes);
     return line;

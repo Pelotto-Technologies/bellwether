@@ -50,28 +50,46 @@ fake agents on the same port.
 Already installed? After upgrading, run `bellwether install` again so your agents get the
 newest hooks (chat bubbles need the one added in 0.1.11).
 
-## Without Herdr: Claude Code plugin
+## Without Herdr
 
-No Herdr? A Claude Code plugin feeds Bellwether straight from your sessions: the Claude Code
-CLI and local Code sessions in the Claude desktop app. Each session is an agent, each working
-directory a party, and subagents show up as extra agents while they run.
+Herdr is optional. Bellwether can draw your agents straight from their own hooks: Claude Code
+(CLI and local Code sessions in the desktop app, subagents included), GitHub Copilot CLI, and
+any other tool through a small event format. Each session is an agent, each working directory
+a party, and subagents show up as extra agents under their session while they run.
 
 ```sh
 npm i -g @pelotto-tech/bellwether@latest
+bellwether install --events      # adds activity hooks to Claude Code and Copilot CLI
+bellwether overlay --hooks       # or source = "hooks" in bellwether.toml
 ```
+
+Prefer a Claude Code plugin to editing settings? Skip `--events` and use:
 
 ```
 /plugin marketplace add Pelotto-Technologies/bellwether
 /plugin install bellwether@bellwether
 ```
 
+Pick one of the two, not both. `bellwether uninstall` removes everything `install` wrote.
+
+**Roles without Herdr.** A session is a generic agent, or an orchestrator while it has
+subagents running. To set one explicitly, use `BELLWETHER_ROLE=reviewer` in its environment, or
+start Claude Code with `claude --agent <name>` (names like `reviewer` or `architect` map to
+roles). Subagents take a role from their type: `Explore` is a researcher, `Plan` an architect.
+
+**Other tools.** Anything that can run a command can show up:
+
 ```sh
-bellwether overlay --hooks    # or source = "hooks" in bellwether.toml
+bellwether emit --ev start --agent my-factory --session job-42 --cwd ~/code/app --role implementer
+bellwether emit --ev tool --session job-42 --detail "Run migrations"
+bellwether emit --ev sub_start --session job-42 --sub w1 --sub-type reviewer --detail "Check the diff"
 ```
 
-The plugin appends short event lines (tool name and file, never prompt text) to
-`~/.bellwether/events.jsonl`. It covers sessions on this machine only; cloud sessions are not
-visible. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
+Or append JSON lines yourself. The format is in [`docs/EVENTS.md`](docs/EVENTS.md).
+
+Event lines hold a tool name and file (never prompt text) in `~/.bellwether/events.jsonl`. They
+cover sessions on this machine only; cloud sessions are not visible, and clicking an agent to
+focus it or prompt it still needs Herdr. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
 
 ## A tour
 
@@ -276,7 +294,7 @@ remembered between runs.
 Put a `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
-source = "live"          # "live" for real Herdr, "hooks" for the Claude Code plugin, "mock" for fake agents
+source = "live"          # "live" for real Herdr, "hooks" for agent events without Herdr, "mock" for fake agents
 pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
 scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
@@ -313,7 +331,9 @@ page URL overrides those:
 | `bellwether agents` | Show which coding agents are on PATH and which config dirs exist. |
 | `bellwether install [--agent claude\|copilot]` | Add the skill, role hook and message hook to each present agent. Safe to re-run. |
 | `bellwether uninstall` | Remove only what `install` wrote. |
-| `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: Claude Code plugin events, no Herdr). |
+| `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: agent events, no Herdr). |
+| `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
+| `bellwether emit --ev <kind> ...` | Append one activity event from any tool. |
 | `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |

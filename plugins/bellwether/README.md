@@ -48,3 +48,9 @@ otherwise it is a generic agent, or an orchestrator while it runs subagents.
 - Sessions started before the plugin was installed appear on their next hook event.
 - A session shows as done after `Stop` and disappears on `SessionEnd`, or after two hours
   without activity if it was killed.
+
+## Not using the plugin system?
+
+`bellwether install --events` writes the same hooks into `~/.claude/settings.json` (and
+Copilot CLI's `~/.copilot/settings.json`). Use that or the plugin, not both. Other tools can feed
+the same file with `bellwether emit`; see [`docs/EVENTS.md`](../../docs/EVENTS.md).
