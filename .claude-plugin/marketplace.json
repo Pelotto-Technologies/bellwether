@@ -12,7 +12,7 @@
       "name": "bellwether",
       "source": "./plugins/bellwether",
       "description": "Feeds Claude Code session activity to the Bellwether pixel overlay.",
-      "version": "0.3.0",
+      "version": "0.3.2",
       "license": "Apache-2.0",
       "homepage": "https://github.com/Pelotto-Technologies/bellwether#readme",
       "keywords": ["overlay", "pixel", "agents", "claude-code"]

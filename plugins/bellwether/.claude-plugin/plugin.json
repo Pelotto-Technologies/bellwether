@@ -1,7 +1,7 @@
 {
   "name": "bellwether",
   "description": "Feeds Claude Code session activity to the Bellwether pixel overlay, without Herdr.",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "author": {
     "name": "Pelotto Technologies",
     "url": "https://github.com/Pelotto-Technologies"
