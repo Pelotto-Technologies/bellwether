@@ -110,6 +110,8 @@ export class StripScene {
   private t = 0;
   /** Arrival puffs, redrawn every frame on top of the characters. */
   private fx = new Graphics();
+  /** Speech bubbles sit above every plate and figure so a clamped bubble is never covered. */
+  private bubbleLayer = new Container();
   /** False until the first world arrives, so what already exists does not play an arrival. */
   private primed = false;
   private reduced = prefersReducedMotion();
@@ -141,7 +143,7 @@ export class StripScene {
       this.rowLayers.push(row);
     }
     this.layer.addChild(...[...this.rowLayers].reverse());
-    app.stage.addChild(this.ground, this.layer, this.fx);
+    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
@@ -220,7 +222,7 @@ export class StripScene {
     const figure = this.art ? new Figure(this.art, this.theme) : undefined;
     const glow = new Graphics();
     const bubbleBg = new Graphics();
-    const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24 } });
+    const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24, wordWrap: true, wordWrapWidth: 180 } });
     const bubble = new Container();
     const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
     if (this.art) {
@@ -243,7 +245,8 @@ export class StripScene {
     body.on('pointertap', () => {
       if (this.doubleTap.tap(paneId, performance.now())) this.feed.onFocus?.(paneId);
     });
-    party.root.addChild(body, glow, bubble);
+    party.root.addChild(body, glow);
+    this.bubbleLayer.addChild(bubble);
     party.members.set(paneId, view);
     return view;
   }
@@ -578,7 +581,8 @@ export class StripScene {
       if (mv.bubbleTail) mv.bubbleTail.position.set(w / 2, h - s);
       const maxX = this.worldWidth() - w - 4;
       const above = art.character.h * s + (ui.tail ? 6 * s : 0) + (view.plate ? 14 * s : 6);
-      mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - w / 2)), y - above - h);
+      // Keep the whole bubble inside the strip window: a tall (wrapped) bubble would otherwise clip off the top.
+      mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - w / 2)), Math.max(2, y - above - h));
     }
   }
 
@@ -620,7 +624,7 @@ export class StripScene {
       }
       const bw = mv.bubbleBg.width;
       const maxX = this.worldWidth() - bw - 4;
-      mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - bw / 2)), y - SPRITE_H * s - 46);
+      mv.bubble.position.set(Math.max(4, Math.min(maxX, cx - bw / 2)), Math.max(2, y - SPRITE_H * s - 46));
     }
   }
 }
