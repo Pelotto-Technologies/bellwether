@@ -91,14 +91,19 @@ describe('DeltaServer client messages', () => {
     ws.close();
   });
 
-  it('ignores close from another web page', async () => {
-    const ws = await connect(true, 'https://evil.example');
-    ws.send(JSON.stringify({ type: 'close', paneId: 'w1:p3' }));
-    ws.send(JSON.stringify({ type: 'focus', paneId: 'w1:p3' }));
-    await until(() => calls().length >= 1);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(calls().map((c) => c.method)).toEqual(['pane.focus']);
-    ws.close();
+  it('refuses connections from another web page', async () => {
+    server = new DeltaServer({ port: 0, actions: true });
+    server.attach(source);
+    const port = await server.listen();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}${DELTA_PATH}`, { origin: 'https://evil.example' });
+    const status = await new Promise<number | undefined>((r) => {
+      ws.once('unexpected-response', (_req, res) => r(res.statusCode));
+      ws.once('open', () => r(undefined));
+      ws.once('error', () => r(-1));
+    });
+    expect(status).toBe(401);
+    ws.terminate();
+    expect(calls()).toEqual([]);
   });
 
   it('survives an unknown pane', async () => {
