@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { Rect } from './bounds.js';
 
 export type Mode = 'strip' | 'map';
 
@@ -24,6 +25,10 @@ export interface ShellConfig {
   span?: boolean;
   /** Speech bubbles shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   bubbles?: boolean;
+  /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
+  mapAlwaysOnTop?: boolean;
+  /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
+  mapBounds?: Rect;
 }
 
 export const DEFAULT_SCALE = 3;
@@ -70,6 +75,11 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
   if (r.span === true) out.span = true;
+  if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
+  const b = r.mapBounds as Record<string, unknown> | null | undefined;
+  if (b && typeof b === 'object' && [b.x, b.y, b.width, b.height].every((n) => typeof n === 'number' && Number.isFinite(n)) && (b.width as number) > 0 && (b.height as number) > 0) {
+    out.mapBounds = { x: Math.round(b.x as number), y: Math.round(b.y as number), width: Math.round(b.width as number), height: Math.round(b.height as number) };
+  }
   const scale = validScale(r.scale);
   if (scale !== undefined) out.scale = scale;
   return out;

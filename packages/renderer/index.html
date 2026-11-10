@@ -27,10 +27,16 @@
         color: #ffb3b3; background: rgba(255,77,77,.12); border: 1px solid rgba(255,77,77,.45); }
       #detail .kill:hover { background: rgba(255,77,77,.3); color: #fff; }
       #detail .kill:disabled { opacity: .5; cursor: default; }
+      #drag-bar {
+        position: fixed; top: 0; left: 0; width: calc(100% - 310px); height: 22px; display: none;
+        -webkit-app-region: drag; background: rgba(12,15,24,.55); color: #9aa6c4; font: 11px ui-monospace, monospace;
+        line-height: 22px; text-align: center; user-select: none; border-radius: 0 0 6px 0;
+      }
+      body.map.transparent #drag-bar { display: block; }
       #exit-map {
         position: fixed; bottom: 12px; left: 12px; padding: 4px 10px; border-radius: 4px; display: none;
         font: 12px ui-monospace, monospace; color: #e8ecf6; background: rgba(12,15,24,.88);
-        border: 1px solid rgba(255,255,255,.3); text-decoration: none;
+        border: 1px solid rgba(255,255,255,.3); text-decoration: none; -webkit-app-region: no-drag;
       }
       body.map #exit-map { display: block; }
       #exit-map:hover, #exit-map:focus-visible { background: rgba(40,48,72,.95); outline: 1px solid #fff; }
@@ -40,6 +46,7 @@
     </style>
   </head>
   <body>
+    <div id="drag-bar" title="Drag to move the map">⠿ Bellwether · drag to move</div>
     <a id="exit-map" href="?mode=strip" title="Back to the strip (m)">Exit map</a>
     <div id="chip">connecting…</div>
     <div id="detail" hidden><button id="detail-close" title="Back to the map (Esc)">✕</button><div id="detail-body"></div></div>

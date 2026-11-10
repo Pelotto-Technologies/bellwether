@@ -3,7 +3,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
-import { type DisplayInfo, pickDisplay, type Rect, spanLayout, windowBounds } from './bounds.js';
+import { type DisplayInfo, mapWindowBounds, pickDisplay, type Rect, spanLayout, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
 import { configPath, effectiveScale, loadConfig, saveConfig, validScale, type ShellConfig } from './config.js';
 import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
@@ -105,12 +105,39 @@ function placements(): Placement[] {
     return spanLayout(ds, scale).map((sl) => ({ bounds: sl.bounds, slice: { offset: sl.offset, total: sl.total } }));
   }
   const d = pickDisplay(ds, cfg.displayId);
-  return d ? [{ bounds: windowBounds(d, cfg.mode, scale) }] : [];
+  if (!d) return [];
+  return [{ bounds: cfg.mode === 'map' ? mapWindowBounds(ds, d, cfg.mapBounds) : windowBounds(d, cfg.mode, scale) }];
+}
+
+/** Strip is a click-through overlay that always floats; the map is a window you can drag and, if you like, pin on top. */
+function wantOnTop(): boolean {
+  return cfg.mode === 'strip' || !!cfg.mapAlwaysOnTop;
+}
+
+function applyStacking(w: BrowserWindow): void {
+  if (wantOnTop()) w.setAlwaysOnTop(true, 'screen-saver');
+  else w.setAlwaysOnTop(false);
+}
+
+/** True while we move windows ourselves, so those moves are not saved as the user's choice. */
+let placing = false;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The user dragged the map: remember where it ended up. */
+function rememberMapBounds(w: BrowserWindow): void {
+  if (placing || cfg.mode !== 'map' || w.isDestroyed()) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (placing || cfg.mode !== 'map' || w.isDestroyed()) return;
+    cfg = { ...cfg, mapBounds: w.getBounds() };
+    void saveConfig(configPath(app.getPath('userData')), cfg);
+  }, 400);
 }
 
 /** Creates or drops windows to match the placements, moves each into place and loads its URL if it changed. */
 function placeWindows(reload = false): void {
   const want = placements();
+  placing = true;
   while (wins.length < want.length) wins.push(createWindow());
   while (wins.length > want.length) wins.pop()?.destroy();
   wins.forEach((w, i) => {
@@ -119,7 +146,9 @@ function placeWindows(reload = false): void {
     // Moving between monitors with different scaling can land at the wrong size on Windows; a second set fixes it.
     const got = w.getBounds();
     if (got.width !== p.bounds.width || got.height !== p.bounds.height) w.setBounds(p.bounds);
-    w.setAlwaysOnTop(true, 'screen-saver');
+    applyStacking(w);
+    w.setMovable(cfg.mode === 'map');
+    w.setFocusable(cfg.mode === 'map');
     // Map mode needs clicks; strip mode lets them fall through to whatever is underneath.
     if (cfg.mode === 'map') w.setIgnoreMouseEvents(false);
     else w.setIgnoreMouseEvents(true, { forward: true });
@@ -129,6 +158,10 @@ function placeWindows(reload = false): void {
       void w.loadURL(url);
     }
   });
+  // Move events from setBounds can arrive late; keep ignoring them briefly.
+  setTimeout(() => {
+    placing = false;
+  }, 500);
 }
 
 function createWindow(): BrowserWindow {
@@ -138,7 +171,7 @@ function createWindow(): BrowserWindow {
     show: false,
     hasShadow: false,
     resizable: false,
-    movable: false,
+    movable: false, // switched on for map mode in placeWindows
     skipTaskbar: true,
     focusable: false,
     alwaysOnTop: true,
@@ -155,6 +188,7 @@ function createWindow(): BrowserWindow {
       void dispatch({ type: 'toggle-mode' });
     }
   });
+  win.on('move', () => rememberMapBounds(win));
   win.once('ready-to-show', () => win.showInactive());
   // A failed load leaves a blank white page in the transparent window: retry, and show
   // a visible message meanwhile instead of a bare white bar.
@@ -186,6 +220,7 @@ let raiseTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** The overlay sits above everything, including the tray menu, so drop it while a menu is open. */
 function lowerWindow(): void {
+  if (!wantOnTop()) return; // a normal window already sits below the menu
   for (const w of wins) if (!w.isDestroyed()) w.setAlwaysOnTop(false);
   clearTimeout(raiseTimer);
   raiseTimer = setTimeout(raiseWindow, 20000); // safety net if the close event never arrives
@@ -193,7 +228,7 @@ function lowerWindow(): void {
 
 function raiseWindow(): void {
   clearTimeout(raiseTimer);
-  for (const w of wins) if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'screen-saver');
+  for (const w of wins) if (!w.isDestroyed()) applyStacking(w);
 }
 
 function rebuildMenu(): void {
