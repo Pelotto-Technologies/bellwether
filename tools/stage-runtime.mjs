@@ -27,5 +27,6 @@ cpSync(join(root, 'packages/shell/dist'), join(out, 'shell/dist'), { recursive: 
 cpSync(join(root, 'packages/shell/assets'), join(out, 'shell/assets'), { recursive: true });
 cpSync(join(root, 'packages/shell/package.json'), join(out, 'shell/package.json'));
 cpSync(join(root, 'LICENSE'), join(root, 'packages/cli/LICENSE'));
+cpSync(join(root, 'NOTICE'), join(root, 'packages/cli/NOTICE'));
 writeFileSync(join(root, 'packages/cli/README.md'), absolutizeLinks(readFileSync(join(root, 'README.md'), 'utf8')));
 console.error('stage-runtime: staged adapter, renderer and shell into packages/cli/runtime');

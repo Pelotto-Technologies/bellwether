@@ -35,7 +35,9 @@ export type ClientMessage =
 /**
  * Whether a WebSocket upgrade came from the overlay itself rather than some other
  * web page in the user's browser: no Origin (Electron, OBS, scripts) or a loopback one.
- * Closing panes is only accepted from such clients.
+ * Browsers let any site open a WebSocket to 127.0.0.1, so upgrades from other origins are
+ * refused outright: a page you happen to visit must not read your agents' activity or
+ * focus, prompt or close them.
  */
 export function isLocalOrigin(origin: string | undefined): boolean {
   if (!origin || origin === 'null' || origin.startsWith('file:')) return true;
@@ -134,12 +136,15 @@ export class DeltaServer {
       res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
       createReadStream(file).pipe(res);
     });
-    this.wss = new WebSocketServer({ server: this.http, path: DELTA_PATH });
-    this.wss.on('connection', (ws, req) => {
+    this.wss = new WebSocketServer({
+      server: this.http,
+      path: DELTA_PATH,
+      verifyClient: (info: { origin?: string }) => isLocalOrigin(info.origin),
+    });
+    this.wss.on('connection', (ws) => {
       this.clients.add(ws);
-      const local = isLocalOrigin(req.headers.origin);
       ws.on('close', () => this.clients.delete(ws));
-      ws.on('message', (data) => this.onClientMessage(String(data), local));
+      ws.on('message', (data) => this.onClientMessage(String(data)));
       ws.send(JSON.stringify(snapshotDelta(this.world)));
     });
   }
@@ -153,7 +158,7 @@ export class DeltaServer {
     source.on('delta', (d) => this.publish(d));
   }
 
-  private onClientMessage(raw: string, local = false): void {
+  private onClientMessage(raw: string): void {
     const action = this.action;
     let msg: Record<string, unknown>;
     try {
@@ -164,7 +169,7 @@ export class DeltaServer {
     if (!action || typeof msg.paneId !== 'string' || !msg.paneId) return;
     let run: Promise<void> | undefined;
     if (msg.type === 'focus') run = action.focus(msg.paneId);
-    else if (msg.type === 'close' && local) {
+    else if (msg.type === 'close') {
       this.opts.log?.(`closing pane ${msg.paneId} (asked by the overlay)`);
       run = action.close(msg.paneId);
     }
