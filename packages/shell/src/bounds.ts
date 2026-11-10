@@ -43,9 +43,38 @@ export function mapBounds(display: DisplayInfo): Rect {
   return { ...display.workArea };
 }
 
-/** Bounds for the current mode. */
+/** Map window default: 80% of the work area, centred, so there is room to drag it around. */
+export function defaultMapBounds(display: DisplayInfo): Rect {
+  const a = display.workArea;
+  const width = Math.round(a.width * 0.8);
+  const height = Math.round(a.height * 0.8);
+  return { x: a.x + Math.round((a.width - width) / 2), y: a.y + Math.round((a.height - height) / 2), width, height };
+}
+
+/**
+ * Map window rectangle: the saved one when it is still on screen (a monitor may have been unplugged),
+ * else the default on `display`. The size is kept, shrunk to fit its monitor, and the window is nudged fully into the work area.
+ */
+export function mapWindowBounds(displays: readonly DisplayInfo[], display: DisplayInfo, saved?: Rect): Rect {
+  if (!saved) return defaultMapBounds(display);
+  const cx = saved.x + saved.width / 2;
+  const cy = saved.y + saved.height / 2;
+  const host = displays.find((d) => cx >= d.workArea.x && cx < d.workArea.x + d.workArea.width && cy >= d.workArea.y && cy < d.workArea.y + d.workArea.height);
+  if (!host) return defaultMapBounds(display);
+  const a = host.workArea;
+  const width = Math.max(320, Math.min(saved.width, a.width));
+  const height = Math.max(240, Math.min(saved.height, a.height));
+  return {
+    x: Math.min(Math.max(saved.x, a.x), a.x + a.width - width),
+    y: Math.min(Math.max(saved.y, a.y), a.y + a.height - height),
+    width,
+    height,
+  };
+}
+
+/** Bounds for the current mode (map: the default; use `mapWindowBounds` for a remembered position). */
 export function windowBounds(display: DisplayInfo, mode: 'strip' | 'map', scale: number): Rect {
-  return mode === 'map' ? mapBounds(display) : stripBounds(display, stripHeightFor(scale));
+  return mode === 'map' ? defaultMapBounds(display) : stripBounds(display, stripHeightFor(scale));
 }
 
 /** One strip window when the strip spans monitors: where it sits, and its slice of the whole strip. */

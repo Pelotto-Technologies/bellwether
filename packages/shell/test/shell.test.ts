@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { adapterArgs } from '../src/adapter-args.js';
-import { type DisplayInfo, pickDisplay, spanLayout, stripBounds, stripHeightFor, windowBounds } from '../src/bounds.js';
+import { defaultMapBounds, mapWindowBounds, type DisplayInfo, pickDisplay, spanLayout, stripBounds, stripHeightFor, windowBounds } from '../src/bounds.js';
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
 import { errorPage, waitForReady } from '../src/ready.js';
 import { existsSync } from 'node:fs';
@@ -35,8 +35,8 @@ describe('bounds', () => {
   it('clamps height to the display', () => {
     expect(stripBounds(primary, 5000).height).toBe(1080);
   });
-  it('map mode uses the work area', () => {
-    expect(windowBounds(primary, 'map', 3)).toEqual(primary.workArea);
+  it('map mode is a centred window inside the work area', () => {
+    expect(windowBounds(primary, 'map', 3)).toEqual({ x: 192, y: 104, width: 1536, height: 832 });
   });
   it('falls back to primary then first display', () => {
     expect(pickDisplay([second, primary], 2)?.id).toBe(2);
@@ -264,5 +264,35 @@ describe('span all monitors', () => {
     expect(rendererUrl(DEFAULT_CONFIG, { offset: 1280, total: 5760 })).toContain('span=1280%2C5760');
     expect(rendererUrl({ ...DEFAULT_CONFIG, mode: 'map' }, { offset: 1280, total: 5760 })).not.toContain('span');
     expect(rendererUrl({ ...DEFAULT_CONFIG, url: 'http://x/?span=1,2' })).not.toContain('span');
+  });
+});
+
+describe('draggable map window', () => {
+  it('defaults to a centred 80% window', () => {
+    expect(defaultMapBounds(primary)).toEqual({ x: 192, y: 104, width: 1536, height: 832 });
+  });
+  it('restores a saved position and keeps it on screen', () => {
+    const ds = [primary, second];
+    expect(mapWindowBounds(ds, primary, { x: 100, y: 120, width: 800, height: 600 })).toEqual({ x: 100, y: 120, width: 800, height: 600 });
+    expect(mapWindowBounds(ds, primary, { x: 1400, y: 600, width: 800, height: 600 })).toEqual({ x: 1120, y: 440, width: 800, height: 600 });
+  });
+  it('falls back to the default when the saved monitor is gone', () => {
+    expect(mapWindowBounds([primary], primary, { x: 3000, y: 0, width: 800, height: 600 })).toEqual(defaultMapBounds(primary));
+  });
+  it('toggles always-on-top (default off) and resets the position', () => {
+    expect(normalizeConfig({}).mapAlwaysOnTop).toBeUndefined();
+    const on = applyAction(DEFAULT_CONFIG, { type: 'toggle-map-top' }).cfg;
+    expect(on.mapAlwaysOnTop).toBe(true);
+    expect(applyAction(on, { type: 'toggle-map-top' }).cfg.mapAlwaysOnTop).toBeUndefined();
+    const m = buildMenuModel(on, [primary], []);
+    expect(m).toContainEqual({ kind: 'item', label: 'Always on top', checked: true, action: { type: 'toggle-map-top' } });
+    const moved = { ...on, mapBounds: { x: 1, y: 2, width: 400, height: 300 } };
+    expect(applyAction(moved, { type: 'reset-map' }).cfg.mapBounds).toBeUndefined();
+    expect(applyAction(moved, { type: 'pick-display', id: 2 }).cfg.mapBounds).toBeUndefined();
+  });
+  it('sanitises saved config', () => {
+    expect(normalizeConfig({ mapAlwaysOnTop: true, mapBounds: { x: 1.4, y: 2, width: 500, height: 400 } })).toMatchObject({ mapAlwaysOnTop: true, mapBounds: { x: 1, y: 2, width: 500, height: 400 } });
+    expect(normalizeConfig({ mapBounds: { x: 'a', y: 2, width: 5, height: 5 } }).mapBounds).toBeUndefined();
+    expect(normalizeConfig({ mapAlwaysOnTop: 'yes' }).mapAlwaysOnTop).toBeUndefined();
   });
 });

@@ -159,6 +159,14 @@ Herdr after a confirm. Esc, the ✕ or a click on empty ground zooms back out, a
 
 ![Zoomed into a settlement with the detail panel open](docs/images/map-detail.png)
 
+In the desktop overlay the map is a window, not a full-screen takeover: drag the strip at
+its top edge to move it, and Bellwether remembers where you left it. It starts centred at
+80% of the monitor, and a normal window stacks like any other, so it can sit behind your
+editor. To keep it floating above everything, tick **Map window → Always on top** in the
+tray menu (off by default; it is saved as `mapAlwaysOnTop` in the overlay's `shell.json`).
+**Map window → Reset position** recentres it, and picking another monitor moves it there.
+The strip itself always floats on top and lets clicks through.
+
 Orchestrators stand at their repo's settlement and **ride a mount** out to each new
 worktree they spawn, with a trail back home. Settlements gain a building for every four
 agents and camps gain a tent for every two members, with a small pop as each goes up.
