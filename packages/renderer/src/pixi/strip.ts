@@ -110,6 +110,8 @@ export class StripScene {
   private t = 0;
   /** Arrival puffs, redrawn every frame on top of the characters. */
   private fx = new Graphics();
+  /** Speech bubbles sit above every plate and figure so a clamped bubble is never covered. */
+  private bubbleLayer = new Container();
   /** False until the first world arrives, so what already exists does not play an arrival. */
   private primed = false;
   private reduced = prefersReducedMotion();
@@ -141,7 +143,7 @@ export class StripScene {
       this.rowLayers.push(row);
     }
     this.layer.addChild(...[...this.rowLayers].reverse());
-    app.stage.addChild(this.ground, this.layer, this.fx);
+    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
@@ -243,7 +245,8 @@ export class StripScene {
     body.on('pointertap', () => {
       if (this.doubleTap.tap(paneId, performance.now())) this.feed.onFocus?.(paneId);
     });
-    party.root.addChild(body, glow, bubble);
+    party.root.addChild(body, glow);
+    this.bubbleLayer.addChild(bubble);
     party.members.set(paneId, view);
     return view;
   }
