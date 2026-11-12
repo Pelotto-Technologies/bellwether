@@ -5,6 +5,8 @@ export default {
   name: 'aesir',
   displayName: 'Aesir',
   description: 'Gods and folk of the northern sagas, with rune-lit staves and a fjord-side map.',
+  // Camp scene: `tone` is 'camp' (wood and canvas) or 'outpost' (plating and holograms).
+  camp: { tone: 'camp', sky: ['#8ea8c4', '#d8e4ee'], glow: '#ffb050' },
   fallback: 'generic',
   palette: {
     q: '#1e1614', o: '#140f17', e: '#140f17', k: '#4a1c1c', n: '#e08a7a',

@@ -8,6 +8,7 @@ import { Image } from './canvas.mjs';
 import { encodePng, decodePng } from './png.mjs';
 import { drawCharacter, ANIMATIONS, FRAMES, W, H, isTip, isCloak } from './character.mjs';
 import * as Wd from './world.mjs';
+import * as Cp from './camp.mjs';
 import neutral from './packs/neutral.mjs';
 import aesir from './packs/aesir.mjs';
 import wayfarers from './packs/wayfarers.mjs';
@@ -85,6 +86,12 @@ WORLD_STYLE.scifi = {
 };
 WORLD_STYLE.neutral.overrides.mount = { t: '#4a2e1c', m: '#4a2e1c', y: '#3a6ab8', Y: '#2a4e8a' };
 WORLD_STYLE.neutral.overrides.ui = { p: '#ffffff', P: '#e0e0e0' };
+
+/** Activity stations: id, drawing function in camp.mjs, frame count. The ids are the renderer's activity names. */
+const CAMP_STATIONS = [
+  ['edit', 'stEdit', 4], ['read', 'stRead', 4], ['shell', 'stShell', 4], ['search', 'stSearch', 4],
+  ['delegate', 'stDelegate', 4], ['think', 'stThink', 4], ['blocked', 'stBlocked', 2],
+];
 
 const TIP_MASK = { g: '#d9d9d9', G: '#ffffff', z: '#ffffff' };
 const CLOAK_MASK = { c: '#ffffff', C: '#9a9a9a' };
@@ -198,6 +205,35 @@ export function renderPack(pack) {
     banner_cloth: ['banner_cloth_0', 'banner_cloth_1'],
   }));
 
+  // Camp scene.
+  const camp = { tone: 'camp', sky: ['#8fd0f0', '#e4f4fa'], glow: '#ffa84a', ...pack.camp };
+  const tech = camp.tone === 'outpost';
+  const cpal = Cp.campPalette(style, tech);
+  const cpalTent = { ...cpal, ...(style.overrides.settlement ?? {}) };
+  const four = [0, 1, 2, 3];
+  const campItems = [
+    ...four.map((v) => ({ name: `floor_${v}`, grid: Cp.floorTile(tech, v), palette: cpal })),
+    ...four.map((f) => ({ name: `fire_${f}`, grid: Cp.fire(tech, f), palette: cpal })),
+    { name: 'tent', grid: Cp.bigTent(style, tech), palette: cpalTent },
+    ...[0, 1].map((v) => ({ name: `tall_${v}`, grid: Cp.tall(style, tech, v), palette: cpal })),
+    ...[0, 1].map((v) => ({ name: `low_${v}`, grid: Cp.low(style, tech, v), palette: cpal })),
+    ...CAMP_STATIONS.flatMap(([id, fn, n]) => Array.from({ length: n }, (_, f) => ({ name: `st_${id}_${f}`, grid: Cp[fn](tech, f), palette: cpal }))),
+    { name: 'seat', grid: Cp.seat(tech), palette: cpal },
+    ...[0, 1].map((f) => ({ name: `fx_alert_${f}`, grid: Cp.fxAlert(f), palette: cpal })),
+    { name: 'fx_question', grid: Cp.fxQuestion(), palette: cpal },
+    ...[0, 1, 2].map((s) => ({ name: `fx_zzz_${s}`, grid: Cp.fxZzz(s), palette: cpal })),
+    { name: 'fx_sweat', grid: Cp.fxSweat(), palette: cpal },
+    ...[0, 1].map((v) => ({ name: `crate_${v}`, grid: Cp.crate(tech, v), palette: cpal })),
+    { name: 'cart', grid: Cp.cart(tech, false), palette: cpal },
+    { name: 'cart_loaded', grid: Cp.cart(tech, true), palette: cpal },
+  ];
+  const campAtlas = atlas(campItems);
+  png('map/camp.png', campAtlas.img);
+  json('map/camp.json', sheetJson('camp.png', { w: campAtlas.img.w, h: campAtlas.img.h }, campAtlas.placed, {
+    fire: four.map((f) => `fire_${f}`),
+    ...Object.fromEntries(CAMP_STATIONS.map(([id, , n]) => [`st_${id}`, Array.from({ length: n }, (_, f) => `st_${id}_${f}`)])),
+  }));
+
   // UI.
   const uiPal = ov('ui');
   const ui = [
@@ -220,7 +256,7 @@ export function renderPack(pack) {
     character: {
       size: { w: W, h: H }, facing: 'right', anchor: { x: 0.5, y: 30 / 32 },
       frames: FRAMES.map((f) => f.name),
-      fps: { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1 },
+      fps: { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1, work: 4 },
       layers: {
         tip: 'Frame name + "_tip": white status-light pixels. Tint with the status colour and draw over the base frame.',
         cloak: 'Frame name + "_cloak": grey cloak pixels. Tint and draw over the base frame to recolour the cloak.',
@@ -237,6 +273,7 @@ export function renderPack(pack) {
       glow: { frame: 'glow', tint: true }, pin: { frame: 'pin', ring: 'pin_ring', tint: true },
       minimap: style.minimap,
     },
+    camp: { atlas: 'map/camp.json', tone: camp.tone, sky: camp.sky, glow: camp.glow, stations: CAMP_STATIONS.map(([id]) => id) },
     ui: {
       sheet: 'ui/ui.json',
       bubble: { frame: 'bubble', slice: 8, tail: 'bubble_tail' },

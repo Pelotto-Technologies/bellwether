@@ -19,6 +19,9 @@ export const FRAMES = [
   { name: 'talk_1', bob: 0, mouth: 'closed' },
   { name: 'raise_0', bob: -1, armF: 'raise', mouth: 'open', raise: true },
   { name: 'blink_0', bob: 0, blink: true },
+  // Hammering, tinkering: the held item goes up, then swings down. Used by the camp scene.
+  { name: 'work_0', bob: -1, armF: 'raise', armUp: true },
+  { name: 'work_1', bob: 1, armF: 'swingF' },
 ];
 
 export const ANIMATIONS = {
@@ -28,6 +31,7 @@ export const ANIMATIONS = {
   talk: ['talk_0', 'talk_1'],
   raise: ['raise_0'],
   blink: ['blink_0'],
+  work: ['work_0', 'work_1'],
 };
 
 const TIP_KEYS = new Set(['g', 'G', 'z']);
@@ -112,7 +116,7 @@ export function drawFrame(spec, frame) {
   const item = P.ITEMS[spec.item ?? 'none'];
   if (spec.item && item === undefined) throw new Error(`${spec.id}: unknown item ${spec.item}`);
   if (item) {
-    const v = frame.raise ? item.raise : item.hold;
+    const v = frame.raise || frame.armUp ? item.raise : item.hold;
     g.stamp(v.rows, sx + armF.grip[0] - v.grip[0], sy + armF.grip[1] - v.grip[1]);
   }
   g.stamp(armF.rows, sx, sy, { map: sleeve });
