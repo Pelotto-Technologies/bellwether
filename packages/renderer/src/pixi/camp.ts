@@ -34,6 +34,7 @@ interface MView {
   phase: number;
   born: number;
   act: string;
+  bubbleKey?: string;
   actSince: number;
 }
 
@@ -242,7 +243,7 @@ export class CampScene {
     const sw = mk(this.overlay, 0.5);
     sw.texture = art.frame('fx_sweat');
     const bg = new Graphics();
-    const text = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 8, fill: 0x1b1b24, wordWrap: true, wordWrapWidth: 104, lineHeight: 9 }, resolution: 4 });
+    const text = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 7, fill: 0x1b1b24, wordWrap: true, wordWrapWidth: 92, lineHeight: 8 }, resolution: 4 });
     const bubble = new Container();
     bubble.addChild(bg, text);
     this.overlay.addChild(bubble);
@@ -327,7 +328,8 @@ export class CampScene {
     v.mark.visible = showMark;
     if (showMark) {
       v.mark.texture = art.frame(act === 'blocked' ? `fx_alert_${pose.mark}` : 'fx_question');
-      v.mark.position.set(Math.round(x + dir * 2), Math.round(headY - (act === 'unknown' ? Math.round(Math.sin(this.t * 2.5 + v.phase) + 1) : 0)));
+      // Beside the head, on the side away from the fire, so it never covers the neighbour above.
+      v.mark.position.set(Math.round(x - dir * 15), Math.round(y - 20 - (act === 'unknown' ? Math.round(Math.sin(this.t * 2.5 + v.phase) + 1) : 0)));
     }
     const zs = act === 'idle' ? zzz(this.t, v.phase) : [];
     v.zzz.forEach((s, i) => {
@@ -349,15 +351,21 @@ export class CampScene {
     const say = feed.say(party.id, m.paneId, now);
     v.bubble.visible = !!say;
     if (say) {
-      if (v.text.text !== say) {
-        v.text.text = say;
-        v.bg.clear().roundRect(0, 0, v.text.width + 8, v.text.height + 6, 3).fill({ color: 0xffffff, alpha: 0.95 }).stroke({ color: 0x1b1b24, width: 1 });
-        v.text.position.set(4, 3);
-      }
+      if (v.text.text !== say) v.text.text = say;
       const bw = v.text.width + 8;
       const bh = v.text.height + 6;
-      const lift = showMark ? 18 : 0;
-      v.bubble.position.set(Math.round(Math.min(this.size.w - bw - 2, Math.max(2, x - bw / 2))), Math.round(y - 36 - bh - lift));
+      const lift = showMark ? 6 : 0;
+      const bx = Math.round(Math.min(this.size.w - bw - 2, Math.max(2, x - bw / 2)));
+      // The tail points at the speaker.
+      const tx = Math.round(Math.min(bw - 7, Math.max(7, x - bx)));
+      const key = `${say}|${tx}`;
+      if (key !== v.bubbleKey) {
+        v.bubbleKey = key;
+        const ink = { color: 0x1b1b24, width: 1 };
+        v.bg.clear().roundRect(0, 0, bw, bh, 3).fill({ color: 0xffffff, alpha: 0.95 }).stroke(ink).poly([tx - 3, bh - 0.5, tx + 3, bh - 0.5, tx, bh + 4]).fill({ color: 0xffffff }).moveTo(tx - 3, bh).lineTo(tx, bh + 4).lineTo(tx + 3, bh).stroke(ink);
+        v.text.position.set(4, 3);
+      }
+      v.bubble.position.set(bx, Math.round(y - 37 - bh - lift));
     }
   }
 

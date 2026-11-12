@@ -56,7 +56,8 @@ pack folder.
 - `name`, `displayName`, `description`, `license`.
 - `character`: `size` `{w,h}` (24x32), `facing` (`right`), `anchor` `{x,y}` as
   fractions (bottom-centre of the feet), `frames` (must include `walk_N`, `idle_N`,
-  `wave_N`, `talk_N`, `raise_N`, `blink_N`), `fps` per animation.
+  `wave_N`, `talk_N`, `raise_N`, `blink_N`; the camp scene also plays `work_0..1`, a
+  hammering pose, and shows `talk` instead when a sheet has none), `fps` per animation.
 - `roles.<role>`: `sheet` (a sprite sheet JSON), `displayName`, `cloak` (`#rrggbb`),
   `light` (tip tint). `fallback` names the role used for roles you leave out
   (default `generic`, which must exist).
@@ -90,6 +91,41 @@ on grass) and `autotile`. Paths and water are 16-tile autotiles: N=1, E=2, S=4, 
 neighbours with the same terrain, giving `path_<mask>` and `water_<mask>` (alternate
 with `water_<mask>_b` to shimmer). `map/props.json` is a normal spritesheet with the
 settlement, camp, campfire frames, signpost, mount, banner pieces, glow and pins.
+
+## Camp scene
+
+The camp scene (click a camp, then **Enter camp**) draws one party at its stations around a
+fire. It needs a second atlas, `map/camp.json` + `map/camp.png` (a normal spritesheet, found
+the same way as `props`), and an optional `camp` block in `art.json`:
+
+```json
+"camp": { "atlas": "map/camp.json", "tone": "camp", "sky": ["#8fd0f0", "#e4f4fa"], "glow": "#ffa84a" }
+```
+
+| Key | Meaning |
+|---|---|
+| `tone` | `camp` (wood and canvas) or `outpost` (plating and holograms). The renderer uses it for the ground (a trodden clearing or a plated bay), the sky (clouds and sun, or stars and a moon) and the light. Default `camp`. |
+| `sky` | Two `#rrggbb` colours: top of the sky, then the horizon. |
+| `glow` | Colour of the fire's light (also used for its sparks). |
+| `stations` | Informational: the activity stations the atlas draws. |
+
+A pack with no `camp.*` files borrows the neutral pack's camp art (and look), so it still
+renders. The frames the renderer asks for by name (all anchored bottom-centre unless noted):
+
+| Frames | What |
+|---|---|
+| `floor_0..3` | 16x16 clearing tiles. |
+| `fire_0..3` | The fire (or energy core), about 44x40, with the ground ring at the bottom. |
+| `tent` | A tent or pod, about 44x34. |
+| `tall_0..1`, `low_0..1` | Scenery: trees or pylons, bushes or rocks or crates. |
+| `st_edit_0..3`, `st_read_0..3`, `st_shell_0..3`, `st_search_0..3`, `st_delegate_0..3`, `st_think_0..3` | One animated prop per activity (anvil, lectern, cauldron, lookout, map table, easel in the camp packs), 32x32 with the ground at row 31. The member stands beside it. |
+| `st_blocked_0..1` | A signal lamp, unlit then lit. |
+| `seat` | A log or bench drawn over the legs of a sitting member (done, idle, unknown). |
+| `fx_alert_0..1`, `fx_question`, `fx_zzz_0..2`, `fx_sweat` | Marks beside and above the head. |
+| `crate_0..1`, `cart`, `cart_loaded` | Git: crates for uncommitted files (up to nine), a loaded cart while commits are unpushed. |
+
+Which activity a member plays is decided in the core from its status and tool name
+(`packages/renderer/src/map/activity.ts`), so a pack only supplies art.
 
 ## UI
 
