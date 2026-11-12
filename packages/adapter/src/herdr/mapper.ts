@@ -56,6 +56,24 @@ export function partyFromWorkspace(ws: WorkspaceInfo, members: Record<string, Me
   return p;
 }
 
+/**
+ * Local folder of each party: the worktree checkout path Herdr reports, else the cwd of
+ * the workspace's lowest-numbered agent pane. Only parties in `parties` get an entry.
+ */
+export function foldersFromSnapshot(snap: SessionSnapshot, parties: Record<string, Party>, ctx: MapContext): Record<string, string> {
+  const out: Record<string, string> = {};
+  const recs = [...(snap.agents ?? []), ...(snap.panes ?? [])].sort((a, b) => paneNumber(a.pane_id) - paneNumber(b.pane_id));
+  for (const ws of snap.workspaces) {
+    const id = partyId(ctx.session, ws.workspace_id);
+    const party = parties[id];
+    if (!party) continue;
+    const cwd = recs.find((r) => r.workspace_id === ws.workspace_id && r.pane_id in party.members && r.cwd)?.cwd;
+    const folder = ws.worktree?.checkout_path || cwd;
+    if (folder) out[id] = folder;
+  }
+  return out;
+}
+
 /** Trailing pane number of an id like `w1:p3`, for ordering panes within a workspace. */
 function paneNumber(id: string): number {
   const m = /(\d+)\D*$/.exec(id);

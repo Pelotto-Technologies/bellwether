@@ -1,7 +1,7 @@
 import { createRng, pick } from './random.js';
 import { BaseSource } from './source.js';
 import { applyDelta, emptyWorld } from './world.js';
-import type { Delta, Member, Party, Role, Status, World } from './types.js';
+import type { Delta, GitState, Member, Party, Role, Status, World } from './types.js';
 
 interface PartySeed {
   label: string;
@@ -18,6 +18,16 @@ const PARTIES: PartySeed[] = [
   { label: 'search-index', repo: 'api', branch: 'perf/search-index', roles: ['architect', 'researcher', 'implementer'] },
   { label: 'docs-site', repo: 'docs', branch: 'docs/getting-started', roles: ['coordinator', 'writer', 'researcher'] },
   { label: 'deploy-pipeline', repo: 'infra', roles: ['architect', 'ops', 'implementer'] },
+];
+
+// Mock git block: starting values per party, drifting every few steps from a separate rng.
+const MOCK_GIT: GitState[] = [
+  { dirty: 0, ahead: 0, noRemote: false },
+  { dirty: 3, ahead: 2, noRemote: false },
+  { dirty: 12, ahead: 0, noRemote: false },
+  { dirty: 0, ahead: 4, noRemote: false },
+  { dirty: 1, ahead: 0, noRemote: false },
+  { dirty: 2, ahead: 0, noRemote: true },
 ];
 
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;
@@ -65,9 +75,12 @@ export class MockGenerator {
   private rng: () => number;
   private world: World;
   private seq = 0;
+  private gitRng: () => number;
+  private steps = 0;
 
   constructor(opts: MockOptions = {}) {
     this.rng = createRng(opts.seed ?? 1);
+    this.gitRng = createRng((opts.seed ?? 1) + 1000);
     this.world = emptyWorld(opts.machine ?? 'local');
   }
 
@@ -97,6 +110,7 @@ export class MockGenerator {
         status: 'unknown',
         members,
         tokens: {},
+        git: { ...MOCK_GIT[i % MOCK_GIT.length]! },
       };
     });
     const delta: Delta = { t, kind: 'snapshot', world: { machine: this.world.machine, parties } };
@@ -109,7 +123,19 @@ export class MockGenerator {
     return this.world;
   }
 
+  /** Every sixth step: one party's git counts move (a commit, an edit, a push). */
+  private driftGit(t: number): Delta {
+    const party = pick(this.gitRng, Object.values(this.world.parties));
+    const g = party.git ?? { dirty: 0, ahead: 0, noRemote: false };
+    const roll = this.gitRng();
+    const git: GitState = roll < 0.4 ? { ...g, dirty: g.dirty + 1 } : roll < 0.6 ? { ...g, dirty: 0, ahead: g.noRemote ? 0 : g.ahead + 1 } : roll < 0.8 ? { ...g, ahead: 0 } : { ...g, dirty: Math.max(0, g.dirty - 2) };
+    const delta: Delta = { t, kind: 'party', party: { ...party, git } };
+    this.world = applyDelta(this.world, delta);
+    return delta;
+  }
+
   step(t = 0): Delta {
+    if (++this.steps % 6 === 0) return this.driftGit(t);
     const parties = Object.values(this.world.parties);
     const party = pick(this.rng, parties);
     const member = pick(this.rng, Object.values(party.members));
