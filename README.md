@@ -75,12 +75,8 @@ subagents show up as extra agents under their session while they run.
 ```sh
 npm i -g @pelotto-tech/bellwether@latest
 bellwether install --events      # adds activity hooks to Claude Code and Copilot CLI
-<<<<<<< HEAD
 bellwether install --statusline  # optional, Claude Code: context and quota bars, model, quest (see Vitals)
-bellwether overlay --hooks       # or source = "hooks" in bellwether.toml
-=======
 bellwether overlay               # uses the events file when Herdr is not running
->>>>>>> worktree-agent-ac713d9cdaadc7ec6
 ```
 
 Prefer a Claude Code plugin to editing settings? Skip `--events` and use:
@@ -385,15 +381,10 @@ overlay after starting Herdr:
 | `bellwether uninstall` | Remove only what `install` wrote. |
 | `bellwether overlay [--hooks]` | Open the desktop overlay (Herdr if running, else agent events; `--hooks` forces events). |
 | `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
-<<<<<<< HEAD
 | `bellwether install --statusline` | Claude Code only: report context, quota, model, effort and session name for vitals, wrapping any status line you have. |
 | `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--ev vitals --ctx N --quota N ...` for vitals). |
 | `bellwether hook statusline` | Status line body: reports vitals from the JSON on stdin, then prints the line. |
-| `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
-=======
-| `bellwether emit --ev <kind> ...` | Append one activity event from any tool. |
 | `bellwether run` | Serve the overlay on port 7341 (Herdr if running, else agent events; `--live`, `--hooks`, `--mock` force one). |
->>>>>>> worktree-agent-ac713d9cdaadc7ec6
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
 | `bellwether record F [--scrub]` | Run live and append deltas to `F`. |
