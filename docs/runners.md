@@ -140,6 +140,56 @@ checkers and testers are `reviewer`; explorers and searchers are `researcher`; d
 deploy, CI and infrastructure agents are `ops`; anything else is `generic`. Use `name` or `--label` for the
 distinction your own role names carry.
 
+## Fleet: one master for many projects
+
+Bellwether works without any of this and draws exactly the same map when no fleet marker is
+present. The marker only adds a hub, rollups and journeys for runners that coordinate several
+projects from one pane.
+
+**Token contract.** Tag the master pane `role=orchestrator` and `scope=fleet` (any other
+`scope`, or `scope=fleet` on another role, is ignored). Optionally add `name`.
+
+```sh
+herdr pane report-metadata <pane> --source bellwether --token role=orchestrator --token scope=fleet --token name=Dispatch
+```
+
+Without Herdr: `bellwether emit start --session lead --role orchestrator --scope fleet --label Dispatch`.
+
+**Projects and messages.**
+- A project is a normal workspace party, so repos become settlements as usual. A project
+  that is a bare node (a pane that is not an agent) can be drawn with `role=orchestrator`,
+  `name=<project>` and `state=<status>`.
+- `say` plus `say_to` addresses another member, and `say_to` also matches a `name` token, so the
+  master can address a project node by name. With hooks, `prompt`, `tool` and `wait` events
+  take `to=<session id>` (`bellwether emit tool --session lead --to api-lead --detail "Rebase onto main"`).
+- A `say` between members of different parties, in either direction, or between the master
+  and a project, is drawn as a journey.
+
+**What you see.**
+- The master stands at a hub near the map centre, clear of settlements, camps, water and road
+  ends. With none or one settlement it sits at the centre or beside the first one. Several
+  masters all stand at the hub. Settlements are not moved to make room for it.
+- A fleet-only party never becomes a settlement or camp, and a master inside a repo workspace
+  is lifted out of that camp. Fleet members never appear in the camp scene.
+- Rollup: each settlement shows its worst status (blocked, done, working, idle, unknown, so idle
+  and unknown never hide done work). The hub beacon is the worst of the fleet and the master's
+  own status, both shown.
+- Journeys: messages sent within about half a second are merged into one trip of at most 6 stops,
+  ordered for a short path; more become plain bubbles at home, as does an unknown target. Each leg
+  takes about 2 to 6 seconds and a trip is capped at about 20 seconds, after which remaining bubbles
+  appear at once. The bubble's timer starts on arrival, a marker shows the empty seat while the
+  speaker is away, and the status colour is unaffected. Journeys need a fleet master; reduced
+  motion, strip mode and the camp scene draw no travel.
+- Alerts: toasts read `Name (reviewer) finished · party · settlement`, only when a master or more than one
+  settlement exists. A blocked member that says something to the master raises "needs you" once.
+  Clicking the master focuses its pane.
+- A theme pack may supply `map.hub` (guild house, great hall, map room, signal tower); otherwise a generic
+  hub is drawn, see [themes](themes.md).
+
+**Scenarios.** A runner with 3 projects and an escalation: the master sends a line per project, a
+project's coordinator blocks and says so to the master (toast, red pennant, beacon), the master blocks
+briefly, then works again. `bellwether-adapter --mock` (or `pnpm mock`) plays exactly this; `--mock-fleet 0` turns it off.
+
 ## Picking a matching name pool
 
 `bellwether pack` prints the skin the overlay is showing, so a runner can choose names that fit it:
@@ -161,4 +211,5 @@ the current directory), or `default`. `available` lists the pack folders found, 
   `--detail` or `--label`; recordings drop `say`, `title`, `quest` and `name` when scrubbed.
 - At most 40 characters for `name`, `model` and `--label`; 16 for `effort`; 80 for `quest`.
 - A pane belongs to one party and one member; a pane with no agent needs a `role` token to be drawn.
+- `scope` is only `fleet`, only with `role=orchestrator`.
 - Bellwether only displays: it does not start, stop or steer agents.

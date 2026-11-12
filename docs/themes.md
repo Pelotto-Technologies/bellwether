@@ -85,6 +85,7 @@ pack folder.
   horizontally).
 - `ui`: `sheet`, `bubble` and `nameplate` (`{frame, slice[, tail]}`, 9-slice margin in
   pixels), `minimapFrame`, `statusIcons` (frame per status, default `status_<status>`).
+- `map.hub`: optional frame in `map/props.json` for the fleet hub (the public packs use a guild house, great hall, map room or signal tower; the spritegen pack field `hub` picks one of `guildhouse`, `greathall`, `waystation`, `tower`, `generic`). A pack without it gets a generic hub.
 - `map`: `tileset`, `props`, frame names for `settlement`, `camp`, `campfire`,
   `signpost`, `mount`, `banner`, `glow`, `pin`, and `minimap` colours. These are used by map mode
   (`packages/renderer/src/map/` and `src/pixi/map.ts`); `art.ts` does not validate

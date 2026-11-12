@@ -211,6 +211,21 @@ only walk when it means something (a message to a teammate, a new worktree to ri
 
 ![An orchestrator riding out as new worktrees arrive](docs/images/map-story.gif)
 
+### Fleet
+
+If one master pane drives several projects (a runner such as Flock, or your own script),
+tag it `role=orchestrator` with `scope=fleet` and it stands at a **hub** in the middle of
+the map, with roads to every settlement. Each settlement flies a pennant in its worst
+status, and the hub's beacon shows the worst across the fleet next to the master's own
+status. Click the hub for a panel with the master and one line per project (no camp to
+enter). A message between parties, or to the master, is shown as a short **journey** along
+the roads: the speaker walks over, the bubble appears on arrival, then they walk home.
+Toasts then also name the settlement. In strip mode the master walks at the front under
+its own violet banner. Without the tag nothing changes: the map is drawn exactly as before.
+See [Fleet: one master for many projects](docs/runners.md#fleet-one-master-for-many-projects).
+
+![A fleet master at the hub with roads to three projects](docs/images/fleet-map.png)
+
 ### Camp
 
 Zoom into a worktree and **Enter camp** (or press Enter, or double-click the camp) to see its

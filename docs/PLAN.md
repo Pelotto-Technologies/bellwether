@@ -239,6 +239,7 @@ interface Member {                   // one pane with an agent
   paneId: string;
   agent: string;                    // 'claude', 'codex', ...
   role?: string;                    // 'architect' from tokens.role, else fallback chain
+  scope?: 'fleet';                  // tokens.scope; only with role 'orchestrator': the master of many projects, drawn at the map hub
   status: Status;
   title?: string;
   say?: string;                     // tokens.say, cleared on TTL expiry

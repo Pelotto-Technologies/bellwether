@@ -25,6 +25,8 @@ by appending lines itself.
 | `sub`, `subType` | for `sub_*` | Id and type of a subagent (a worker under `session`). |
 | `ctx`, `quota` | `vitals` only | Percent remaining, 0 to 100: `ctx` of the context window, `quota` of the 5-hour usage quota. Clamped; anything that is not a number is dropped. |
 | `model`, `effort`, `name` | `vitals` only | Model display name (40 characters), reasoning effort (16) and the session's human name, shown as its quest (80). Control and bidi characters are stripped and whitespace collapsed. |
+| `scope` | no | Only `fleet`, only with `role` `orchestrator`: the session is a fleet master and stands at the map hub. Anything else is dropped. |
+| `to` | no | Only on `prompt`, `tool` and `wait` (200 characters): a `session` id. The line is a message to that session, drawn as a journey on the map. An unknown session gives a plain bubble. |
 | `tool`, `detail` | no | Short label, at most 72 characters, one line. Never put prompt text or secrets here. |
 
 ## Kinds
