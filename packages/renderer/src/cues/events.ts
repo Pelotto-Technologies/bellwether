@@ -1,4 +1,6 @@
 import { applyDelta, type Delta, type Party, type Recap, type Role, type World } from '@bellwether/adapter/core';
+import { isFleetLead, settlementOf, splitFleet } from '../fleet.js';
+import { repoKey } from '../map/layout.js';
 import type { CueKind } from './schedule.js';
 
 /**
@@ -16,6 +18,8 @@ export interface CueEvent {
   name?: string;
   /** The party label. */
   label?: string;
+  /** The project (settlement) the party belongs to; set only when the world has a fleet lead or more than one project, so a lone project's alerts read as before. */
+  settlement?: string;
   /** For `done`: how long the member had been working, when we saw it start. */
   durationMs?: number;
   /** For `spawn`: a whole party or one more member in a known party. */
@@ -49,6 +53,12 @@ const keyOf = (partyId: string, paneId: string) => `${partyId}/${paneId}`;
 /** The role to show for a party as a whole: its first member's. */
 function leadRole(p: Party): Role | undefined {
   return Object.values(p.members)[0]?.role;
+}
+
+/** Alerts name the project once there is more than one to tell apart: a fleet lead, or two or more repos. */
+export function namesProjects(world: World): boolean {
+  const { world: w, leads } = splitFleet(world);
+  return leads.length > 0 || new Set(Object.values(w.parties).map(repoKey)).size > 1;
 }
 
 export class EventCore {
@@ -88,7 +98,15 @@ export class EventCore {
     }
     if (delta.kind === 'say') {
       const from = prev.parties[delta.partyId]?.members[delta.paneId];
-      if (from && delta.to) events.push({ kind: 'message', at: delta.t, partyId: delta.partyId, paneId: delta.paneId, role: from.role, label: prev.parties[delta.partyId]!.label });
+      const party = prev.parties[delta.partyId];
+      if (from && party && delta.to) {
+        const base = { at: delta.t, partyId: delta.partyId, paneId: delta.paneId, role: from.role, ...(from.name ? { name: from.name } : {}), label: party.label, ...(!isFleetLead(from) && namesProjects(next) ? { settlement: settlementOf(party) } : {}) };
+        const target = prev.parties[delta.to.partyId]?.members[delta.to.paneId];
+        // A blocked member telling the fleet lead is the member asking for the person: that is the "needs you" alert, not
+        // a message blip as well. The flap guard keeps it to one however the status and the line arrive.
+        if (from.status === 'blocked' && target && isFleetLead(target)) events.push({ kind: 'blocked', ...base });
+        else events.push({ kind: 'message', ...base });
+      }
     } else if (delta.kind === 'removed') {
       const prefix = `${delta.partyId}/`;
       for (const k of [...this.workStart.keys()]) if (delta.paneId === undefined ? k.startsWith(prefix) : k === keyOf(delta.partyId, delta.paneId)) this.workStart.delete(k);
@@ -115,7 +133,7 @@ export class EventCore {
     for (const m of Object.values(after.members)) {
       const key = keyOf(partyId, m.paneId);
       const was = before.members[m.paneId];
-      const base = { at: t, partyId, paneId: m.paneId, role: m.role, ...(m.name ? { name: m.name } : {}), label: after.label };
+      const base = { at: t, partyId, paneId: m.paneId, role: m.role, ...(m.name ? { name: m.name } : {}), label: after.label, ...(!isFleetLead(m) && namesProjects(next) ? { settlement: settlementOf(after) } : {}) };
       if (!was) {
         if (m.status === 'working') this.workStart.set(key, t);
         out.push({ kind: 'spawn', scope: 'member', ...base });

@@ -182,7 +182,7 @@ describe('mock fleet', () => {
     const parties = Object.values(first.world.parties);
     const leads = parties.flatMap((p) => Object.values(p.members)).filter((m) => m.scope === 'fleet');
     expect(leads).toHaveLength(1);
-    expect(leads[0]).toMatchObject({ role: 'orchestrator', name: 'Fleet lead' });
+    expect(leads[0]).toMatchObject({ role: 'orchestrator', name: 'Dispatch' });
     const home = parties.find((p) => leads[0]!.paneId in p.members)!;
     expect(home.repo).toBeUndefined();
     expect(Object.keys(home.members)).toEqual([leads[0]!.paneId]);
@@ -214,7 +214,7 @@ describe('mock fleet', () => {
   it('scrubbed, a mock fleet leaks no project name, lead name or line', () => {
     const first = run({ seed: 1 }, 0)[0]!;
     const text = JSON.stringify(scrubDelta(first));
-    for (const leak of ['Fleet lead', '"docs"', '"infra"', '"api"', '"label":"fleet"', 'auth-refresh']) expect(text).not.toContain(leak);
+    for (const leak of ['Dispatch', '"docs"', '"infra"', '"api"', '"label":"fleet"', 'auth-refresh']) expect(text).not.toContain(leak);
     const sayAddr = scrubDelta({ t: 1, kind: 'say', partyId: 'w8', paneId: 'w8:p1', text: 'Hold the deploy for now', to: { partyId: 'w1', paneId: 'w1:p1' } });
     expect(JSON.stringify(sayAddr)).not.toContain('deploy');
   });

@@ -1,4 +1,5 @@
 import type { Member, Party, World } from '@bellwether/adapter/core';
+import { splitFleet, type FleetLead } from './fleet.js';
 import { repoKey } from './map/layout.js';
 import { hash01 } from './sim.js';
 
@@ -49,6 +50,8 @@ export interface FellowshipView {
   fellowships: Fellowship[];
   /** Follower party id to its fellowship. */
   byParty: Map<string, Fellowship>;
+  /** Fleet leads (`scope: fleet`), lifted out of every party. Empty without a fleet. */
+  fleet: FleetLead[];
   /** Party id to its tint; absent when the party stands alone and keeps the pack's colours. */
   tints: Map<string, string>;
 }
@@ -84,7 +87,9 @@ export function groupFellowships(world: World, opts: FellowshipOptions = {}): Fe
   return view;
 }
 
-function compute(world: World, leadAlone: boolean): FellowshipView {
+function compute(raw: World, leadAlone: boolean): FellowshipView {
+  // A fleet lead belongs to no repo: it is lifted out first, so it never counts as a repo's leader or member.
+  const { world, leads: fleet } = splitFleet(raw);
   const groups = new Map<string, Party[]>();
   for (const p of Object.values(world.parties)) groups.set(groupKey(p), [...(groups.get(groupKey(p)) ?? []), p]);
 
@@ -123,7 +128,7 @@ function compute(world: World, leadAlone: boolean): FellowshipView {
     if (led || kept.length >= 2) tintable.push(...kept.map((p) => p.id));
   }
 
-  return { world: { ...world, parties }, fellowships, byParty, tints: assignTints(tintable) };
+  return { world: { ...world, parties }, fellowships, fleet, byParty, tints: assignTints(tintable) };
 }
 
 /**

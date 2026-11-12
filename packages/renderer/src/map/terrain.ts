@@ -1,5 +1,6 @@
 import { hash01 } from '../sim.js';
 import type { MapLayout } from './layout.js';
+import { buildRoads } from './roads.js';
 
 /** Deterministic terrain for a layout: grass, paths between camps and settlements, ponds, scenery. */
 
@@ -49,7 +50,7 @@ export function buildTerrain(layout: MapLayout): Terrain {
   for (let i = 0; i < t.ground.length; i++) t.variant.push(Math.floor(hash01(`v${i}`) * 4));
 
   // Occupied tiles: nothing grows or floods within a few tiles of a building.
-  const anchors = [...layout.settlements.map((s) => ({ ...s.tile, r: 4 })), ...[...layout.camps.values()].map((c) => ({ ...c.tile, r: 3 }))];
+  const anchors = [...layout.settlements.map((s) => ({ ...s.tile, r: 4 })), ...[...layout.camps.values()].map((c) => ({ ...c.tile, r: 3 })), ...(layout.hub ? [{ ...layout.hub, r: 4 }] : [])];
   const near = (x: number, y: number) => anchors.some((a) => Math.abs(a.x - x) <= a.r && Math.abs(a.y - y) <= a.r - 1);
 
   for (let y = 0; y < t.h; y++) {
@@ -58,14 +59,13 @@ export function buildTerrain(layout: MapLayout): Terrain {
     }
   }
 
-  // Camps link to their settlement; settlements chain together in a stable order.
-  const bySettlement = new Map(layout.settlements.map((s) => [s.key, s]));
-  for (const c of layout.camps.values()) {
-    const s = bySettlement.get(c.settlementKey)!;
-    carve(t, c.tile.x, c.tile.y, s.tile.x, s.tile.y);
+  // Roads: camps link to their settlement, settlements chain together, and a fleet's hub links to every settlement.
+  const roads = buildRoads(layout);
+  for (const e of roads.edges) {
+    const a = roads.nodes.get(e.a)!.tile;
+    const b = roads.nodes.get(e.b)!.tile;
+    carve(t, a.x, a.y, b.x, b.y);
   }
-  const ordered = [...layout.settlements].sort((a, b) => a.tile.x - b.tile.x || a.tile.y - b.tile.y);
-  for (let i = 1; i < ordered.length; i++) carve(t, ordered[i - 1]!.tile.x, ordered[i - 1]!.tile.y, ordered[i]!.tile.x, ordered[i]!.tile.y);
 
   for (let y = 0; y < t.h; y++) {
     for (let x = 0; x < t.w; x++) {

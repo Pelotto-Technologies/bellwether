@@ -235,7 +235,7 @@ export class MockGenerator {
       isWorktree: false,
       status: 'unknown',
       members: {
-        [FLEET_LEAD.paneId]: { paneId: FLEET_LEAD.paneId, agent: 'claude', role: 'orchestrator', scope: 'fleet', status: 'working', name: 'Fleet lead', title: 'Watching the projects', vitals: { context: 64, quota: this.quota, at: 0 }, model: 'Opus 5.5', effort: 'high', lastChange: this.seq++ },
+        [FLEET_LEAD.paneId]: { paneId: FLEET_LEAD.paneId, agent: 'claude', role: 'orchestrator', scope: 'fleet', status: 'working', name: 'Dispatch', title: 'Watching the projects', vitals: { context: 64, quota: this.quota, at: 0 }, model: 'Opus 5.5', effort: 'high', lastChange: this.seq++ },
       },
       tokens: {},
       git: { dirty: 0, ahead: 0, noRemote: false },

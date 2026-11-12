@@ -1,7 +1,11 @@
 import type { Member, Party, Status, World } from '@bellwether/adapter/core';
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, pickFollower, type Fellowship, type FellowshipView } from '../fellowship.js';
-import type { FeedState } from '../feed.js';
+import { describeFleet, fleetRollup, hubBeacon, isFleetLead, settlementStatuses, splitFleet, withoutFleet, type FleetLead } from '../fleet.js';
+import type { FeedState, SayEntry } from '../feed.js';
+import { JourneyBoard, type Place, type TravelPose } from '../map/journey.js';
+import { isJourney, nodeOf } from '../map/place.js';
+import { buildRoads, HUB_ID, settlementNode } from '../map/roads.js';
 import { pickPartner } from '../map/chatter.js';
 import { campPanel, campPanelHtml } from '../map/camppanel.js';
 import type { CampArt } from '../map/campart.js';
@@ -28,6 +32,10 @@ import type { LoadedArt } from './pack.js';
 
 const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 const CAMP_RADIUS = 22;
+/** The focus id of the fleet hub: not a party, but the panel and the camera treat it like one. */
+export const HUB_FOCUS = 'fleet:hub';
+/** A courier stands this far to the left of the listener it came to. */
+const ARRIVE_OFFSET = -10;
 /** How far a rider sits above the ground while mounted, in world pixels. */
 const RIDER_LIFT = 8;
 /** A leader farther than this from its settlement rides home. */
@@ -100,12 +108,27 @@ export class MapScene {
   /** New led camps waiting for their orchestrator to ride out and summon them. */
   private summons = new Map<string, { prefix: string; to: { x: number; y: number }; arrive: number; speed: number }>();
   private waterSprites: { sprite: Sprite; a: Texture; b: Texture }[] = [];
+  /** Couriers: messages between parties travel the roads. Only active while the world has a fleet lead. */
+  private journeys = new JourneyBoard({ nodes: new Map(), edges: [] });
+  /** Lines taken from the feed while their speaker travels, by say id, until they arrive. */
+  private carried = new Map<number, SayEntry>();
+  private feedEpoch = 0;
+  /** Empty seats at the homes of couriers who are out; redrawn every frame, under the characters. */
+  private awayMarks = new Graphics();
+  /** The fleet's hub building and its beacon, rebuilt with the layout. */
+  private hubView: { root: Container; beacon: Graphics; pips: Graphics; glow: Sprite; label: Text } | undefined;
+  /** Status flag and glow at each settlement, shown only when the world has a fleet. */
+  private pennants = new Map<string, { root: Container; cloth: Graphics; glow: Sprite }>();
+  /** Fleet leads standing at the hub, by `<party>/<pane>`. */
+  private fleetViews = new Map<string, MemberView>();
+  private fleetLeads: FleetLead[] = [];
   private parties = new Map<string, PartyView>();
   private leaders = new Map<string, MemberView>();
   /** Leader view id to the Herdr workspace its pane lives in, so a click on a leader opens that workspace. */
   private leaderParty = new Map<string, string>();
   private fellowships: FellowshipView = groupFellowships({ machine: 'local', parties: {} });
   private settlementViews: Container[] = [];
+  private settlementLabels: Text[] = [];
   private towns = new Map<string, Container>();
   /** Build time of each building per settlement, kept across layout rebuilds so growth pops once. */
   private townBorn = new Map<string, number[]>();
@@ -136,7 +159,7 @@ export class MapScene {
     private figures: LoadedArt | null = null,
     campArt: CampArt | null = null,
   ) {
-    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer, this.fx, this.levelFx.layer);
+    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.awayMarks, this.actorLayer, this.fx, this.levelFx.layer);
     app.stage.addChild(this.world);
     if (campArt) {
       this.camp = new CampScene({ theme, feed, mapArt: art, art: campArt, figures, procTexture: (r, f, b) => this.frameTexture(r, f, b) });
@@ -154,6 +177,11 @@ export class MapScene {
     document.getElementById('detail-close')?.addEventListener('click', () => this.back());
     document.getElementById('camp-back')?.addEventListener('click', () => this.back());
     for (const el of [this.panel, this.campEl]) el?.addEventListener('click', (e) => this.onPanelClick(e));
+    // A double click on the lead's row in the hub panel does the same.
+    this.panel?.addEventListener('dblclick', (e) => {
+      const paneId = (e.target as HTMLElement | null)?.closest?.('li[data-pane]')?.getAttribute('data-pane');
+      if (paneId) this.feed.onFocus?.(paneId);
+    });
     // A double click on a row in the camp panel focuses that pane in Herdr, like double-clicking a member on the strip.
     this.campEl?.addEventListener('dblclick', (e) => {
       const paneId = (e.target as HTMLElement | null)?.closest?.('li[data-pane]')?.getAttribute('data-pane');
@@ -195,7 +223,8 @@ export class MapScene {
 
   setFocus(id: string | undefined): void {
     if (this.nav.view === 'camp') return;
-    this.nav = navReduce(this.nav, { t: 'click', party: id && this.feed.world.parties[id] ? id : undefined });
+    const known = id === HUB_FOCUS ? !!this.layout.hub : !!(id && this.feed.world.parties[id]);
+    this.nav = navReduce(this.nav, { t: 'click', party: known ? id : undefined });
     if (!this.focus && this.panel) this.panel.hidden = true;
   }
 
@@ -207,7 +236,9 @@ export class MapScene {
 
   /** Opens the camp scene of a party; does nothing without camp art or for an unknown party. */
   enterCamp(id: string): void {
-    if (!this.camp || !this.feed.world.parties[id]) return;
+    const party = this.feed.world.parties[id];
+    // The hub is no camp, and a workspace of nothing but fleet leads has none either.
+    if (!this.camp || !party || !Object.keys(withoutFleet(party).members).length) return;
     this.nav = navReduce(this.nav, { t: 'enter', party: id });
   }
 
@@ -238,6 +269,7 @@ export class MapScene {
   }
 
   private partyPoint(id: string) {
+    if (id === HUB_FOCUS) return this.layout.hub ? tileToWorld(this.layout.hub) : undefined;
     const c = this.layout.camps.get(id);
     return c ? tileToWorld(c.tile) : undefined;
   }
@@ -250,6 +282,11 @@ export class MapScene {
       const partyId = this.leaderParty.get(id);
       if (partyId) points.push({ id: partyId, x: mv.w.x, y: mv.w.y });
     }
+    // The hub and the fleet leads standing at it open the fleet panel.
+    if (this.layout.hub) {
+      const hub = tileToWorld(this.layout.hub);
+      points.push({ id: HUB_FOCUS, x: hub.x, y: hub.y }, ...[...this.fleetViews.values()].map((mv) => ({ id: HUB_FOCUS, x: mv.w.x, y: mv.w.y })));
+    }
     const w = screenToWorld(this.cam, screen, { x: sx, y: sy });
     // Hit radius is generous so a glow is easy to click, even at overview zoom.
     if (this.nav.view === 'camp') return;
@@ -260,7 +297,11 @@ export class MapScene {
     const prev = this.lastTap;
     if (prev && at - prev.at < DOUBLE_CLICK_MS && Math.hypot(sx - prev.x, sy - prev.y) < DOUBLE_CLICK_PX) {
       this.lastTap = undefined;
-      this.enterCamp(prev.id);
+      // A camp opens its scene; the hub has none, so a double click on it jumps to the lead's pane in Herdr instead.
+      if (prev.id === HUB_FOCUS) {
+        const lead = this.fleetLeads[0];
+        if (lead) this.feed.onFocus?.(lead.member.paneId);
+      } else this.enterCamp(prev.id);
       return;
     }
     this.lastTap = hit ? { id: hit, x: sx, y: sy, at } : undefined;
@@ -296,6 +337,9 @@ export class MapScene {
     for (const l of [this.terrainLayer, this.buildingLayer]) l.removeChildren().forEach((c) => (camps.has(c) ? undefined : c.destroy({ children: true })));
     this.waterSprites = [];
     this.settlementViews = [];
+    this.settlementLabels = [];
+    this.pennants.clear();
+    this.hubView = undefined;
     this.towns.clear();
     const terrain = buildTerrain(layout);
 
@@ -330,9 +374,25 @@ export class MapScene {
       name.position.set(0, 2);
       name.scale.set(0.9);
       c.addChild(name);
+      this.settlementLabels.push(name);
+      // With a fleet every settlement shows its status: a glow under the town and a pennant beside it.
+      const glow = new Sprite(this.art.prop('glow'));
+      glow.anchor.set(0.5, 0.75);
+      glow.blendMode = 'add';
+      glow.visible = false;
+      c.addChildAt(glow, 0);
+      const flag = new Container();
+      flag.visible = false;
+      flag.position.set(-27, 0);
+      const pole = new Graphics().rect(0, -36, 1, 36).fill(0x2a2118).rect(-1, -37, 3, 2).fill(0xe8c547);
+      const cloth = new Graphics().poly([1, -35, 13, -31, 1, -27]).fill(0xffffff).poly([1, -35, 13, -31, 1, -27]).stroke({ color: 0x2a2118, width: 1 });
+      flag.addChild(pole, cloth);
+      c.addChild(flag);
+      this.pennants.set(s.key, { root: flag, cloth, glow });
       this.buildingLayer.addChild(c);
       this.settlementViews.push(c);
     }
+    if (layout.hub) this.buildHub(layout.hub);
     for (const v of this.parties.values()) this.buildingLayer.addChild(v.root);
   }
 
@@ -365,18 +425,22 @@ export class MapScene {
     const fv = groupFellowships(this.feed.world, { leadAlone: true });
     this.fellowships = fv;
     const world = fv.world;
-    const layout = layoutMap(world, fv.fellowships.map((f) => f.key.slice(f.key.indexOf('|') + 1)));
+    // The hub exists only while a fleet lead does; it is placed after everything else, so it moves nothing.
+    const layout = layoutMap(world, fv.fellowships.map((f) => f.key.slice(f.key.indexOf('|') + 1)), { hub: fv.fleet.length > 0 });
     if (layout.signature !== this.layout.signature || !this.terrainLayer.children.length) {
       this.rebuild(layout);
+      this.journeys.setRoads(buildRoads(layout));
       this.cam = { cx: this.mapPx().w / 2, cy: this.mapPx().h / 2, zoom: fitZoom(this.mapPx(), this.screenSize()) };
     }
+    this.fleetLeads = fv.fleet;
+    this.processJourneys(fv.fleet.length > 0, now);
     // Focus is on the raw world: a leader's own workspace has no camp but can still be opened.
-    if (this.focus && !this.feed.world.parties[this.focus]) {
+    if (this.focus && (this.focus === HUB_FOCUS ? !layout.hub : !this.feed.world.parties[this.focus])) {
       this.nav = navReduce(this.nav, { t: 'gone', party: this.focus });
       if (this.panel) this.panel.hidden = true;
     }
     if (this.pendingCamp !== undefined && Object.keys(this.feed.world.parties).length) {
-      const id = resolveParty(this.feed.world, this.pendingCamp);
+      const id = resolveParty(splitFleet(this.feed.world).world, this.pendingCamp);
       if (id) {
         this.pendingCamp = undefined;
         this.enterCamp(id);
@@ -397,7 +461,7 @@ export class MapScene {
     // Keep text a readable size at every zoom.
     const ts = Math.min(1.2, Math.max(0.35, 2.2 / this.cam.zoom));
     this.textScale = ts;
-    for (const c of this.settlementViews) c.children[1]?.scale.set(ts);
+    for (const l of this.settlementLabels) l.scale.set(ts);
     for (const w of this.waterSprites) w.sprite.texture = wf ? w.b : w.a;
 
     for (const [id, v] of this.parties) {
@@ -405,7 +469,10 @@ export class MapScene {
         // Member bodies live on the actor layer, not under the camp, so they go separately.
         // Leaving them behind is what made ghosts: a lone agent renamed to orchestrator
         // left its camp, and its old body stood frozen where the camp had been.
-        for (const mv of v.members.values()) this.destroyMember(mv);
+        for (const [paneId, mv] of v.members) {
+          this.destroyMember(mv);
+          this.journeys.drop(`${id}/${paneId}`);
+        }
         v.root.destroy({ children: true });
         this.parties.delete(id);
       }
@@ -413,8 +480,11 @@ export class MapScene {
     this.growTowns();
     for (const party of Object.values(world.parties)) this.updateParty(party, fv.tints.get(party.id), now);
     this.updateLeaders(fv.fellowships, world, now);
+    this.updateFleet(fv.fleet, now);
     if (Object.keys(world.parties).length) this.primed = true;
     this.drawMarks(fv.fellowships, fv.tints);
+    this.drawFleet(fv.fleet);
+    this.drawAway();
     this.updatePanel(now);
     this.updateCamp(dt, now, fv.tints);
     this.levelFx.end(this.t);
@@ -431,7 +501,9 @@ export class MapScene {
     const camp = this.camp;
     if (!camp) return;
     const id = this.campParty;
-    const party = id ? this.feed.world.parties[id] : undefined;
+    // Fleet leads stand at the hub, never in a camp.
+    const raw = id ? this.feed.world.parties[id] : undefined;
+    const party = raw ? withoutFleet(raw) : undefined;
     const inCamp = !!party;
     document.body.classList.toggle('camp-view', inCamp);
     this.world.visible = !inCamp;
@@ -472,7 +544,7 @@ export class MapScene {
   private growTowns(): void {
     const raw = this.feed.world;
     if (!this.primed && Object.keys(raw.parties).length === 0) return;
-    const counts = agentsByRepo(raw);
+    const counts = agentsByRepo(splitFleet(raw).world);
     for (const [key, town] of this.towns) {
       const n = townSize(counts.get(key) ?? 0);
       const born = this.townBorn.get(key) ?? [];
@@ -565,6 +637,7 @@ export class MapScene {
       if (!party.members[paneId]) {
         this.destroyMember(mv);
         view.members.delete(paneId);
+        this.journeys.drop(`${party.id}/${paneId}`);
       }
     }
     const beaconPane = (members.find((m) => m.role === this.theme.beacon) ?? members[0])?.paneId;
@@ -608,6 +681,177 @@ export class MapScene {
     mv.bubble.destroy({ children: true });
   }
 
+  /** Builds the hub: the pack's hub building (or its settlement, bigger, when a pack has none), a beacon above it and a glow under it. */
+  private buildHub(tile: { x: number; y: number }): void {
+    const p = tileToWorld(tile);
+    const root = new Container();
+    root.position.set(p.x, p.y);
+    const glow = new Sprite(this.art.prop('glow'));
+    glow.anchor.set(0.5, 0.75);
+    glow.blendMode = 'add';
+    const body = new Sprite(this.art.prop(this.art.hasProp('hub') ? 'hub' : 'settlement'));
+    body.anchor.set(0.5, 1);
+    if (!this.art.hasProp('hub')) body.scale.set(1.35);
+    const label = new Text({ text: 'fleet', style: { fontFamily: 'monospace', fontSize: 9, fill: 0xffffff, stroke: { color: 0x000000, width: 3 } }, resolution: 4 });
+    label.anchor.set(0.5, 0);
+    label.position.set(0, 3);
+    const pips = new Graphics();
+    const beacon = new Graphics();
+    root.addChild(glow, body, label, pips, beacon);
+    this.buildingLayer.addChild(root);
+    this.hubView = { root, beacon, pips, glow, label };
+  }
+
+  /** Height of the hub building in world pixels, for placing its beacon on top. */
+  private hubHeight(): number {
+    const body = this.hubView?.root.children[1] as Sprite | undefined;
+    return body ? body.texture.height * body.scale.y : 40;
+  }
+
+  /**
+   * With a fleet: the hub's beacon (the worse of the fleet's rollup and its lead's own status, so a lead waiting on the
+   * person is never hidden by calm camps), two pips that show those two separately, and a pennant and glow at each
+   * settlement in its rollup colour. Without one, nothing here is visible.
+   */
+  private drawFleet(leads: FleetLead[]): void {
+    const fleet = leads.length > 0;
+    const stats = fleet ? new Map(settlementStatuses(splitFleet(this.feed.world).world).map((s) => [s.key, s])) : new Map();
+    for (const [key, pn] of this.pennants) {
+      const st = stats.get(key);
+      pn.root.visible = pn.glow.visible = !!st;
+      if (!st) continue;
+      const color = hexNum(this.theme.palette[st.status as Status]);
+      const pulse = beaconAlpha(st.status as Status, this.t);
+      pn.cloth.tint = color;
+      pn.cloth.scale.x = 1 + (st.status === 'blocked' ? 0.12 * Math.sin(this.t * 8) : 0.04 * Math.sin(this.t * 3 + pn.root.x));
+      pn.glow.tint = color;
+      pn.glow.alpha = 0.18 + 0.3 * pulse;
+      pn.glow.scale.set(Math.min(3.4, Math.max(1.5, (1.6 / this.cam.zoom) * 2.4)));
+    }
+    const hv = this.hubView;
+    if (!hv) return;
+    const fleetStatus = fleetRollup([...stats.values()]);
+    const own = leads.length ? hubBeacon('unknown', leads) : 'unknown';
+    const status = hubBeacon(fleetStatus, leads);
+    const color = hexNum(this.theme.palette[status]);
+    const pulse = beaconAlpha(status, this.t);
+    const H = this.hubHeight();
+    hv.glow.tint = color;
+    hv.glow.alpha = 0.3 + 0.4 * pulse;
+    hv.glow.scale.set(Math.min(3.8, Math.max(1.8, (1.6 / this.cam.zoom) * 2.8)) * (1 + (status === 'blocked' ? 0.08 * Math.sin(this.t * 8) : 0)));
+    // The beacon: a lantern on the mast with a halo that pulses when something needs the person.
+    const b = hv.beacon.clear();
+    const y = -H - 6;
+    const halo = 9 + 2.5 * pulse + (status === 'blocked' ? 2 * Math.sin(this.t * 8) : 0);
+    b.circle(0, y, halo).fill({ color, alpha: 0.28 });
+    b.rect(-1, y + 4, 2, 6).fill(0x2a2118);
+    b.circle(0, y, 5.5).fill(color).stroke({ color: 0x1b1530, width: 1.2 });
+    b.rect(-2, y - 3, 2, 2).fill({ color: 0xffffff, alpha: 0.8 });
+    // Under the name: the fleet's colour on the left, the lead's own on the right.
+    const pips = hv.pips.clear();
+    const fc = hexNum(this.theme.palette[fleetStatus]);
+    const oc = hexNum(this.theme.palette[own]);
+    pips.rect(-12, 15, 8, 4).fill(fc).stroke({ color: 0x1b1530, width: 1 });
+    pips.rect(4, 15, 8, 4).fill(oc).stroke({ color: 0x1b1530, width: 1 });
+    hv.label.scale.set(this.textScale);
+    hv.label.visible = true;
+  }
+
+  /** The fleet leads stand together at the hub, on their mounts like any orchestrator. */
+  private updateFleet(leads: FleetLead[], now: number): void {
+    const hub = this.layout.hub;
+    const live = new Set<string>();
+    if (hub) {
+      const p = tileToWorld(hub);
+      // Beside the building, not in front of its name and pips.
+      const home = { x: p.x + 34, y: p.y + 4 };
+      for (const l of leads) {
+        const key = `${l.partyId}/${l.member.paneId}`;
+        live.add(key);
+        let mv = this.fleetViews.get(key);
+        if (!mv) {
+          mv = this.makeMember(l.member.paneId, `fleet/${key}`, home, LEADER_RADIUS, true);
+          this.fleetViews.set(key, mv);
+        }
+        this.stepMember(mv, { sayParty: l.partyId, wid: `fleet/${key}`, status: l.member.status }, l.member, home, LEADER_RADIUS, true, now);
+      }
+    }
+    for (const [key, mv] of this.fleetViews) {
+      if (live.has(key)) continue;
+      this.destroyMember(mv);
+      this.fleetViews.delete(key);
+      this.journeys.drop(key);
+    }
+  }
+
+  /**
+   * Couriers. While the world has a fleet lead, a line addressed to a member of another party leaves its speaker's
+   * bubble and goes along the roads with it; the bubble shows on arrival, with its full time to live from then. Reduced
+   * motion, the camp scene and a world with no fleet keep the bubble where the speaker stands, as ever.
+   */
+  private processJourneys(fleet: boolean, now: number): void {
+    if (this.feed.epoch !== this.feedEpoch) {
+      this.feedEpoch = this.feed.epoch;
+      this.journeys.reset();
+      this.carried.clear();
+    }
+    const entries = this.feed.drainSays();
+    if (!fleet || this.reduced || this.nav.view !== 'map') {
+      // Nothing travels: what a courier still carried is said where it stands.
+      for (const e of this.carried.values()) this.feed.deliver(e, now);
+      this.carried.clear();
+      this.journeys.reset();
+      return;
+    }
+    for (const e of entries) this.planSay(e);
+    for (const d of this.journeys.update(this.t)) {
+      const e = this.carried.get(d.id);
+      if (!e) continue;
+      this.carried.delete(d.id);
+      this.feed.deliver(e, now);
+    }
+  }
+
+  private planSay(e: SayEntry): void {
+    const raw = this.feed.world;
+    if (!e.to || !isJourney(raw, e, e.to)) return;
+    const from = nodeOf(raw, this.layout, e.partyId, e.paneId);
+    const to = nodeOf(raw, this.layout, e.to.partyId, e.to.paneId);
+    const sv = this.viewOf(e.partyId, e.paneId);
+    const tv = this.viewOf(e.to.partyId, e.to.paneId);
+    if (!from || !to || !sv || !tv) return;
+    const home: Place = { node: from, pt: { x: sv.w.ax, y: sv.w.ay } };
+    const target: Place = { node: to, pt: { x: tv.w.ax + ARRIVE_OFFSET, y: tv.w.ay } };
+    if (this.journeys.push(`${e.partyId}/${e.paneId}`, home, target, e.id, this.t) !== 'trip') return;
+    this.feed.retract(e);
+    this.carried.set(e.id, e);
+  }
+
+  /** A ring at a courier's feet in its status colour and a short trail behind it, so it can be followed across the whole map. */
+  private drawCourier(key: string, travel: TravelPose, status: Status): void {
+    const k = Math.max(1, this.textScale * 1.1);
+    const g = this.fx;
+    if (travel.moving) {
+      for (let i = 1; i <= 6; i++) {
+        const q = this.journeys.pose(key, this.t - 0.16 * i);
+        if (!q || !q.moving) break;
+        g.circle(q.x, q.y - 1, 1.3 * k).fill({ color: 0xffffff, alpha: 0.7 - 0.1 * i });
+      }
+    }
+    g.ellipse(travel.x, travel.y - 1, 8 * k, 3.5 * k).stroke({ color: hexNum(this.theme.palette[status]), width: 1.4 * k, alpha: travel.moving ? 0.95 : 0.6 });
+  }
+
+  /** An empty seat at the home of every courier who is out, so the place does not look abandoned. */
+  private drawAway(): void {
+    const g = this.awayMarks.clear();
+    for (const { pt } of this.journeys.homes(this.t)) {
+      const x = Math.round(pt.x);
+      const y = Math.round(pt.y);
+      g.rect(x - 4, y - 5, 8, 2).fill(0x8a6a44).rect(x - 4, y - 3, 1, 3).fill(0x5a3a1e).rect(x + 3, y - 3, 1, 3).fill(0x5a3a1e);
+      g.rect(x - 4, y - 9, 8, 1).fill({ color: 0xffffff, alpha: 0.35 }).rect(x - 4, y - 9, 1, 4).fill({ color: 0xffffff, alpha: 0.35 }).rect(x + 3, y - 9, 1, 4).fill({ color: 0xffffff, alpha: 0.35 });
+    }
+  }
+
   /** Orchestrators stand at the root of their project, the settlement, with the beacon light on. */
   private updateLeaders(fellowships: Fellowship[], world: World, now: number): void {
     const live = new Set<string>();
@@ -636,7 +880,9 @@ export class MapScene {
       if (live.has(id)) continue;
       this.destroyMember(mv);
       this.leaders.delete(id);
+      const gone = this.leaderParty.get(id);
       this.leaderParty.delete(id);
+      if (gone) this.journeys.drop(`${gone}/${id.slice(id.lastIndexOf('/') + 1)}`);
     }
   }
 
@@ -699,12 +945,25 @@ export class MapScene {
     }
     let speed: number | undefined;
     const mount = mv.mount;
+    // A courier on the road goes where the journey planner puts it; everything below is for a member at home.
+    const travel = this.journeys.pose(`${ctx.sayParty}/${m.paneId}`, this.t);
     if (ctx.summon) {
       // Summoning a camp beats chatting: ride out to where it will stand.
       meet = ctx.summon.to;
       speed = ctx.summon.speed;
     }
-    if (mount) {
+    if (travel) {
+      if (mount) {
+        const was = mount.riding;
+        mount.riding = travel.moving;
+        if (was && !mount.riding) {
+          const p = parkSpot(mv.w, mv.w.dir);
+          Object.assign(mount, { x: p.x, y: p.y, dir: mv.w.dir });
+        }
+      }
+      mv.w = { ...mv.w, x: travel.x, y: travel.y, tx: travel.x, ty: travel.y, dir: travel.moving ? travel.dir : mv.w.dir };
+      this.drawCourier(`${ctx.sayParty}/${m.paneId}`, travel, m.status);
+    } else if (mount) {
       const homeDist = Math.hypot(home.x - mv.w.x, home.y - mv.w.y);
       // A rider far from its settlement, or mid-ride, heads home when it has nothing else to do.
       if (!meet && (mount.riding || homeDist > HOME_RADIUS)) meet = home;
@@ -717,8 +976,8 @@ export class MapScene {
         Object.assign(mount, { x: p.x, y: p.y, dir: mv.w.dir });
       }
     }
-    mv.w = stepWanderer(mv.w, ctx.wid, m.status, home, radius, this.dt, meet, this.bounds(), speed);
-    const moving = isMoving(mv.w) && (SPEED[m.status] > 0 || speed !== undefined);
+    if (!travel) mv.w = stepWanderer(mv.w, ctx.wid, m.status, home, radius, this.dt, meet, this.bounds(), speed);
+    const moving = travel ? travel.moving : isMoving(mv.w) && (SPEED[m.status] > 0 || speed !== undefined);
     const lift = mount?.riding ? RIDER_LIFT : 0;
     if (mount) {
       if (mount.riding) Object.assign(mount, { x: mv.w.x, y: mv.w.y, dir: mv.w.dir });
@@ -729,7 +988,7 @@ export class MapScene {
     }
     const figH = mv.figure ? this.figures!.art.character.h * FIGURE_SCALE : SPRITE_H;
     if (mv.figure) {
-      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && m.status !== 'blocked', talking, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
+      mv.figure.update({ member: m, partyStatus: ctx.status, isBeacon: beacon, moving: moving && (!!travel || m.status !== 'blocked'), talking, t: this.t, phase: mv.phase, tint: ctx.tint }, mv.w.dir, FIGURE_SCALE, mv.w.x, mv.w.y - lift + bob(m.status, this.t, mv.phase) * 0.5);
     } else {
       const frame = FRAME_NAMES[walkFrame(moving, this.t, mv.phase)]!;
       mv.sprite.texture = this.frameTexture(m.role, frame, beacon);
@@ -759,6 +1018,8 @@ export class MapScene {
   private viewOf(partyId: string, paneId: string): MemberView | undefined {
     const camp = this.parties.get(partyId)?.members.get(paneId);
     if (camp) return camp;
+    const lead = this.fleetViews.get(`${partyId}/${paneId}`);
+    if (lead) return lead;
     for (const [id, mv] of this.leaders) if (this.leaderParty.get(id) === partyId && id.endsWith(`/${paneId}`)) return mv;
     return undefined;
   }
@@ -775,9 +1036,26 @@ export class MapScene {
     drawPuff(this.fx, mv.w.x, mv.w.y, age, hexNum(this.theme.palette[status]), 1, 10);
   }
 
+  /** The hub's panel: who leads the fleet and one line per project. "Enter camp" is not offered. */
+  private updateFleetPanel(now: number): void {
+    if (!this.panel) return;
+    const d = describeFleet(splitFleet(this.feed.world).world, this.fleetLeads, now);
+    const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p><h3>Lead</h3><ul>${d.leads
+      .map((l) => `<li data-pane="${esc(l.paneId)}" title="Double-click to jump to this pane in Herdr"><span class="st ${l.status}">●</span> <b>${esc(l.label)}</b> <i>${l.status}</i><br><span class="line">${esc(l.line)}</span></li>`)
+      .join('')}</ul><h3>Projects</h3><ul>${d.settlements.map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.name)}</b> <span class="line">${esc(r.line)}</span></li>`).join('')}</ul>`;
+    const body = this.panel.querySelector('#detail-body');
+    if (body && body.innerHTML !== html) body.innerHTML = html;
+    this.panel.hidden = false;
+  }
+
   private updatePanel(now: number): void {
     if (!this.panel) return;
-    const party = this.focus ? this.feed.world.parties[this.focus] : undefined;
+    if (this.focus === HUB_FOCUS) {
+      this.updateFleetPanel(now);
+      return;
+    }
+    const raw = this.focus ? this.feed.world.parties[this.focus] : undefined;
+    const party = raw ? withoutFleet(raw) : undefined;
     if (!party) {
       this.panel.hidden = true;
       return;

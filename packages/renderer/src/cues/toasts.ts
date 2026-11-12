@@ -20,16 +20,18 @@ function clip(label: string): string {
 /** The banner for an event, or undefined when it does not get one (messages and extra members stay sound-only). */
 export function toastFor(e: CueEvent): Toast | undefined {
   const label = e.label ? clip(e.label) : undefined;
+  // The project follows the party, unless it is the party's own name already.
+  const project = e.settlement && e.settlement.toLowerCase() !== e.label?.toLowerCase() ? clip(e.settlement) : undefined;
   const role = e.role ?? 'generic';
   // A named member reads `Name (reviewer)`; an unnamed one just its role.
   const who = e.name ? `${e.name} (${role})` : role;
   switch (e.kind) {
     case 'done': {
       const took = e.durationMs !== undefined ? ago(e.durationMs) : undefined;
-      return { text: [`${who} finished`, label, took].filter(Boolean).join(' · '), status: 'done', ...(e.role ? { role: e.role } : {}) };
+      return { text: [`${who} finished`, label, project, took].filter(Boolean).join(' · '), status: 'done', ...(e.role ? { role: e.role } : {}) };
     }
     case 'blocked':
-      return { text: [`${who} needs you`, label].filter(Boolean).join(' · '), status: 'blocked', ...(e.role ? { role: e.role } : {}) };
+      return { text: [`${who} needs you`, label, project].filter(Boolean).join(' · '), status: 'blocked', ...(e.role ? { role: e.role } : {}) };
     case 'spawn':
       return e.scope === 'party' && label ? { text: `New party: ${label}`, status: 'working', ...(e.role ? { role: e.role } : {}) } : undefined;
     case 'allDone':

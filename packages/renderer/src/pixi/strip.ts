@@ -41,6 +41,8 @@ interface Segment {
   status: Status;
   tint?: string | undefined;
   leader: boolean;
+  /** Banner, tether and chip colour of a leader segment; gold unless it leads a fleet. */
+  color?: number | undefined;
   members: Member[];
   /** Git state of the party (absent for a fellowship's leaders). */
   git?: GitState | undefined;
@@ -94,6 +96,8 @@ interface PartyView {
 
 /** Colour of a leader's banner pole, tether and nameplate chip. */
 const GOLD = 0xe8c547;
+/** The fleet lead's banner, so it is told apart from a project's gold one at a glance. */
+const FLEET_COLOR = 0x7b5cff;
 /** Width reserved for a leader's banner, in art pixels. */
 const BANNER_W = 18;
 
@@ -309,6 +313,14 @@ export class StripScene {
       const named = leader || !this.feed.vitalsOn ? label : withQuest(label, sorted);
       return { id, label: named, status: rollup(sorted), tint, leader, members: sorted, git, gitShown: [], gitW: 0, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
     };
+    // The fleet lead walks at the front of a small group of its own, under a violet banner instead of gold.
+    if (world.fleet.length) {
+      const name = world.fleet[0]!.member.name ?? 'fleet';
+      const partyOf = new Map(world.fleet.map((l) => [l.member.paneId, l.partyId]));
+      const lead = seg('lead:fleet', `★ ${name}`, world.fleet.map((l) => l.member), (m) => partyOf.get(m.paneId)!, undefined, true);
+      lead.color = FLEET_COLOR;
+      trains.push({ id: 'fellow:fleet', fellowship: { key: 'fleet', name, leaders: world.fleet, partyIds: [] }, segments: [lead] });
+    }
     for (const f of world.fellowships) {
       const leaders = f.leaders.map((l) => l.member);
       const partyOf = new Map(f.leaders.map((l) => [l.member.paneId, l.partyId]));
@@ -589,7 +601,7 @@ export class StripScene {
   /** A coloured bar under a nameplate in the party's fellowship tint (gold for a leader). */
   private drawChip(view: PartyView, seg: Segment, x: number, y: number, w: number, s: number): void {
     view.chip.clear();
-    const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : undefined;
+    const color = seg.leader ? (seg.color ?? GOLD) : seg.tint ? hexNum(seg.tint) : undefined;
     if (color === undefined) return;
     view.chip.rect(x, y, w, 2 * s).fill(color);
   }
@@ -605,23 +617,24 @@ export class StripScene {
     if (!f) return;
     const left = extents[0]!.x0;
     const right = extents[extents.length - 1]!.x1;
-    tv.tether.rect(left, groundY + 1.5 * s, right - left, s).fill({ color: GOLD, alpha: 0.7 });
+    const lead = extents.find((e) => e.seg.leader)!;
+    const gold = lead.seg.color ?? GOLD;
+    tv.tether.rect(left, groundY + 1.5 * s, right - left, s).fill({ color: gold, alpha: 0.7 });
     for (const { seg, x0, x1 } of extents) {
-      const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : GOLD;
+      const color = seg.leader ? gold : seg.tint ? hexNum(seg.tint) : gold;
       tv.tether.rect(x0, groundY + 1.5 * s, x1 - x0, 2 * s).fill(color);
     }
-    const lead = extents.find((e) => e.seg.leader)!;
     // The pole stands just ahead of the leader at head height; the flag streams forward from it.
     const poleX = dir === 1 ? lead.fig1 + 2 * s : lead.fig0 - 2 * s;
     const fw = (BANNER_W - 4) * s;
     const fh = 10 * s;
     const top = groundY - figH * s;
     tv.banner.rect(poleX - s / 2, top - 2 * s, s, groundY - top + 2 * s).fill(0x2a2118);
-    tv.banner.rect(poleX - 1.5 * s, top - 4 * s, 3 * s, 2 * s).fill(GOLD);
+    tv.banner.rect(poleX - 1.5 * s, top - 4 * s, 3 * s, 2 * s).fill(gold);
     const stripes = extents.filter((e) => !e.seg.leader && e.seg.tint).map((e) => hexNum(e.seg.tint!));
     const fx = dir === 1 ? poleX + s / 2 : poleX - s / 2 - fw;
     const n = Math.max(1, stripes.length);
-    (stripes.length ? stripes : [GOLD]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
+    (stripes.length ? stripes : [gold]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
     tv.banner.rect(fx, top, fw, fh).stroke({ color: 0x2a2118, width: s, alignment: 1 });
   }
 

@@ -129,7 +129,8 @@ async function main() {
   const replay = params.get('replay');
   if (replay) replayFeed(replay, Number(params.get('speed') ?? 1), onDelta, onMode);
   else {
-    const handle = connectFeed(deltaUrl(), onDelta, onMode);
+    // `?fleet=0` leaves the fleet lead out of the in-browser mock (the adapter's mock has `--mock-fleet=0`).
+    const handle = connectFeed(deltaUrl(), onDelta, onMode, { mockFleet: params.get('fleet') !== '0' });
     feed.onFocus = (paneId) => handle.send?.({ type: 'focus', paneId });
     feed.onClose = (paneId) => handle.send?.({ type: 'close', paneId });
   }
