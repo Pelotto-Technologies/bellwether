@@ -391,6 +391,8 @@ See [writing a skin pack](docs/themes.md).
 
 ## Giving agents a role
 
+Driving Bellwether from a runner or orchestration framework? See [docs/runners.md](docs/runners.md).
+
 Roles decide which character a pane gets: `orchestrator`, `coordinator`, `architect`,
 `implementer`, `reviewer`, `researcher`, `writer`, `ops`, or `generic` (the default). They
 are checked in this order:
@@ -526,11 +528,12 @@ overlay after starting Herdr:
 | `bellwether overlay [--hooks]` | Open the desktop overlay (Herdr if running, else agent events; `--hooks` forces events). |
 | `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
 | `bellwether install --statusline` | Claude Code only: report context, quota, model, effort and session name for vitals, wrapping any status line you have. |
-| `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--ev vitals --ctx N --quota N ...` for vitals). |
+| `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--label NAME` names the member; `--ev vitals --ctx N --quota N ...` for vitals). |
 | `bellwether hook statusline` | Status line body: reports vitals from the JSON on stdin, then prints the line. |
 | `bellwether run` | Serve the overlay on port 7341 (Herdr if running, else agent events; `--live`, `--hooks`, `--mock` force one). |
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
+| `bellwether pack [--json]` | Print the active skin pack id; `--json` adds where it came from (`shell`, `env`, `toml`, `default`) and the packs available. |
 | `bellwether record F [--scrub]` | Run live and append deltas to `F`. |
 | `bellwether replay F [--speed n]` | Serve the overlay from a recording. |
 | `bellwether scrub IN OUT` | Rewrite a recording with repo, branch and label names hashed and speech removed. |

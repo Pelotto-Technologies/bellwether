@@ -21,6 +21,7 @@ by appending lines itself.
 | `agent` | no | Free label for the tool (`claude`, `copilot`, `my-factory`). Never used to branch. |
 | `cwd` | no | Working directory. Agents with the same directory form one party. |
 | `role` | no | `orchestrator`, `coordinator`, `architect`, `implementer`, `reviewer`, `researcher`, `writer`, `ops` or `generic`. |
+| `label` | no | What to call this member (40 characters; with `sub`, the subagent). Shown as `Name · role`. Not the same as `vitals`' `name`, which is the quest. |
 | `sub`, `subType` | for `sub_*` | Id and type of a subagent (a worker under `session`). |
 | `ctx`, `quota` | `vitals` only | Percent remaining, 0 to 100: `ctx` of the context window, `quota` of the 5-hour usage quota. Clamped; anything that is not a number is dropped. |
 | `model`, `effort`, `name` | `vitals` only | Model display name (40 characters), reasoning effort (16) and the session's human name, shown as its quest (80). Control and bidi characters are stripped and whitespace collapsed. |
@@ -75,8 +76,10 @@ privacy of `~/.bellwether/stats.json`.
 
 ## Writing events
 
+A runner driving many agents: see [runners.md](runners.md).
+
 ```sh
-bellwether emit --ev <kind> [--session S] [--agent A] [--cwd D] [--role R] [--sub ID] [--sub-type T] [--tool T] [--detail TEXT]
+bellwether emit --ev <kind> [--session S] [--agent A] [--cwd D] [--role R] [--label NAME] [--sub ID] [--sub-type T] [--tool T] [--detail TEXT]
 bellwether emit --ev vitals [--session S] [--ctx N] [--quota N] [--model M] [--effort E] [--name NAME]
 ```
 
