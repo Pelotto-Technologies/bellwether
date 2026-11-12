@@ -307,6 +307,37 @@ Other tools can report the same numbers with `bellwether emit --ev vitals` (see
 number gets no bar for it. Icon-only labels hide vitals, as do the tray menu's **Vitals**
 checkbox, `vitals = false`, `?vitals=0`, and the `v` key in the page.
 
+### Levels and quest recap
+
+A little RPG progression, on by default, so finishing work feels good. Every role has a level
+(every implementer shares the implementer level, every reviewer the reviewer level), shown as
+`Lv 3` with a thin XP bar in the map's detail panel and the camp's party window. XP comes from:
+
+- **20 XP** for each finished task (a working-to-done transition after at least 5 seconds of work),
+- **2 XP** for each minute spent working,
+- **5 XP** when a blocked agent gets unblocked within two minutes.
+
+The curve gets steeper: level 2 takes 40 XP, level 3 100, level 4 180, and each level needs
+20 XP more than the one before. When a role levels up, a ▲ and sparkles float over the agent
+with the words LEVEL UP (still, without sparkles, if you prefer reduced motion), and a rising
+chime plays if sounds are on.
+
+When a party that was working has been done (or idle) for ten seconds, **Quest complete**
+opens a pixel results window with the time, who took part, tasks finished, time spent waiting
+on you, tools used by kind, XP earned and any levels gained. It closes by itself after about
+twelve seconds, or on a click or Esc. It shows in the map and camp windows and in browser or
+OBS pages; the thin desktop strip gets a one-line banner instead (when alerts are on). Turn the
+card off with the tray's **Quest recap** checkbox, `recap = false`, or `?recap=0`.
+
+Where it lives: `~/.bellwether/stats.json` (`BELLWETHER_STATS=<path>` or `[stats] file` moves it).
+Only counters are stored: XP, finished tasks, time working and blocked, tool counts by kind and
+messages sent, per role, plus lifetime totals. Never prompts, speech, repository, branch or
+party names. The file is written privately (mode 0600), at most every 30 seconds and when the
+adapter stops, and a missing or damaged file just starts you at level 1. Turn all of it off with
+`[stats] enabled = false`, `--no-stats` or `BELLWETHER_STATS=0`; no levels, no recap, no file.
+The mock shows made-up levels and a scripted quest in its first half minute and never writes the
+file; replays do not either.
+
 ### Fellowships: orchestrators and worktrees
 
 Parties that share a Herdr session and repo form a **fellowship**. Bellwether works this out
@@ -438,6 +469,7 @@ scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
 bubbles = true           # false hides chat bubbles
 vitals = true            # false hides context/quota bars, model and quest
+recap = true             # false hides the quest recap card
 sounds = true            # chiptune cues; unset: on in the desktop overlay, off in a browser or OBS
 volume = 0.3             # sound volume, 0 to 1
 alerts = "top-right"     # banners: off (default) | top-left | top-right | top-center
@@ -451,12 +483,16 @@ sessions = "all"         # or ["default", "overlay-dev"]
 # enabled = true         # opt in: show uncommitted/unpushed counts per party (trust your repos, see "Git at a glance")
 # interval = 30          # seconds between probes of one folder (5 to 3600)
 
+[stats]
+# enabled = false        # no XP, levels or quest recap (default: on; only counters are stored)
+# file = "..."           # default ~/.bellwether/stats.json (or BELLWETHER_STATS=<path>, =0 to disable)
+
 [hooks]
 # file = "..."           # events file for source = "hooks" (default ~/.bellwether/events.jsonl)
 ```
 
 Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
-`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--git` or `BELLWETHER_GIT=1`, `--events <file>`, `--port`), and the tray menu or
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--git` or `BELLWETHER_GIT=1`, `--events <file>`, `--no-stats` or `BELLWETHER_STATS=0`, `--port`), and the tray menu or
 page URL overrides those. `auto` decides once at startup (a one-second connect probe of the
 Herdr socket) and logs which source it picked; it does not switch later, so restart the
 overlay after starting Herdr:
@@ -471,6 +507,7 @@ overlay after starting Herdr:
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
 | `?vitals=0` | Hide vitals: bars, model and quest. |
+| `?recap=0` | Hide the quest recap card (and its banner). |
 | `?sounds=1` | Sound cues on (`0` off). |
 | `?volume=0.5` | Sound volume, 0 to 1 (default 0.3). |
 | `?alerts=top-right` | Alert banners: `top-left`, `top-right`, `top-center` or `off`. |

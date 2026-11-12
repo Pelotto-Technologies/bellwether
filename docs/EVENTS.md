@@ -57,6 +57,22 @@ Claude Code is the only agent that provides this data today, through its status 
 else can write the same line with `bellwether emit --ev vitals --ctx 88 --quota 74 --model "Opus 5.5" --effort high --name "Fix the auth flow"`.
 Under Herdr the same values travel as pane tokens `ctx`, `quota`, `model`, `effort` and `quest`.
 
+## Levels and moments (derived, not written)
+
+Nothing here is an input. The adapter's stats decorator reads the same stream of `Delta`s these
+events turn into and adds progression on top: each member gets `level` and `xp` (per role), and two
+new delta kinds are emitted for the overlay, never by Herdr or an agent:
+
+```ts
+{ t, kind: 'moment', moment: 'level_up', partyId, paneId, role, level }
+{ t, kind: 'moment', moment: 'quest_complete', partyId, recap }
+```
+
+`tool` events feed the tool-category counts in the recap (`edit`, `read`, `search`, `shell`,
+`delegate`, `plan`, `other`); a `say` addressed to another agent counts as a message sent.
+Moments carry counters only. See README "Levels and quest recap" for the XP rules and the
+privacy of `~/.bellwether/stats.json`.
+
 ## Writing events
 
 ```sh

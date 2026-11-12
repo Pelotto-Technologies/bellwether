@@ -49,6 +49,7 @@ flags. `source = "live"` in `bellwether.toml` sets the default source (the defau
 | `?bubbles=0` | Hide chat bubbles. Press `b` in an interact window to toggle. |
 | `?vitals=0` | Hide vitals (bars, model, quest). Press `v` in an interact window to toggle. |
 | `?sounds=1` | Play sound cues (off by default in a browser source). `?volume=0.5` sets the level, default 0.3. Press `s` in an interact window to mute. |
+| `?recap=0` | Hide the quest recap card that opens when a party finishes its work (levels and XP are described in the README). |
 | `?alerts=top-right` | Alert banners (also `top-left`, `top-center`, `off`). Press `a` to toggle. |
 | `?mode=alerts` | Only alert banners on a transparent page, no strip. See [Alerts and sound](#alerts-and-sound). |
 | `?mode=map` | Start in map mode instead of the strip. The default is the strip; press `m` to toggle. Map mode is not click-through, so the strip is usually what you want in OBS. |
