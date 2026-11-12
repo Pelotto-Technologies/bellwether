@@ -103,7 +103,7 @@
     <ul>
       <li>Per role: a sheet with 12 frames (walk ×4, idle ×2, wave ×2, talk ×2, raise, blink) plus a status-light mask row and a cloak mask row.</li>
       <li>Strip ground, map tileset (grass, flowers, trees, rocks, 16 path and 16 water autotiles with a 2-frame shimmer).</li>
-      <li>Props: settlement, camp, 4-frame campfire, signpost, mount with walk cycle, tintable banner, glow and minimap pins.</li>
+      <li>Props: settlement, fleet hub (one building per pack, with a mast for the beacon), camp, 4-frame campfire, signpost, mount with walk cycle, tintable banner, glow and minimap pins.</li>
       <li>UI: speech bubble and tail, nameplate, minimap frame (all 9-slice), and five status icons.</li>
     </ul>
   </div>
@@ -386,6 +386,13 @@ function drawMap(P, t) {
       drawChar(x, P, role, `idle_${Math.floor(t * 2 + k) % 2}`, gx + 26 + k * 14, gy - 6, 1, { status: cp.status, cloak: state.cloak, t, flip: k === 1 });
     }
   });
+  // The fleet hub, with its beacon lit in the colour of the worst camp, standing off to the right of the settlement.
+  const hf = pf.hub.frame, hx = Math.min(c.width - hf.w - 12, settle.x * 16 + 110), hy = settle.y * 16 + 22;
+  const worst = camps.some((cp) => cp.status === 'blocked') ? 'blocked' : camps.some((cp) => cp.status === 'done') ? 'done' : 'working';
+  x.save(); x.globalAlpha = 0.55; x.drawImage(tintProp(P, 'glow', P.art.status[worst]), hx + hf.w / 2 - 32, hy - hf.h - 8, 64, 64); x.restore();
+  sprite(x, pi, pf, 'hub', hx, hy - hf.h);
+  x.fillStyle = P.art.status[worst]; x.beginPath(); x.arc(hx + hf.w / 2, hy - hf.h - 5, 4.5, 0, 7); x.fill();
+  x.strokeStyle = '#1b1530'; x.lineWidth = 1; x.stroke();
   // mount wandering near the settlement
   const mx = settle.x * 16 + 40 + Math.round(((t * 12) % 80));
   sprite(x, pi, pf, `mount_walk_${Math.floor(t * 8) % 4}`, mx, settle.y * 16 + 30);

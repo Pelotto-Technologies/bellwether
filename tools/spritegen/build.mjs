@@ -32,7 +32,7 @@ const WORLD_STYLE = {
       1: '#ffffff40', 2: '#ffffff70', 3: '#ffffffa8', 4: '#ffffffe0',
     },
     // Roofs for the cottage reuse r/R; give them a warm red.
-    overrides: { settlement: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78', v: '#d8d8e0' } },
+    overrides: { settlement: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78', v: '#d8d8e0' }, hub: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78' } },
     minimap: { grass: '#6cb851', path: '#a87b4f', water: '#4a9ad9', tree: '#2f7040', building: '#c4473a', background: '#1b1530' },
   },
   aesir: {
@@ -61,6 +61,7 @@ WORLD_STYLE.wayfarers = {
   palette: { ...WORLD_STYLE.neutral.palette, g: '#74b850', G: '#9ad66c', h: '#56983c', L: '#5aa848', K: '#367838', J: '#8ad06a', o: '#1a1410' },
   overrides: {
     settlement: { L: '#6cb84e', J: '#8ad06a', G: '#9ad66c', p: '#c4a46a', k: '#5a3a1e', K: '#3a2410', u: '#3e8a3a', a: '#e8c44a', y: '#ffe08a', q: '#8a6a4a', v: '#d8d8e0', f: '#ff9ab8' },
+    hub: { L: '#6cb84e', J: '#8ad06a', G: '#9ad66c', p: '#c4a46a', k: '#5a3a1e', K: '#3a2410', u: '#3e8a3a', a: '#e8c44a', y: '#ffe08a', q: '#8a6a4a', v: '#d8d8e0', f: '#ff9ab8' },
     mount: { t: '#e8dcc0', m: '#e8dcc0', b: '#8a6a4a', B: '#6a4e34', y: '#8a3a2a', Y: '#6a2a1e' },
     ui: { p: '#fbf6ea', P: '#e8dfca', w: '#fbf6ea', W: '#e0d6c0' },
   },
@@ -187,6 +188,8 @@ export function renderPack(pack) {
   const props = [
     { name: 'settlement', grid: Wd.settlement(style), palette: ov('settlement') },
     { name: 'camp', grid: Wd.tent(style), palette: ov('settlement') },
+    // The fleet hub: the pack's `hub` field picks the building; a pack with none gets the generic hall.
+    { name: 'hub', grid: Wd.hub(pack.hub ?? 'generic'), palette: ov('hub') },
     ...[0, 1, 2, 3].map((f) => ({ name: `campfire_${f}`, grid: Wd.campfire(f), palette: { ...style.palette, r: '#e8402a', O: '#ff9a2a', y: '#ffe36a', t: '#8a5a33', T: '#5e3b20', q: '#5a5a66' } })),
     { name: 'signpost', grid: Wd.signpost(), palette: style.palette },
     ...[0, 1, 2, 3, 4].map((f) => ({ name: f < 4 ? `mount_walk_${f}` : 'mount_idle', grid: Wd.mount(style, f), palette: ov('mount') })),
@@ -268,7 +271,7 @@ export function renderPack(pack) {
     strip: { ground: 'sprites/ground.json', tiles: ['ground_0', 'ground_1', 'ground_2', 'ground_3'] },
     map: {
       tileset: 'map/tileset.json', props: 'map/props.json',
-      settlement: 'settlement', camp: 'camp', campfire: 'campfire', signpost: 'signpost', mount: 'mount_walk',
+      settlement: 'settlement', hub: 'hub', camp: 'camp', campfire: 'campfire', signpost: 'signpost', mount: 'mount_walk',
       banner: { pole: 'banner_pole', cloth: 'banner_cloth', tint: true },
       glow: { frame: 'glow', tint: true }, pin: { frame: 'pin', ring: 'pin_ring', tint: true },
       minimap: style.minimap,

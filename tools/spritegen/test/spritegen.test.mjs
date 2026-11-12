@@ -106,3 +106,33 @@ test('only the scifi pack is an outpost; the others are camps', () => {
   assert.equal(tones.scifi, 'outpost');
   for (const n of ['neutral', 'aesir', 'wayfarers']) assert.equal(tones[n], 'camp');
 });
+
+// The fleet hub: each public pack names a building, the atlas holds it, and the mast leaves room for the renderer's beacon.
+const HUBS = { neutral: 'guildhouse', aesir: 'greathall', wayfarers: 'waystation', scifi: 'tower' };
+
+for (const pack of PACKS) {
+  test(`${pack.name}: the hub building is in the props atlas, with a mast to the top row`, () => {
+    assert.equal(pack.hub, HUBS[pack.name]);
+    const dir = path.join(THEMES_DIR, pack.name);
+    const atlas = JSON.parse(fs.readFileSync(path.join(dir, 'map/props.json'), 'utf8'));
+    const f = atlas.frames.hub?.frame;
+    assert.ok(f, `${pack.name} lacks a hub frame`);
+    assert.ok(f.w >= 40 && f.h >= 40, 'the hub is bigger than a settlement');
+    const settle = atlas.frames.settlement.frame;
+    assert.ok(f.h * f.w > settle.h * settle.w);
+    const art = JSON.parse(fs.readFileSync(path.join(dir, 'art.json'), 'utf8'));
+    assert.equal(art.map.hub, 'hub');
+    const img = decodePng(fs.readFileSync(path.join(dir, 'map/props.png')));
+    const alpha = (x, y) => img.rgba[((f.y + y) * img.w + f.x + x) * 4 + 3];
+    assert.ok(alpha(23, 0) > 0 || alpha(24, 0) > 0, 'the mast reaches the top row');
+    assert.ok(alpha(0, 0) === 0 && alpha(f.w - 1, 0) === 0, 'the top corners are clear');
+  });
+}
+
+test('a pack with no hub field, or an unknown one, gets the generic hall', async () => {
+  const { hub } = await import('../world.mjs');
+  const generic = hub('generic');
+  assert.deepEqual(hub(undefined).px, generic.px);
+  assert.deepEqual(hub('castle').px, generic.px);
+  for (const kind of ['guildhouse', 'greathall', 'waystation', 'tower']) assert.notDeepEqual(hub(kind).px, generic.px, kind);
+});

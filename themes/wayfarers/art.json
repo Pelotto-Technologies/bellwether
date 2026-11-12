@@ -121,6 +121,7 @@
     "tileset": "map/tileset.json",
     "props": "map/props.json",
     "settlement": "settlement",
+    "hub": "hub",
     "camp": "camp",
     "campfire": "campfire",
     "signpost": "signpost",
