@@ -17,6 +17,8 @@ export interface SourceConfig {
   minimal?: boolean;
   /** Speech bubbles over agents; on by default, `bubbles = false` hides them. Carried only when false. */
   bubbles?: boolean;
+  /** Vitals (context, quota, model, quest) over agents; on by default, `vitals = false` hides them. Carried only when false. */
+  vitals?: boolean;
   /** Scrub recordings at record time (`scrub = true`). */
   scrub?: boolean;
   /** Let the overlay send prompts and keys to agents (`actions = true`). Focus is always allowed. */
@@ -44,6 +46,7 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * scale = 2                  # strip pixel scale, 1 to 6 (default 3); 2 is compact
  * minimal = true             # strip shows just a status icon under the feet, no nameplate
  * bubbles = false            # hide speech bubbles (default: shown)
+ * vitals = false             # hide context and quota bars, model and quest (default: shown)
  * scrub = true               # hash labels and strip say text in recordings
  * actions = true             # let the overlay prompt and send keys to agents (focus is always on)
  * [herdr]
@@ -76,9 +79,10 @@ export function parseSourceConfig(text: string): SourceConfig {
   }
   if (raw.minimal !== undefined && typeof raw.minimal !== 'boolean') throw new Error('bellwether.toml: minimal must be true or false');
   if (raw.bubbles !== undefined && typeof raw.bubbles !== 'boolean') throw new Error('bellwether.toml: bubbles must be true or false');
+  if (raw.vitals !== undefined && typeof raw.vitals !== 'boolean') throw new Error('bellwether.toml: vitals must be true or false');
   if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
   if (raw.actions !== undefined && typeof raw.actions !== 'boolean') throw new Error('bellwether.toml: actions must be true or false');
-  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), herdr, ...(typeof hk.file === 'string' ? { hooks: { file: hk.file } } : {}) };
+  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), ...(raw.vitals === false ? { vitals: false } : {}), herdr, ...(typeof hk.file === 'string' ? { hooks: { file: hk.file } } : {}) };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */

@@ -5,7 +5,7 @@ import type { FeedState } from '../feed.js';
 import { pickPartner } from '../map/chatter.js';
 import type { MapArt } from '../map/assets.js';
 import { fitZoom, focusZoom, nearestParty, screenToWorld, stepCamera, type Camera } from '../map/camera.js';
-import { describeParty } from '../map/detail.js';
+import { describeParty, type DetailRow } from '../map/detail.js';
 import { agentsByRepo, campSize, campSlots, pop, townSize, townSlots } from '../map/growth.js';
 import { layoutMap, repoKey, settlementName, tileToWorld, TILE, type MapLayout } from '../map/layout.js';
 import { buildTerrain, groundTileName } from '../map/terrain.js';
@@ -13,7 +13,8 @@ import { nextRiding, parkSpot, RIDE_SPEED, summonPlan } from '../map/ride.js';
 import { isMoving, spawnWanderer, stepWanderer, type Bounds, type Wanderer } from '../map/wander.js';
 import { SPEED, beaconAlpha, bob, hash01, walkFrame } from '../sim.js';
 import { FRAME_NAMES, SPRITE_H, SPRITE_W, buildFrame, paletteFor, rasterize, type FrameName } from '../sprites.js';
-import type { Theme } from '../theme.js';
+import { vitalsLook, type Theme, type VitalsLook } from '../theme.js';
+import { isLow } from '../vitals.js';
 import { birthTime, prefersReducedMotion, spawnPose } from '../spawn.js';
 import { Figure } from './figure.js';
 import { drawPuff } from './spawnfx.js';
@@ -636,14 +637,24 @@ export class MapScene {
       return;
     }
     const camp = this.layout.camps.get(party.id);
-    const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now);
+    const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now, this.feed.vitalsOn);
     const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p><ul>${d.rows
-      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button><br><span class="line">${esc(r.line)}</span></li>`)
+      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
       .join('')}</ul>`;
     const body = this.panel.querySelector('#detail-body');
     if (body && body.innerHTML !== html) body.innerHTML = html;
     this.panel.hidden = false;
   }
+}
+
+/** Model line, the two bars with their percentages, and the quest, for one panel row. Empty when the agent reports none of it. */
+function vitalsHtml(r: DetailRow, look: VitalsLook): string {
+  const bar = (label: string, pct: number | undefined, color: string) =>
+    pct === undefined
+      ? ''
+      : `<div class="vit"><span>${label}</span><span class="bar"><i style="width:${pct}%;background:${isLow(pct) && label === 'HP' ? look.low : color}"></i></span><span class="pct">${pct}%</span></div>`;
+  const bars = bar('HP', r.context, look.context) + bar('SP', r.quota, look.quota);
+  return `${r.model ? `<div class="model">${esc(r.model)}</div>` : ''}${bars}${r.quest ? `<div class="quest">quest: ${esc(r.quest)}</div>` : ''}`;
 }
 
 function esc(s: string): string {

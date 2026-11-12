@@ -60,6 +60,7 @@ a party, and subagents show up as extra agents under their session while they ru
 ```sh
 npm i -g @pelotto-tech/bellwether@latest
 bellwether install --events      # adds activity hooks to Claude Code and Copilot CLI
+bellwether install --statusline  # optional, Claude Code: context and quota bars, model, quest (see Vitals)
 bellwether overlay --hooks       # or source = "hooks" in bellwether.toml
 ```
 
@@ -185,6 +186,24 @@ listener. Finished hand-offs between teammates are inferred too.
 Too chatty? Hide bubbles from the tray menu, with `bubbles = false`, `?bubbles=0`, or by
 pressing `b` in the page.
 
+### Vitals
+
+When an agent reports them, each character gets two thin bars on the ground under its feet:
+**HP** is the percent of its context window left, **stamina** is the percent of the 5-hour
+usage quota left. Below 20% HP the bar turns red and the whole group walks slower. The party
+nameplate adds the agent session's name as its quest (`atlas · auth — Fix the login flow`)
+when every member that has one shares it, and the map's detail panel lists each member's
+model, effort, both bars with their percentages, and quest.
+
+Only Claude Code provides this data today, through its status line, and only the fields it
+sends: no quota bar without a Claude.ai subscription, no effort on models that lack it. Run
+`bellwether install --statusline` to turn it on. If you already have a status line,
+Bellwether wraps it and prints its output unchanged; `bellwether uninstall` puts it back.
+Other tools can report the same numbers with `bellwether emit --ev vitals` (see
+[the event format](docs/EVENTS.md)). Nothing is estimated: an agent that does not report a
+number gets no bar for it. Icon-only labels hide vitals, as do the tray menu's **Vitals**
+checkbox, `vitals = false`, `?vitals=0`, and the `v` key in the page.
+
 ### Fellowships: orchestrators and worktrees
 
 Parties that share a Herdr session and repo form a **fellowship**. Bellwether works this out
@@ -284,7 +303,7 @@ just create the workspace and tag pane 1.
 | A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
 The desktop overlay's **tray menu** has everything in one place: switch strip and map,
-Size, Labels, Chat bubbles, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
+Size, Labels, Chat bubbles, Vitals, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
 remembered between runs.
 
 ### Keyboard
@@ -294,6 +313,7 @@ remembered between runs.
 | Ctrl+Alt+M (Cmd+Alt+M) | anywhere, desktop overlay | toggle strip and map |
 | `m` | page | toggle strip and map |
 | `b` | page | show or hide chat bubbles |
+| `v` | page | show or hide vitals (bars, model, quest) |
 | Esc | map | zoom back out |
 | double-click a member | strip, browser | focus that pane in Herdr |
 
@@ -307,6 +327,7 @@ pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
 scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
 bubbles = true           # false hides chat bubbles
+vitals = true            # false hides context/quota bars, model and quest
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
@@ -328,6 +349,7 @@ page URL overrides those:
 | `?mode=map` | Start in map mode. |
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
+| `?vitals=0` | Hide vitals: bars, model and quest. |
 | `?transparent` | No backdrop or status chip, for OBS. |
 | `?source=mock` | Mock agents inside the page, no adapter. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
@@ -341,7 +363,9 @@ page URL overrides those:
 | `bellwether uninstall` | Remove only what `install` wrote. |
 | `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: agent events, no Herdr). |
 | `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
-| `bellwether emit --ev <kind> ...` | Append one activity event from any tool. |
+| `bellwether install --statusline` | Claude Code only: report context, quota, model, effort and session name for vitals, wrapping any status line you have. |
+| `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--ev vitals --ctx N --quota N ...` for vitals). |
+| `bellwether hook statusline` | Status line body: reports vitals from the JSON on stdin, then prints the line. |
 | `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |

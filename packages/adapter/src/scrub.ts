@@ -9,7 +9,8 @@ export function hashLabel(value: string, prefix = ''): string {
 }
 
 function scrubMember(m: Member): Member {
-  const { title: _title, say: _say, ...rest } = m;
+  // Quest names are free text a person typed, so they go like `say` does; model, effort and the numbers are not identifying.
+  const { title: _title, say: _say, quest: _quest, ...rest } = m;
   return rest;
 }
 

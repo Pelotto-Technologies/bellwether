@@ -54,6 +54,16 @@ export interface Member {
   sayTo?: string;
   /** Changes with every message, so a repeated line still raises a new bubble. */
   sayId?: string;
+  /** Remaining percentages, 0-100. Absent when unknown; never estimated. */
+  vitals?: { context?: number; quota?: number; at: number };
+  /** Display name of the model, e.g. "Opus 5.5". At most 40 characters. */
+  model?: string;
+  /** Reasoning effort, e.g. "high". At most 16 characters. */
+  effort?: string;
+  /** The agent session's human name. At most 80 characters. */
+  quest?: string;
+  /** Name of the tool currently running: set on `tool`, cleared on `tool_done` and `stop`. Hooks source only for now. */
+  tool?: string;
   lastChange: number;
 }
 

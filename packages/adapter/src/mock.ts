@@ -20,6 +20,17 @@ const PARTIES: PartySeed[] = [
   { label: 'deploy-pipeline', repo: 'infra', roles: ['architect', 'ops', 'implementer'] },
 ];
 
+/** Quest names the mock parties go on, by party label. Parties without one show no quest. */
+const QUESTS: Record<string, string> = {
+  'auth-refresh': 'Refresh the auth tokens',
+  'billing-export': 'Export invoices as CSV',
+  'search-index': 'Make the search index faster',
+  'docs-site': 'Write the getting-started guide',
+};
+
+const MODELS = ['Opus 5.5', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 5'] as const;
+const EFFORTS = ['low', 'medium', 'high', 'high', 'xhigh'] as const;
+
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;
 
 const LINES: Partial<Record<Role, string[]>> = {
@@ -65,6 +76,8 @@ export class MockGenerator {
   private rng: () => number;
   private world: World;
   private seq = 0;
+  /** The usage quota is the account's, so every agent sees the same number; it only goes down. */
+  private quota = 78;
 
   constructor(opts: MockOptions = {}) {
     this.rng = createRng(opts.seed ?? 1);
@@ -78,7 +91,7 @@ export class MockGenerator {
       const members: Record<string, Member> = {};
       seed.roles.forEach((role, j) => {
         const paneId = `${id}:p${j + 1}`;
-        members[paneId] = {
+        const member: Member = {
           paneId,
           agent: pick(this.rng, AGENTS),
           role,
@@ -86,6 +99,15 @@ export class MockGenerator {
           title: role,
           lastChange: this.seq++,
         };
+        // Only Claude Code reports vitals today, so the mock gives them to its claude agents alone.
+        if (member.agent === 'claude') {
+          member.vitals = { context: 6 + Math.floor(this.rng() * 94), quota: this.quota, at: t };
+          member.model = pick(this.rng, MODELS);
+          member.effort = pick(this.rng, EFFORTS);
+          const quest = QUESTS[seed.label];
+          if (quest) member.quest = quest;
+        }
+        members[paneId] = member;
       });
       parties[id] = {
         id,
@@ -120,12 +142,16 @@ export class MockGenerator {
       delta = { t, kind: 'say', partyId: party.id, paneId: member.paneId, text: pick(this.rng, lines) };
     } else {
       const status = weighted(this.rng, NEXT[member.status]);
-      delta = {
-        t,
-        kind: 'member',
-        partyId: party.id,
-        member: { ...member, status, say: undefined, lastChange: this.seq++ },
-      };
+      const next: Member = { ...member, status, say: undefined, lastChange: this.seq++ };
+      if (member.vitals) {
+        // Working eats context; at the bottom the agent compacts and starts over high.
+        const used = status === 'working' ? 3 + Math.floor(this.rng() * 7) : 0;
+        let context = (member.vitals.context ?? 100) - used;
+        if (context <= 2) context = 90 + Math.floor(this.rng() * 8);
+        if (this.rng() < 0.15) this.quota = Math.max(3, this.quota - 1);
+        next.vitals = { context, quota: this.quota, at: t };
+      }
+      delta = { t, kind: 'member', partyId: party.id, member: next };
     }
     this.world = applyDelta(this.world, delta);
     return delta;

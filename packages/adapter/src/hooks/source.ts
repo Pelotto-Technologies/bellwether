@@ -35,6 +35,13 @@ interface SessionState {
   title?: string;
   say?: string;
   sayId?: string;
+  context?: number;
+  quota?: number;
+  vitalsAt?: number;
+  model?: string;
+  effort?: string;
+  quest?: string;
+  tool?: string;
   lastEvent: number;
   lastChange: number;
 }
@@ -251,7 +258,18 @@ export class HooksSource extends BaseSource {
     s.lastEvent = Math.max(s.lastEvent, e.t);
     s.agent = e.agent;
     if (e.role) s.role = e.role;
-    if (e.ev === 'start' && e.cwd) s.cwd = e.cwd;
+    if ((e.ev === 'start' || s.cwd === '(unknown)') && e.cwd) s.cwd = e.cwd;
+
+    if (e.ev === 'vitals') {
+      // Vitals never change the status. A field the event omits keeps its last value.
+      if (e.ctx !== undefined) s.context = e.ctx;
+      if (e.quota !== undefined) s.quota = e.quota;
+      if (e.ctx !== undefined || e.quota !== undefined) s.vitalsAt = e.t;
+      if (e.model) s.model = e.model;
+      if (e.effort) s.effort = e.effort;
+      if (e.name) s.quest = e.name;
+      return;
+    }
 
     const subKey = e.sub ? `${e.session}:${e.sub}` : undefined;
     if (e.ev === 'sub_start' || e.ev === 'sub_stop') {
@@ -298,6 +316,8 @@ export class HooksSource extends BaseSource {
       case 'tool_done':
         this.setStatus(s, 'working', e.t);
         if (e.detail) s.title = e.detail;
+        if (e.ev === 'tool' && e.tool) s.tool = e.tool;
+        else delete s.tool;
         if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
         break;
       case 'wait':
@@ -309,6 +329,7 @@ export class HooksSource extends BaseSource {
         break;
       case 'stop':
         this.setStatus(s, 'done', e.t);
+        delete s.tool;
         break;
     }
   }
@@ -350,6 +371,13 @@ export class HooksSource extends BaseSource {
       if (s.title) m.title = s.title;
       if (s.say) m.say = s.say;
       if (s.say && s.sayId) m.sayId = s.sayId;
+      if (s.context !== undefined || s.quota !== undefined) {
+        m.vitals = { at: s.vitalsAt ?? s.lastEvent, ...(s.context !== undefined ? { context: s.context } : {}), ...(s.quota !== undefined ? { quota: s.quota } : {}) };
+      }
+      if (s.model) m.model = s.model;
+      if (s.effort) m.effort = s.effort;
+      if (s.quest) m.quest = s.quest;
+      if (s.tool) m.tool = s.tool;
       partyFor(s.cwd).members[s.id] = m;
     }
     for (const sub of this.subs.values()) {

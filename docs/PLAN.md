@@ -241,6 +241,11 @@ interface Member {                   // one pane with an agent
   status: Status;
   title?: string;
   say?: string;                     // tokens.say, cleared on TTL expiry
+  vitals?: { context?: number; quota?: number; at: number }; // percent remaining, 0-100; absent = unknown
+  model?: string;                   // display name, e.g. "Opus 5.5" (tokens.model)
+  effort?: string;                  // e.g. "high" (tokens.effort)
+  quest?: string;                   // the session's human name (tokens.quest)
+  tool?: string;                    // tool running now; hooks source only
   lastChange: number;               // state_change_seq
 }
 type Delta = { t: number; kind: 'snapshot'; world: World }

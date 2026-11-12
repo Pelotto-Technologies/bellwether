@@ -1,5 +1,6 @@
 // Pure mapping from Herdr protocol records to the Bellwether world model.
 import { isOrchestrationLabel, resolveRole } from '../roles.js';
+import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_QUEST } from '../sanitize.js';
 import { rollup } from '../rollup.js';
 import type { Delta, Member, Party, Status } from '../types.js';
 import type { AgentInfo, AgentStatusChanged, PaneInfo, SessionSnapshot, WorkspaceInfo } from './protocol.js';
@@ -36,6 +37,16 @@ export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = f
   if (pane.title) m.title = pane.title;
   if (tokens.say) m.say = tokens.say;
   if (tokens.say && tokens.say_id) m.sayId = tokens.say_id;
+  const context = cleanPercent(tokens.ctx);
+  const quota = cleanPercent(tokens.quota);
+  // Pane tokens carry no timestamp, so `at` is the pane's revision: it changes when the pane does.
+  if (context !== undefined || quota !== undefined) m.vitals = { at: m.lastChange, ...(context !== undefined ? { context } : {}), ...(quota !== undefined ? { quota } : {}) };
+  const model = cleanText(tokens.model, MAX_MODEL);
+  if (model) m.model = model;
+  const effort = cleanText(tokens.effort, MAX_EFFORT);
+  if (effort) m.effort = effort;
+  const quest = cleanText(tokens.quest, MAX_QUEST);
+  if (quest) m.quest = quest;
   return m;
 }
 
@@ -167,7 +178,11 @@ export function applyStatusChange(
 }
 
 function sameMember(a: Member, b: Member): boolean {
-  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo;
+  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
+}
+
+function sameVitals(a: Member, b: Member): boolean {
+  return a.vitals?.context === b.vitals?.context && a.vitals?.quota === b.vitals?.quota && a.model === b.model && a.effort === b.effort && a.quest === b.quest && a.tool === b.tool;
 }
 
 function samePartyHeader(a: Party, b: Party): boolean {

@@ -9,6 +9,7 @@ export type MenuAction =
   | { type: 'reset-map' }
   | { type: 'pick-labels'; minimal: boolean | undefined }
   | { type: 'pick-bubbles'; bubbles: boolean | undefined }
+  | { type: 'toggle-vitals' }
   | { type: 'pick-scale'; scale: number | undefined }
   | { type: 'pick-pack'; pack: string | undefined }
   | { type: 'pick-session'; session: string | undefined }
@@ -38,7 +39,7 @@ const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles' | 'span' | 'mapAlwaysOnTop'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles' | 'vitals' | 'span' | 'mapAlwaysOnTop'> & { pack?: string },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -67,6 +68,9 @@ export function buildMenuModel(
     { kind: 'item', label: 'Default (bellwether.toml)', checked: cfg.bubbles === undefined, action: { type: 'pick-bubbles', bubbles: undefined } },
     { kind: 'item', label: 'Show', checked: cfg.bubbles === true, action: { type: 'pick-bubbles', bubbles: true } },
     { kind: 'item', label: 'Hide', checked: cfg.bubbles === false, action: { type: 'pick-bubbles', bubbles: false } },
+    { kind: 'separator' },
+    // Shown unless switched off here or in bellwether.toml; the first click from the default hides them.
+    { kind: 'item', label: 'Vitals', checked: cfg.vitals !== false, action: { type: 'toggle-vitals' } },
     { kind: 'separator' },
     { kind: 'item', label: 'Skin', enabled: false },
     { kind: 'item', label: 'Default (bellwether.toml)', checked: !cfg.pack, action: { type: 'pick-pack', pack: undefined } },
@@ -137,6 +141,8 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       else next.bubbles = action.bubbles;
       return { cfg: next, restartAdapter: false, reload: cfg.bubbles !== action.bubbles };
     }
+    case 'toggle-vitals':
+      return { cfg: { ...cfg, vitals: cfg.vitals === false }, restartAdapter: false, reload: true };
     case 'pick-scale': {
       const next = { ...cfg };
       if (action.scale) next.scale = action.scale;

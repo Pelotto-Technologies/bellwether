@@ -23,6 +23,9 @@ export interface ToolHookCommand {
 /** Builds the activity-event hook command for one hook name, for each shell. */
 export type EventHookCommand = (agent: string, event: string) => ToolHookCommand;
 
+/** Builds the status line command; `wrap` is the previous command, base64url, to run and print in its place. */
+export type StatusLineCommand = (wrap?: string) => ToolHookCommand;
+
 /**
  * One coding agent the installer can integrate with. `id` is the value Herdr puts in
  * the `agent` field for this agent. This is the only place in Bellwether that knows
@@ -46,4 +49,11 @@ export interface AgentTarget {
   addEventHooks(settings: JsonObject, command: EventHookCommand): JsonObject;
   /** Return settings with every activity-event hook removed and all other entries untouched. */
   removeEventHooks(settings: JsonObject): JsonObject;
+  /**
+   * Optional: agents with a single status line slot. Return settings whose status line reports vitals through
+   * Bellwether, wrapping an existing status line of someone else's instead of replacing it. Assumes ours is not present.
+   */
+  addStatusLine?(settings: JsonObject, command: StatusLineCommand): JsonObject;
+  /** Optional: return settings with the status line restored to what it was before `addStatusLine` (or removed). The same object when it is not ours. */
+  removeStatusLine?(settings: JsonObject): JsonObject;
 }

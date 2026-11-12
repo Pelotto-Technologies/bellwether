@@ -25,6 +25,8 @@ export interface ShellConfig {
   span?: boolean;
   /** Speech bubbles shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   bubbles?: boolean;
+  /** Vitals (bars, model, quest) shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
+  vitals?: boolean;
   /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
   mapAlwaysOnTop?: boolean;
   /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
@@ -74,6 +76,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
   if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
+  if (typeof r.vitals === 'boolean') out.vitals = r.vitals;
   if (r.span === true) out.span = true;
   if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
   const b = r.mapBounds as Record<string, unknown> | null | undefined;
