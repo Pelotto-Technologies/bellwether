@@ -24,12 +24,21 @@ export const GIT_TIMEOUT_MS = 3000;
 /** Flags on every call: no fsmonitor daemon, no bare repos found by accident. */
 const SAFE_FLAGS = ['-c', 'safe.bareRepository=explicit', '-c', 'core.fsmonitor=false', '--no-optional-locks'];
 
-/** Spawns git with an args array (no shell). */
+const STATUS_ARGV = [...SAFE_FLAGS, 'status', '--porcelain=v2', '--branch'];
+const REMOTE_ARGV = [...SAFE_FLAGS, 'remote'];
+
+/**
+ * Spawns git with an args array (no shell). Only the two fixed command lines above ever
+ * reach git: the caller's args merely select one, so no caller can smuggle in an option
+ * such as `--upload-pack`.
+ */
 export const runGit: GitRunner = (args, { cwd, timeoutMs }) =>
   new Promise((resolve, reject) => {
+    const argv = args.includes('status') ? STATUS_ARGV : args.includes('remote') ? REMOTE_ARGV : undefined;
+    if (!argv) return reject(new Error('unsupported git command'));
     execFile(
       'git',
-      args,
+      argv,
       {
         cwd,
         timeout: timeoutMs,
@@ -67,9 +76,9 @@ export function parseStatusV2(out: string): { dirty: number; ahead: number } {
 /** Git state of `folder`, or undefined: not a repository, git missing, timeout or any error. */
 export async function probeGit(folder: string, run: GitRunner = runGit, timeoutMs = GIT_TIMEOUT_MS): Promise<GitState | undefined> {
   try {
-    const status = await run([...SAFE_FLAGS, 'status', '--porcelain=v2', '--branch'], { cwd: folder, timeoutMs });
+    const status = await run(STATUS_ARGV, { cwd: folder, timeoutMs });
     if (status.code !== 0) return undefined;
-    const remote = await run([...SAFE_FLAGS, 'remote'], { cwd: folder, timeoutMs });
+    const remote = await run(REMOTE_ARGV, { cwd: folder, timeoutMs });
     if (remote.code !== 0) return undefined;
     return { ...parseStatusV2(status.stdout), noRemote: remote.stdout.trim() === '' };
   } catch {
