@@ -5,3 +5,4 @@ export * from './scrub.js';
 export * from './config.js';
 export * from './herdr/index.js';
 export * from './hooks/index.js';
+export * from './auto.js';

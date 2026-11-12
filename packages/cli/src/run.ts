@@ -13,13 +13,13 @@ export function adapterArgs(cmd: RunCommand, rest: string[], serveDir?: string):
   const serve = serveDir ? ['--serve', serveDir] : [];
   switch (cmd) {
     case 'run':
-      // Live Herdr unless the user chose a source with a flag. `--prefer-live` (rather than `--live`)
-      // leaves bellwether.toml / BELLWETHER_SOURCE free to pick the hooks source.
-      return [...(rest.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--prefer-live', '--all']), ...serve, ...rest];
+      // Auto-detect (live Herdr if reachable, else hooks) unless the user chose a source with a flag.
+      // `--auto` (rather than `--live`) leaves bellwether.toml / BELLWETHER_SOURCE free to pick a source.
+      return [...(rest.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--auto', '--all']), ...serve, ...rest];
     case 'record': {
       const [file, ...more] = rest;
       if (!file || file.startsWith('-')) throw new Error('usage: bellwether record <file.jsonl> [--scrub] [adapter flags]');
-      return [...(more.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--prefer-live', '--all']), ...serve, '--record', file, ...more];
+      return [...(more.some((a) => SOURCE_FLAGS.includes(a)) ? [] : ['--auto', '--all']), ...serve, '--record', file, ...more];
     }
     case 'replay': {
       const [file, ...more] = rest;

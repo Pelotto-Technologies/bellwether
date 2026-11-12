@@ -44,7 +44,7 @@ Adapter flags (`--help` for all):
 
 | Flag | Effect |
 |---|---|
-| `--live` / `--mock` / `--replay <file.jsonl>` | Where deltas come from. `source` in `bellwether.toml` or `BELLWETHER_SOURCE` sets the default. |
+| `--live` / `--hooks` / `--mock` / `--auto` / `--replay <file.jsonl>` | Where deltas come from. `source` (`live`, `hooks`, `mock`, `auto`) in `bellwether.toml` or `BELLWETHER_SOURCE` sets the default. `--auto` (what `run` and `overlay` use) picks live Herdr if a socket answers at startup, else hooks. |
 | `--session <name>` / `--all` | Which Herdr sessions to watch. |
 | `--socket <path>` | Explicit socket or named pipe. |
 | `--record <file.jsonl>` | Append every delta to a file. Add `--scrub` (or `scrub = true`) to hash repo, branch and workspace labels and strip speech and pane titles. |
@@ -61,7 +61,7 @@ seeing exactly what the adapter makes of a session.
 `packages/shell` wraps the page in a transparent, frameless, always-on-top, click-through
 Electron window the width of one monitor, pinned to its bottom edge. It attaches to an
 adapter already serving `http://127.0.0.1:7341/` or, if none answers, spawns one with
-`--live --all`. Tray choices persist in `shell.json` in Electron's userData folder. Set
+`--auto --all` (live Herdr if it answers, else the events file). Tray choices persist in `shell.json` in Electron's userData folder. Set
 `BELLWETHER_ADAPTER_BIN` or `BELLWETHER_RENDERER_DIR` to point at other builds.
 `pnpm install` downloads the Electron binary; CI skips it with
 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`.

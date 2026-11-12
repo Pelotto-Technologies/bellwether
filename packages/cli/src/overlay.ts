@@ -48,10 +48,11 @@ export function ensureElectron(cacheDir = electronCacheDir()): string {
 /**
  * Source choice for the overlay's adapter, passed as environment because the desktop shell
  * spawns the adapter itself. `--hooks` (optionally `--events <file>`) reads Claude Code
- * sessions without Herdr; without it, bellwether.toml and BELLWETHER_SOURCE decide.
+ * sessions without Herdr; without it, bellwether.toml and BELLWETHER_SOURCE decide, else the adapter auto-detects Herdr.
  */
 export function overlayEnv(args: string[], env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = { ...env };
+  if (args.includes('--live')) out.BELLWETHER_SOURCE = 'live';
   if (args.includes('--hooks')) out.BELLWETHER_SOURCE = 'hooks';
   const i = args.indexOf('--events');
   if (i >= 0 && args[i + 1]) out.BELLWETHER_EVENTS = args[i + 1];
