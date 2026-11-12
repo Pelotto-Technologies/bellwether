@@ -3,6 +3,10 @@ import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js
 import { groupFellowships, mixHex, pickFollower, type Fellowship, type FellowshipView } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
 import { pickPartner } from '../map/chatter.js';
+import { campPanel, campPanelHtml } from '../map/camppanel.js';
+import type { CampArt } from '../map/campart.js';
+import { MAP_HOME, navReduce, resolveParty, type Nav } from '../map/nav.js';
+import { CampScene, PANEL_W } from './camp.js';
 import type { MapArt } from '../map/assets.js';
 import { fitZoom, focusZoom, nearestParty, screenToWorld, stepCamera, type Camera } from '../map/camera.js';
 import { describeParty, type DetailRow } from '../map/detail.js';
@@ -34,6 +38,9 @@ const LEADER_RADIUS = 12;
 const WALK_TO_TALK = 160;
 /** Keep characters this far inside the map edge, in world pixels. */
 const EDGE = 8;
+/** Two clicks this close in time and place are a double click, which enters the camp. */
+const DOUBLE_CLICK_MS = 450;
+const DOUBLE_CLICK_PX = 16;
 
 interface MemberView {
   sprite: Sprite;
@@ -104,7 +111,15 @@ export class MapScene {
   private textures = new Map<string, Texture>();
   private layout: MapLayout = layoutMap({ machine: 'local', parties: {} });
   private cam: Camera = { cx: 0, cy: 0, zoom: 1 };
-  private focus: string | undefined;
+  /** Map overview, a camp focused with its panel open, or inside a camp's scene. */
+  private nav: Nav = MAP_HOME;
+  private get focus(): string | undefined {
+    return this.nav.view === 'map' ? this.nav.focus : this.nav.party;
+  }
+  /** `?mode=camp&party=`: the party to enter once the world arrives (empty string: the first one). */
+  private pendingCamp: string | undefined;
+  private camp: CampScene | undefined;
+  private lastTap: { id: string; x: number; y: number; at: number } | undefined;
   private t = 0;
   private dt = 1 / 60;
   private textScale = 1;
@@ -116,36 +131,99 @@ export class MapScene {
     private feed: FeedState,
     private art: MapArt,
     private figures: LoadedArt | null = null,
+    campArt: CampArt | null = null,
   ) {
     this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer, this.fx);
     app.stage.addChild(this.world);
+    if (campArt) {
+      this.camp = new CampScene({ theme, feed, mapArt: art, art: campArt, figures, procTexture: (r, f, b) => this.frameTexture(r, f, b) });
+      app.stage.addChild(this.camp.root);
+      this.campEl = document.getElementById('camp-panel');
+      this.applyCampTheme();
+    }
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
     app.stage.on('pointerdown', (e) => this.click(e.global.x, e.global.y));
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.setFocus(undefined);
+      if (e.key === 'Escape') this.back();
+      else if (e.key === 'Enter' && this.nav.view === 'map' && this.nav.focus) this.enterCamp(this.nav.focus);
     });
-    document.getElementById('detail-close')?.addEventListener('click', () => this.setFocus(undefined));
-    // Close-pane buttons in the panel: ends the agent in Herdr, after a confirm.
-    this.panel?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement | null)?.closest?.('button[data-close]') as HTMLButtonElement | null;
-      if (!btn) return;
+    document.getElementById('detail-close')?.addEventListener('click', () => this.back());
+    document.getElementById('camp-back')?.addEventListener('click', () => this.back());
+    for (const el of [this.panel, this.campEl]) el?.addEventListener('click', (e) => this.onPanelClick(e));
+    // A double click on a row in the camp panel focuses that pane in Herdr, like double-clicking a member on the strip.
+    this.campEl?.addEventListener('dblclick', (e) => {
+      const paneId = (e.target as HTMLElement | null)?.closest?.('li[data-pane]')?.getAttribute('data-pane');
+      if (paneId && !(e.target as HTMLElement).closest('button')) this.feed.onFocus?.(paneId);
+    });
+  }
+
+  private campEl: HTMLElement | null = null;
+  /** The party window as last written, so it is only rewritten when it changes (a rewrite would eat a click). */
+  private campHtml = "";
+
+  /** Buttons in either panel: close a pane in Herdr after a confirm, or enter the focused camp. */
+  private onPanelClick(e: Event): void {
+    const target = e.target as HTMLElement | null;
+    const enter = target?.closest?.('button[data-enter]');
+    if (enter && this.focus) {
       e.stopPropagation();
-      const paneId = btn.dataset.close!;
-      if (!window.confirm(`Close pane ${paneId} in Herdr? This ends the agent running in it.`)) return;
-      this.feed.onClose?.(paneId);
-      btn.disabled = true;
-      btn.textContent = 'closing…';
-    });
+      this.enterCamp(this.focus);
+      return;
+    }
+    const btn = target?.closest?.('button[data-close]') as HTMLButtonElement | null;
+    if (!btn) return;
+    e.stopPropagation();
+    const paneId = btn.dataset.close!;
+    if (!window.confirm(`Close pane ${paneId} in Herdr? This ends the agent running in it.`)) return;
+    this.feed.onClose?.(paneId);
+    btn.disabled = true;
+    btn.textContent = 'closing…';
   }
 
   get focusedParty(): string | undefined {
     return this.focus;
   }
 
+  /** The party whose camp scene is open, if any. */
+  get campParty(): string | undefined {
+    return this.nav.view === 'camp' ? this.nav.party : undefined;
+  }
+
   setFocus(id: string | undefined): void {
-    this.focus = id && this.feed.world.parties[id] ? id : undefined;
+    if (this.nav.view === 'camp') return;
+    this.nav = navReduce(this.nav, { t: 'click', party: id && this.feed.world.parties[id] ? id : undefined });
     if (!this.focus && this.panel) this.panel.hidden = true;
+  }
+
+  /** Esc, the Back button or the panel's close: out of the camp, else out of the zoom. */
+  private back(): void {
+    this.nav = navReduce(this.nav, { t: 'back' });
+    if (!this.focus && this.panel) this.panel.hidden = true;
+  }
+
+  /** Opens the camp scene of a party; does nothing without camp art or for an unknown party. */
+  enterCamp(id: string): void {
+    if (!this.camp || !this.feed.world.parties[id]) return;
+    this.nav = navReduce(this.nav, { t: 'enter', party: id });
+  }
+
+  /** Deep link: enter this party's camp (id, label or branch; empty for the first party) as soon as it exists. */
+  openCamp(key: string): void {
+    this.pendingCamp = key;
+  }
+
+  /** The party window takes its colours from the pack, so each skin gets its own frame. */
+  private applyCampTheme(): void {
+    const el = this.campEl;
+    if (!el) return;
+    const t = this.theme;
+    const set = (k: string, v: string) => el.style.setProperty(k, v);
+    set('--win-bg', mixHex(t.outline, '#1a2447', 0.55));
+    set('--win-bg2', mixHex(t.outline, '#0a0e22', 0.7));
+    set('--win-edge', mixHex(t.ground, '#ffffff', 0.72));
+    set('--win-accent', t.palette.working);
+    set('--win-text', '#f3f1e8');
   }
 
   private screenSize() {
@@ -171,7 +249,19 @@ export class MapScene {
     }
     const w = screenToWorld(this.cam, screen, { x: sx, y: sy });
     // Hit radius is generous so a glow is easy to click, even at overview zoom.
-    this.setFocus(nearestParty(points, { x: w.x, y: w.y - 10 }, Math.max(18, 28 / this.cam.zoom * 2)));
+    if (this.nav.view === 'camp') return;
+    const hit = nearestParty(points, { x: w.x, y: w.y - 10 }, Math.max(18, 28 / this.cam.zoom * 2));
+    // A second click close to the first, soon after, is a double click: it enters that camp. (The first click
+    // already zoomed in, so the second may land on empty ground; the distance and time decide, not the hit.)
+    const at = performance.now();
+    const prev = this.lastTap;
+    if (prev && at - prev.at < DOUBLE_CLICK_MS && Math.hypot(sx - prev.x, sy - prev.y) < DOUBLE_CLICK_PX) {
+      this.lastTap = undefined;
+      this.enterCamp(prev.id);
+      return;
+    }
+    this.lastTap = hit ? { id: hit, x: sx, y: sy, at } : undefined;
+    this.setFocus(hit);
   }
 
   private frameTexture(role: Member['role'], frame: FrameName, beacon: boolean): Texture {
@@ -277,7 +367,17 @@ export class MapScene {
       this.cam = { cx: this.mapPx().w / 2, cy: this.mapPx().h / 2, zoom: fitZoom(this.mapPx(), this.screenSize()) };
     }
     // Focus is on the raw world: a leader's own workspace has no camp but can still be opened.
-    if (this.focus && !this.feed.world.parties[this.focus]) this.setFocus(undefined);
+    if (this.focus && !this.feed.world.parties[this.focus]) {
+      this.nav = navReduce(this.nav, { t: 'gone', party: this.focus });
+      if (this.panel) this.panel.hidden = true;
+    }
+    if (this.pendingCamp !== undefined && Object.keys(this.feed.world.parties).length) {
+      const id = resolveParty(this.feed.world, this.pendingCamp);
+      if (id) {
+        this.pendingCamp = undefined;
+        this.enterCamp(id);
+      }
+    }
 
     const screen = this.screenSize();
     const target: Camera = this.focus
@@ -312,6 +412,39 @@ export class MapScene {
     if (Object.keys(world.parties).length) this.primed = true;
     this.drawMarks(fv.fellowships, fv.tints);
     this.updatePanel(now);
+    this.updateCamp(dt, now, fv.tints);
+  }
+
+  /** Camp view: the map hides, the scene and its party window show. Back on the map, both go away. */
+  private updateCamp(dt: number, now: number, tints: Map<string, string>): void {
+    const camp = this.camp;
+    if (!camp) return;
+    const id = this.campParty;
+    const party = id ? this.feed.world.parties[id] : undefined;
+    const inCamp = !!party;
+    document.body.classList.toggle('camp-view', inCamp);
+    this.world.visible = !inCamp;
+    if (this.campEl) this.campEl.hidden = !inCamp;
+    if (!party || !id) {
+      if (camp.visible) camp.leave();
+      return;
+    }
+    if (!camp.visible) camp.enter(id);
+    if (this.panel) this.panel.hidden = true;
+    const screen = this.screenSize();
+    const panelW = this.campEl && getComputedStyle(this.campEl).display !== 'none' ? Math.min(PANEL_W, Math.floor(screen.w * 0.42)) : 0;
+    camp.update(dt, now, party, tints.get(id), screen.w - panelW, screen.h);
+    if (this.campEl) {
+      const home = this.layout.camps.get(id);
+      const model = campPanel(party, settlementName(home?.settlementKey ?? repoKey(party)), this.theme.beacon, now, this.feed.vitalsOn);
+      const faces = Object.fromEntries(model.rows.map((r) => [r.role, camp.face(r.role as Member['role'])]).filter(([, f]) => !!f)) as Record<string, string>;
+      const body = this.campEl.querySelector('#camp-body');
+      const html = campPanelHtml(model, vitalsLook(this.theme), faces);
+      if (body && html !== this.campHtml) {
+        this.campHtml = html;
+        body.innerHTML = html;
+      }
+    }
   }
 
   private camFocus(id: string) {
@@ -638,7 +771,7 @@ export class MapScene {
     }
     const camp = this.layout.camps.get(party.id);
     const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now, this.feed.vitalsOn);
-    const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p><ul>${d.rows
+    const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p>${this.camp ? `<button class="enter" data-enter="" title="Open the camp scene (Enter, or double-click the camp)">Enter camp</button>` : ""}<ul>${d.rows
       .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
       .join('')}</ul>`;
     const body = this.panel.querySelector('#detail-body');

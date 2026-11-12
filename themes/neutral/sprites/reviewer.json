@@ -719,6 +719,126 @@
         "w": 24,
         "h": 32
       }
+    },
+    "work_0": {
+      "frame": {
+        "x": 288,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
+    },
+    "work_0_tip": {
+      "frame": {
+        "x": 288,
+        "y": 32,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
+    },
+    "work_0_cloak": {
+      "frame": {
+        "x": 288,
+        "y": 64,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
+    },
+    "work_1": {
+      "frame": {
+        "x": 312,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
+    },
+    "work_1_tip": {
+      "frame": {
+        "x": 312,
+        "y": 32,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
+    },
+    "work_1_cloak": {
+      "frame": {
+        "x": 312,
+        "y": 64,
+        "w": 24,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 32
+      }
     }
   },
   "animations": {
@@ -745,6 +865,10 @@
     ],
     "blink": [
       "blink_0"
+    ],
+    "work": [
+      "work_0",
+      "work_1"
     ],
     "walk_tip": [
       "walk_0_tip",
@@ -793,6 +917,14 @@
     ],
     "blink_cloak": [
       "blink_0_cloak"
+    ],
+    "work_tip": [
+      "work_0_tip",
+      "work_1_tip"
+    ],
+    "work_cloak": [
+      "work_0_cloak",
+      "work_1_cloak"
     ]
   },
   "meta": {
@@ -801,7 +933,7 @@
     "image": "reviewer.png",
     "format": "RGBA8888",
     "size": {
-      "w": 288,
+      "w": 336,
       "h": 96
     },
     "scale": "1"

@@ -19,6 +19,7 @@ for (const pack of PACKS) {
     art, roles,
     ground: { img: uri(`${dir}/sprites/ground.png`), frames: js(`${dir}/sprites/ground.json`).frames },
     tileset: { img: uri(`${dir}/map/tileset.png`), meta: js(`${dir}/map/tileset.json`) },
+    camp: { img: uri(`${dir}/map/camp.png`), frames: js(`${dir}/map/camp.json`).frames },
     props: { img: uri(`${dir}/map/props.png`), frames: js(`${dir}/map/props.json`).frames },
     ui: { img: uri(`${dir}/ui/ui.png`), frames: js(`${dir}/ui/ui.json`).frames },
   };

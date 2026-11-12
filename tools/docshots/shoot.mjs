@@ -7,7 +7,7 @@ import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { castFeed, crowdFeed, stillFeed, storyFeed, toJsonl } from './scenario.mjs';
+import { campFeed, castFeed, crowdFeed, stillFeed, storyFeed, toJsonl } from './scenario.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const dist = join(root, 'packages/renderer/dist');
@@ -21,6 +21,7 @@ const feeds = {
   'still.jsonl': toJsonl(stillFeed()), 'story.jsonl': toJsonl(storyFeed()), 'cast.jsonl': toJsonl(castFeed()), 'crowd.jsonl': toJsonl(crowdFeed()), 'span.jsonl': toJsonl(crowdFeed(14)),
   // Map stills: an addressed message would walk the orchestrator away from its settlement.
   'map.jsonl': toJsonl(stillFeed({ addressed: false })),
+  'camp.jsonl': toJsonl(campFeed()),
 };
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 const server = createServer((req, res) => {
@@ -166,6 +167,7 @@ for (const pack of PACKS) {
   });
 }
 await shot('map-overview', `pack=aesir&mode=map&replay=/map.jsonl`, { wait: 3500 });
+await shot('map-camp', 'pack=aesir&mode=camp&party=atlas&replay=/camp.jsonl', { wait: 3500 });
 await shot('strip-tiny', `pack=aesir&scale=1&replay=/still.jsonl`, { w: 1280, h: 140 });
 await shot('strip-large', `pack=aesir&scale=4&replay=/still.jsonl`, { w: 1280, h: 360 });
 await shot('strip-minimal', `pack=aesir&minimal&replay=/still.jsonl`, STRIP);

@@ -27,20 +27,40 @@ export interface Wanderer {
   dir: 1 | -1;
   /** Counter so each retarget is deterministic but different. */
   n: number;
+  /** Where the member stands when nothing is going on; it always drifts back here. */
+  ax: number;
+  ay: number;
+  /** Seconds left before the next small shuffle. */
+  rest: number;
 }
+
+/** How far from its spot a member strays when it shuffles, in world pixels. */
+export const SHUFFLE = 3;
+/** Seconds between shuffles: members mostly stand still. */
+export const REST_MIN = 6;
+export const REST_SPAN = 10;
+/** Shuffle speed cap, world pixels per second. */
+const SHUFFLE_SPEED = 9;
 
 export function spawnWanderer(id: string, home: Pt, radius: number, bounds?: Bounds): Wanderer {
   const a = hash01(id) * Math.PI * 2;
   const r = hash01(id + 'r') * radius;
   const { x, y } = clampTo({ x: home.x + Math.cos(a) * r, y: home.y + Math.sin(a) * r * 0.6 }, bounds);
-  return { x, y, tx: x, ty: y, dir: 1, n: 0 };
+  return { x, y, tx: x, ty: y, dir: 1, n: 0, ax: x, ay: y, rest: restFor(id, 0) };
 }
 
-function retarget(w: Wanderer, id: string, home: Pt, radius: number, bounds?: Bounds): Wanderer {
-  const a = hash01(`${id}a${w.n}`) * Math.PI * 2;
-  const r = (0.3 + 0.7 * hash01(`${id}r${w.n}`)) * radius;
-  const t = clampTo({ x: home.x + Math.cos(a) * r, y: home.y + Math.sin(a) * r * 0.6 }, bounds);
-  return { ...w, tx: t.x, ty: t.y, n: w.n + 1 };
+function restFor(id: string, n: number): number {
+  return REST_MIN + hash01(`${id}w${n}`) * REST_SPAN;
+}
+
+/** Between shuffles the target is the member's own spot; a shuffle is one short step to the side or forward. */
+function retarget(w: Wanderer, id: string, bounds?: Bounds): Wanderer {
+  const away = Math.hypot(w.x - w.ax, w.y - w.ay) > 0.5;
+  const n = w.n + 1;
+  if (away) return { ...w, tx: w.ax, ty: w.ay, n, rest: restFor(id, n) };
+  const a = hash01(`${id}a${n}`) * Math.PI * 2;
+  const t = clampTo({ x: w.ax + Math.cos(a) * SHUFFLE, y: w.ay + Math.sin(a) * SHUFFLE * 0.6 }, bounds);
+  return { ...w, tx: t.x, ty: t.y, n };
 }
 
 /**
@@ -55,9 +75,12 @@ export function stepWanderer(w: Wanderer, id: string, status: Status, home: Pt, 
     const t = clampTo({ x: meet.x + side * 9, y: meet.y }, bounds);
     cur = { ...w, tx: t.x, ty: t.y };
   } else if (Math.hypot(w.tx - w.x, w.ty - w.y) < 1) {
-    cur = retarget(w, id, home, radius, bounds);
+    // Standing at its spot (or a shuffle just ended): wait out the rest, then shuffle or go back.
+    const away = Math.hypot(w.x - w.ax, w.y - w.ay) > 0.5;
+    const rest = away ? 0 : w.rest - dt;
+    cur = away || rest <= 0 ? retarget(w, id, bounds) : { ...w, rest };
   }
-  const speed = speedOverride ?? (meet ? Math.max(SPEED.working, 24) : SPEED[status]);
+  const speed = speedOverride ?? (meet ? Math.max(SPEED.working, 24) : Math.min(SPEED[status], SHUFFLE_SPEED));
   if (speed === 0) return cur;
   const dx = cur.tx - cur.x;
   const dy = cur.ty - cur.y;

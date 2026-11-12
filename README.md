@@ -27,7 +27,7 @@ Herdr's workspaces, so you can click a character to focus its pane, prompt agent
 overlay, and see agents' messages to each other as chat bubbles.
 
 - [Quickstart](#quickstart)
-- [A tour](#a-tour): reading the strip, sizes, map mode, agents talking, fellowships
+- [A tour](#a-tour): reading the strip, sizes, map mode, camp, agents talking, fellowships
 - [Skins](#skins): Workshop Crew, Aesir, Wayfarers, Deep Space
 - [Giving agents a role](#giving-agents-a-role)
 - [Where to show it](#where-to-show-it): desktop, OBS, browser
@@ -189,8 +189,9 @@ with a glow in its status colour, and roads join it all up.
 
 Click a glow, or an orchestrator, to zoom in. A panel lists every member with role, agent,
 status and latest line, and each member has a **close** button that closes its pane in
-Herdr after a confirm. Esc, the ✕ or a click on empty ground zooms back out, and the
-**Exit map** button returns to the strip.
+Herdr after a confirm. The panel's **Enter camp** button (or Enter, or a double-click on the
+camp) goes inside it, see [Camp](#camp). Esc, the ✕ or a click on empty ground zooms back out,
+and the **Exit map** button returns to the strip.
 
 ![Zoomed into a settlement with the detail panel open](docs/images/map-detail.png)
 
@@ -205,8 +206,50 @@ The strip itself always floats on top and lets clicks through.
 Orchestrators stand at their repo's settlement and **ride a mount** out to each new
 worktree they spawn, with a trail back home. Settlements gain a building for every four
 agents and camps gain a tent for every two members, with a small pop as each goes up.
+Everyone else mostly stays put at their camp: a small shuffle every few seconds, and they
+only walk when it means something (a message to a teammate, a new worktree to ride out to).
 
 ![An orchestrator riding out as new worktrees arrive](docs/images/map-story.gif)
+
+### Camp
+
+Zoom into a worktree and **Enter camp** (or press Enter, or double-click the camp) to see its
+party at work, like a pixel camp screen: a campfire in the middle, a tent or two, and every
+member at its own station. Esc or **Back to map** returns to the zoomed map, and a second Esc
+zooms out.
+
+![Inside a camp: members at their stations, and the party window](docs/images/map-camp.png)
+
+What a member does follows what its agent reports. Where it reports the running tool (the
+hooks source does today), the member works at the matching station; without a tool name it
+falls back on status:
+
+| Member is | Station and animation |
+|---|---|
+| using an editing tool (Edit, Write, apply_patch, ...) | hammering at an anvil, sparks flying |
+| reading or searching files (Read, Grep, Glob, ...) | reading a book on a lectern, turning pages |
+| running a shell command (Bash, PowerShell, ...) | tinkering at a bubbling cauldron |
+| on the web (WebSearch, WebFetch) | scouting with a spyglass at a lookout post |
+| delegating (Task, Agent) | giving orders at a map table |
+| working with no tool, or an unknown one | pacing in front of an easel |
+| blocked | hand raised, a flashing `!` and a signal lamp |
+| done | resting on a log (and waving now and then) |
+| idle | dozing on a log, with rising z's |
+| unknown | sitting, with a question mark |
+
+An agent running low on context (under 20%) droops and sweats at its station. If the party's
+git state is known, the camp shows it: a crate for every few uncommitted files (up to nine)
+and a loaded handcart while there are unpushed commits. Nothing is drawn without git state.
+Speech bubbles appear over the speaker.
+
+The window beside the scene is the party breakdown: branch, quest and party status, git state,
+and one row per member with a portrait, role, agent, model and effort, HP and SP bars (the
+same vitals as the map panel, hidden with `v`), what it is doing, its latest line and the
+**close** button. Double-click a row to focus that pane in Herdr.
+
+Every skin brings its own camp: wood and canvas for Workshop Crew, Aesir and Wayfarers, an
+outpost bay of plating, holo-lecterns and pods for Deep Space. A skin without camp art
+borrows Workshop Crew's.
 
 ### Agents talking to each other
 
@@ -377,6 +420,10 @@ remembered between runs.
 | `s` | page | mute or unmute sounds |
 | `a` | page | turn alert banners on (top right) or off |
 | Esc | map | zoom back out |
+| Enter | map, zoomed on a camp | enter the camp |
+| double-click a camp | map | enter the camp |
+| Esc, or the Back button | camp | back to the map |
+| double-click a row | camp window | focus that pane in Herdr |
 | double-click a member | strip, browser | focus that pane in Herdr |
 
 ## Configuration
@@ -419,6 +466,8 @@ overlay after starting Herdr:
 | `?pack=aesir` | Skin pack. |
 | `?scale=4` | Pixel scale, 1 to 6. |
 | `?mode=map` | Start in map mode. |
+| `?mode=camp&party=<id, label or branch>` | Open one party's camp scene (first party if `party` is left out), for OBS. |
+| `?panel=0` | Camp scene without the party window. |
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
 | `?vitals=0` | Hide vitals: bars, model and quest. |

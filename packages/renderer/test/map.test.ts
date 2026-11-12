@@ -6,7 +6,7 @@ import { describeParty, ago } from '../src/map/detail.js';
 import { layoutMap, settlementName, TILE } from '../src/map/layout.js';
 import { sliceTileset } from '../src/map/tileset.js';
 import { autotileMask, buildTerrain, groundTileName } from '../src/map/terrain.js';
-import { spawnWanderer, stepWanderer, type Bounds } from '../src/map/wander.js';
+import { isMoving, SHUFFLE, spawnWanderer, stepWanderer, type Bounds } from '../src/map/wander.js';
 
 const member = (paneId: string, over: Partial<Member> = {}): Member => ({ paneId, agent: 'claude', role: 'implementer', status: 'idle', lastChange: 0, ...over });
 const party = (id: string, repo: string, members: Member[], over: Partial<Party> = {}): Party => ({
@@ -170,6 +170,27 @@ describe('wander', () => {
     }
     const b = stepWanderer(w, 'm', 'blocked', home, 20, 1);
     expect({ x: b.x, y: b.y }).toEqual({ x: w.x, y: w.y });
+  });
+  it('mostly stands still: never strays more than a shuffle from its spot and moves rarely', () => {
+    let w = spawnWanderer('m', home, 20);
+    const spot = { x: w.x, y: w.y };
+    let movingTicks = 0;
+    const ticks = 60 * 20 * 5; // five minutes at 20 Hz
+    for (let i = 0; i < ticks; i++) {
+      w = stepWanderer(w, 'm', 'working', home, 20, 0.05);
+      expect(Math.hypot(w.x - spot.x, w.y - spot.y)).toBeLessThanOrEqual(SHUFFLE + 0.01);
+      if (isMoving(w)) movingTicks++;
+    }
+    expect(movingTicks / ticks).toBeLessThan(0.2);
+    expect(movingTicks).toBeGreaterThan(0); // still an occasional step
+  });
+  it('goes back to its own spot after meeting someone', () => {
+    let w = spawnWanderer('m', home, 20);
+    const spot = { x: w.x, y: w.y };
+    for (let i = 0; i < 400; i++) w = stepWanderer(w, 'm', 'working', home, 20, 0.05, { x: 220, y: 100 });
+    expect(Math.abs(w.x - spot.x)).toBeGreaterThan(30);
+    for (let i = 0; i < 1200; i++) w = stepWanderer(w, 'm', 'working', home, 20, 0.05);
+    expect(Math.hypot(w.x - spot.x, w.y - spot.y)).toBeLessThanOrEqual(SHUFFLE + 0.01);
   });
   it('walks toward a conversation partner and stops beside them', () => {
     let w = spawnWanderer('m', home, 20);

@@ -31,14 +31,18 @@ const QUESTS: Record<string, string> = {
 const MODELS = ['Opus 5.5', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 5'] as const;
 const EFFORTS = ['low', 'medium', 'high', 'high', 'xhigh'] as const;
 
-// Mock git block: starting values per party, drifting every few steps from a separate rng.
+/** Tools a working mock member cycles through, so the camp scene shows every activity. Not random: the mock stays deterministic. */
+const TOOLS = ['Edit', 'Read', 'Bash', 'Grep', 'WebSearch', 'Task', 'Write', 'Glob'] as const;
+
+// Mock git block: starting values per party (index), drifting every few steps from a separate rng.
+// Several parties are dirty and/or ahead so the camp scene (crates, cart) always has something to show.
 const MOCK_GIT: GitState[] = [
-  { dirty: 0, ahead: 0, noRemote: false },
+  { dirty: 7, ahead: 2, noRemote: false },
   { dirty: 3, ahead: 2, noRemote: false },
   { dirty: 12, ahead: 0, noRemote: false },
   { dirty: 0, ahead: 4, noRemote: false },
   { dirty: 1, ahead: 0, noRemote: false },
-  { dirty: 2, ahead: 0, noRemote: true },
+  { dirty: 14, ahead: 0, noRemote: true },
 ];
 
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;
@@ -86,6 +90,7 @@ export class MockGenerator {
   private rng: () => number;
   private world: World;
   private seq = 0;
+  private toolSeq = 0;
   /** The usage quota is the account's, so every agent sees the same number; it only goes down. */
   private quota = 78;
   private gitRng: () => number;
@@ -120,6 +125,7 @@ export class MockGenerator {
           const quest = QUESTS[seed.label];
           if (quest) member.quest = quest;
         }
+        if (member.status === 'working') member.tool = TOOLS[this.toolSeq++ % TOOLS.length];
         members[paneId] = member;
       });
       parties[id] = {
@@ -169,6 +175,8 @@ export class MockGenerator {
     } else {
       const status = weighted(this.rng, NEXT[member.status]);
       const next: Member = { ...member, status, say: undefined, lastChange: this.seq++ };
+      if (status === 'working') next.tool = TOOLS[this.toolSeq++ % TOOLS.length];
+      else delete next.tool;
       if (member.vitals) {
         // Working eats context; at the bottom the agent compacts and starts over high.
         const used = status === 'working' ? 3 + Math.floor(this.rng() * 7) : 0;
