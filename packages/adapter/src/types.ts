@@ -39,6 +39,17 @@ export interface Party {
   status: Status;
   members: Record<string, Member>;
   tokens: Record<string, string>;
+  /** Working-tree state of the party's folder. Absent when unknown or git probing is off. */
+  git?: GitState;
+}
+
+export interface GitState {
+  /** Files with uncommitted changes (staged, unstaged or untracked). */
+  dirty: number;
+  /** Commits not yet pushed to the upstream branch; 0 when there is no upstream. */
+  ahead: number;
+  /** True when the repository has no remote at all. */
+  noRemote: boolean;
 }
 
 /** One pane running an agent. */
