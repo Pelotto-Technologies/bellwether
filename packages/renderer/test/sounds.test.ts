@@ -52,7 +52,7 @@ describe('note schedules', () => {
   it('maps scale degrees to semitones, climbing octaves past the scale', () => {
     const c = { root: 60, scale: 'major' } as const;
     expect([0, 2, 4, 7, 9].map((d) => degreeToMidi(c, d))).toEqual([60, 64, 67, 72, 76]);
-    expect([0, 2, 4, 7].map((d) => degreeToMidi({ root: 60, scale: 'pentatonic' }, d))).toEqual([60, 64, 72, 76]);
+    expect([0, 2, 4, 7].map((d) => degreeToMidi({ root: 60, scale: 'pentatonic' }, d))).toEqual([60, 64, 69, 76]);
     expect(degreeToMidi(c, -1)).toBe(59);
     expect(midiToFreq(69)).toBeCloseTo(440);
     expect(midiToFreq(60)).toBeCloseTo(261.63, 1);
@@ -64,7 +64,7 @@ describe('note schedules', () => {
     expect(notes.map((n) => n.midi)).toEqual([60, 64, 67, 72]);
     expect(notes.map((n) => Math.round(n.freq))).toEqual([262, 330, 392, 523]);
     const beat = 60 / 132;
-    expect(notes.map((n) => n.start)).toEqual([0, 0.5 * beat, 1 * beat, 1.5 * beat]);
+    expect(notes.map((n) => n.start)).toEqual([0, 0.4 * beat, 0.8 * beat, 1.2 * beat]);
     expect(notes.every((n) => n.wave === 'square')).toBe(true);
   });
 
@@ -111,6 +111,7 @@ function fakeContext(state: AudioContextState) {
     currentTime: 10,
     destination: {},
     resume: vi.fn(async () => {
+      await Promise.resolve();
       ctx.state = 'running';
     }),
     createGain: () => ({ gain: { value: 1, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn(), setTargetAtTime: vi.fn() }, connect: vi.fn() }),

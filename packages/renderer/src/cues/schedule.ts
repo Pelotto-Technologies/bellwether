@@ -12,7 +12,7 @@ export interface Motif {
 
 export const MOTIFS: Record<CueKind, Motif> = {
   // A bright climb: an agent finished.
-  done: { degrees: [0, 2, 4, 7], beats: [0.5, 0.5, 0.5, 1.25], gain: 0.9 },
+  done: { degrees: [0, 2, 4, 7], beats: [0.4, 0.4, 0.4, 1], gain: 0.9 },
   // Two pings and a drop: someone is waiting on you.
   blocked: { degrees: [4, 4, 1], beats: [0.4, 0.4, 1], gain: 1 },
   // A soft two-note hello. Quiet.
