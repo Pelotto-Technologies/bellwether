@@ -2,7 +2,7 @@
 import { isOrchestrationLabel, resolveRole } from '../roles.js';
 import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_NAME, MAX_QUEST } from '../sanitize.js';
 import { rollup } from '../rollup.js';
-import { isRole, type Delta, type Member, type Party, type Role, type Status } from '../types.js';
+import { fleetScope, isRole, type Delta, type Member, type Party, type Role, type Status } from '../types.js';
 import type { AgentInfo, AgentStatusChanged, PaneInfo, SessionSnapshot, WorkspaceInfo } from './protocol.js';
 
 const STATUSES = new Set<Status>(['working', 'done', 'blocked', 'idle', 'unknown']);
@@ -81,6 +81,8 @@ export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = f
     m.status = state;
     m.statusFromToken = true;
   }
+  const scope = fleetScope(tokens.scope, m.role);
+  if (scope) m.scope = scope;
   if (pane.title) m.title = pane.title;
   const name = cleanText(tokens.name, MAX_NAME);
   if (name) m.name = name;
@@ -213,7 +215,9 @@ export function resolveTargetPane(target: string, records: Array<PaneInfo | Agen
   return (
     records.find((r) => r.pane_id === t)?.pane_id ??
     records.find((r) => 'name' in r && typeof r.name === 'string' && r.name.toLowerCase() === lower)?.pane_id ??
-    records.find((r) => r.terminal_id === t)?.pane_id
+    records.find((r) => r.terminal_id === t)?.pane_id ??
+    // A project node is a pane with no agent, called by its `name` token: `say_to=<project>` reaches it.
+    records.find((r) => r.tokens?.name?.trim().toLowerCase() === lower)?.pane_id
   );
 }
 
@@ -247,7 +251,7 @@ export function applyStatusChange(
 }
 
 function sameMember(a: Member, b: Member): boolean {
-  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.name === b.name && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
+  return a.agent === b.agent && a.role === b.role && a.scope === b.scope && a.status === b.status && a.title === b.title && a.name === b.name && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
 }
 
 function sameVitals(a: Member, b: Member): boolean {

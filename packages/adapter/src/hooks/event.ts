@@ -26,6 +26,10 @@ export interface HookEvent {
   /** Short single-line text, at most 72 characters. Never prompt text. */
   detail?: string;
   role?: string;
+  /** `fleet` marks the master of a fleet of projects (with role `orchestrator`); the map stands it at a hub. Anything else is dropped. */
+  scope?: 'fleet';
+  /** `prompt`, `tool` and `wait`: the session this line is a message to. With a `detail` it draws as a speech bubble to that session's member. */
+  to?: string;
   /** Any event: what to call this session (or, with `sub`, this subagent), at most 40 characters. Becomes `Member.name`. */
   label?: string;
   /** `vitals` only: percent of the context window remaining, 0-100. */
@@ -74,6 +78,9 @@ export function parseHookEvent(line: string): HookEvent | undefined {
   }
   const label = cleanText(raw.label, MAX_NAME);
   if (label) e.label = label;
+  if (typeof raw.scope === 'string' && raw.scope.trim().toLowerCase() === 'fleet') e.scope = 'fleet';
+  const to = str(raw.to);
+  if (to && (e.ev === 'prompt' || e.ev === 'tool' || e.ev === 'wait')) e.to = to.slice(0, 200);
   const detail = str(raw.detail);
   if (detail) e.detail = detail.replace(/\s+/g, ' ').slice(0, MAX_DETAIL);
   if (e.ev === 'vitals') {

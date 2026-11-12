@@ -76,6 +76,11 @@ export interface Member {
   quest?: string;
   /** What the party calls this member ("Ada", "review-bot"): the `name` token or an event's `label`. At most 40 characters. Shown beside the role. */
   name?: string;
+  /**
+   * `fleet` marks the master of a whole fleet of projects (the `scope=fleet` token): it belongs to no repo, and the map
+   * stands it at a hub of its own. Only ever set together with role `orchestrator`.
+   */
+  scope?: 'fleet';
   /** Set when a `state` token chose `status`, so Herdr's own status events do not undo it. */
   statusFromToken?: true;
   /** Name of the tool currently running: set on `tool`, cleared on `tool_done` and `stop`. Hooks source only for now. */
@@ -119,6 +124,14 @@ export type Delta =
   | { t: number; kind: 'removed'; partyId: string; paneId?: string }
   | { t: number; kind: 'say'; partyId: string; paneId: string; text: string; to?: { partyId: string; paneId: string } }
   | { t: number; kind: 'moment'; moment: Moment; partyId: string; paneId?: string; role?: Role; level?: number; recap?: Recap };
+
+/** The only scope there is. */
+export const FLEET_SCOPE = 'fleet' as const;
+
+/** `scope=fleet` counts only for an orchestrator; any other value, or role, is ignored. */
+export function fleetScope(scope: unknown, role: Role): 'fleet' | undefined {
+  return role === 'orchestrator' && typeof scope === 'string' && scope.trim().toLowerCase() === FLEET_SCOPE ? FLEET_SCOPE : undefined;
+}
 
 export function isStatus(value: unknown): value is Status {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);

@@ -23,6 +23,7 @@ commands:
   run         serve the overlay in a browser; Herdr if running, else agent events (--live, --hooks, --mock force one; adapter flags pass through)
   emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop|vitals
               [--session S --agent A --cwd D --role R --label NAME --sub ID --sub-type T --tool T --detail TEXT]
+              fleet: --ev start --role orchestrator --scope fleet (the master of many projects); --to SESSION --detail TEXT on prompt|tool|wait sends a message
               vitals: --ev vitals [--ctx N --quota N --model M --effort E --name NAME] (N is percent remaining)
   pack        print the active skin pack id on one line; --json adds where it came from and the packs available:
               { "pack", "source": "shell"|"toml"|"env"|"default", "available": [...] }

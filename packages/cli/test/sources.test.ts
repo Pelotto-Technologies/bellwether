@@ -65,6 +65,15 @@ describe('generic source', () => {
     expect(buildEmitEvent(flags, {}, '/w/p', 7)).toEqual({ v: 1, t: 7, agent: 'factory', ev: 'sub_start', session: 's', cwd: '/w/p', sub: 'w1', subType: 'reviewer', detail: 'Check the diff' });
   });
 
+  it('builds the fleet lead and a message from emit flags; ignores what does not apply', () => {
+    const lead = buildEmitEvent(parseFlags(['--ev', 'start', '--session', 'lead', '--role', 'orchestrator', '--scope', 'fleet']), {}, '/f', 1);
+    expect(lead).toMatchObject({ role: 'orchestrator', scope: 'fleet' });
+    expect(buildEmitEvent(parseFlags(['--ev', 'start', '--session', 'x', '--scope', 'team']), {}, '/f', 1)).not.toHaveProperty('scope');
+    expect(buildEmitEvent(parseFlags(['--ev', 'prompt', '--session', 'lead', '--to', 'api-node', '--detail', 'Ship it']), {}, '/f', 1)).toMatchObject({ to: 'api-node', detail: 'Ship it' });
+    expect(buildEmitEvent(parseFlags(['--ev', 'stop', '--session', 'lead', '--to', 'api-node']), {}, '/f', 1)).not.toHaveProperty('to');
+    expect(normalizeHookPayload({ v: 1, t: 5, ev: 'wait', session: 'x', scope: 'fleet', to: 'lead' }, ctx)).toMatchObject({ scope: 'fleet', to: 'lead' });
+  });
+
   it('defaults the session per agent and folder, and rejects bad input', () => {
     const a = buildEmitEvent(parseFlags(['--ev', 'start']), {}, '/w/p', 1);
     expect(a.agent).toBe('generic');

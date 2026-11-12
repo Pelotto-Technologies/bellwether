@@ -34,6 +34,10 @@ export interface NormalizedEvent {
   role?: string;
   /** What to call this session (or subagent, with `sub`). At most 40 characters. */
   label?: string;
+  /** `fleet`: the master of a fleet of projects (with role `orchestrator`). */
+  scope?: 'fleet';
+  /** `prompt`, `tool` and `wait` only: the session this line is a message to. */
+  to?: string;
   /** `vitals` only: percent of the context window remaining. */
   ctx?: number;
   /** `vitals` only: percent of the 5-hour usage quota remaining. */
@@ -181,10 +185,18 @@ export function passThrough(p: Obj, now: number): NormalizedEvent | undefined {
   }
   const label = cleanText(p.label, MAX_NAME);
   if (label) out.label = label;
+  applyFleet(out, p.scope, p.to);
   const d = str(p.detail);
   if (d) out.detail = shorten(d);
   if (out.ev === 'vitals') applyVitals(out, p);
   return out;
+}
+
+/** `scope` counts only as `fleet`; `to` only on the kinds that can carry a message. */
+function applyFleet(out: NormalizedEvent, scope: unknown, to: unknown): void {
+  if (typeof scope === 'string' && scope.trim().toLowerCase() === 'fleet') out.scope = 'fleet';
+  const target = str(to);
+  if (target && (out.ev === 'prompt' || out.ev === 'tool' || out.ev === 'wait')) out.to = target.slice(0, 200);
 }
 
 function applyVitals(out: NormalizedEvent, from: Obj): void {
@@ -274,6 +286,7 @@ export function buildEmitEvent(flags: EmitArgs, env: Record<string, string | und
   }
   const label = cleanText(flags.label, MAX_NAME);
   if (label) out.label = label;
+  applyFleet(out, flags.scope, flags.to);
   const detail = str(flags.detail);
   if (detail) out.detail = shorten(detail);
   if ((ev === 'sub_start' || ev === 'sub_stop') && !out.sub) throw new Error(`--sub is required for ${ev}`);

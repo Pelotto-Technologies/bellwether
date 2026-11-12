@@ -5,7 +5,7 @@ import { resolveRole } from '../roles.js';
 import { diffParties } from '../herdr/mapper.js';
 import { rollup } from '../rollup.js';
 import { BaseSource } from '../source.js';
-import type { Member, Party, Role, Status } from '../types.js';
+import { fleetScope, type Member, type Party, type Role, type Status } from '../types.js';
 import { defaultEventsFile, type HookEvent, parseHookEvent } from './event.js';
 
 export interface HooksSourceOptions {
@@ -32,9 +32,12 @@ interface SessionState {
   cwd: string;
   role?: string;
   label?: string;
+  scope?: 'fleet';
   status: Status;
   title?: string;
   say?: string;
+  /** Session the current `say` is addressed to, as the writer named it; resolved when the world is built. */
+  sayTo?: string;
   sayId?: string;
   context?: number;
   quota?: number;
@@ -249,10 +252,12 @@ export class HooksSource extends BaseSource {
     s.status = status;
   }
 
-  private say(s: SessionState, text: string | undefined): void {
+  private say(s: SessionState, text: string | undefined, to?: string): void {
     // History replayed at start is not chatter; only events that arrive live raise bubbles.
     if (!text || !this.live) return;
     s.say = text;
+    if (to && to !== s.id) s.sayTo = to;
+    else delete s.sayTo;
     s.sayId = String(++this.sayCount);
   }
 
@@ -267,6 +272,7 @@ export class HooksSource extends BaseSource {
     s.agent = e.agent;
     if (e.role) s.role = e.role;
     if (e.label && !e.sub) s.label = e.label;
+    if (e.scope && !e.sub) s.scope = e.scope;
     if ((e.ev === 'start' || s.cwd === '(unknown)') && e.cwd) s.cwd = e.cwd;
 
     if (e.ev === 'vitals') {
@@ -329,13 +335,15 @@ export class HooksSource extends BaseSource {
         if (e.detail) s.title = e.detail;
         if (e.ev === 'tool' && e.tool) s.tool = e.tool;
         else delete s.tool;
-        if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
+        // A line with `to` is a message to that session; without it only a hand-off to a subagent speaks.
+        if (e.to && e.detail && e.ev !== 'tool_done') this.say(s, e.detail, e.to);
+        else if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
         break;
       case 'wait':
         this.setStatus(s, 'blocked', e.t);
         if (e.detail) {
           s.title = e.detail;
-          this.say(s, e.detail);
+          this.say(s, e.detail, e.to);
         }
         break;
       case 'stop':
@@ -384,6 +392,10 @@ export class HooksSource extends BaseSource {
       if (s.title) m.title = s.title;
       if (s.say) m.say = s.say;
       if (s.say && s.sayId) m.sayId = s.sayId;
+      // The target must be a session we know, else the line is a plain bubble at the speaker.
+      if (s.say && s.sayTo && this.sessions.has(s.sayTo)) m.sayTo = s.sayTo;
+      const scope = fleetScope(s.scope, role);
+      if (scope) m.scope = scope;
       if (s.context !== undefined || s.quota !== undefined) {
         m.vitals = { at: s.vitalsAt ?? s.lastEvent, ...(s.context !== undefined ? { context: s.context } : {}), ...(s.quota !== undefined ? { quota: s.quota } : {}) };
       }

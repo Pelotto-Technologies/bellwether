@@ -24,6 +24,7 @@ Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock; source may 
   --config <file>      config file (default bellwether.toml)
   --seed <n>           mock seed (default 1)
   --interval <ms>      mock delta interval (default 1500)
+  --mock-fleet <0|1>   mock: 0 leaves out the fleet lead and its project nodes (also BELLWETHER_MOCK_FLEET=0); default 1
   --speed <n>          replay speed multiplier (default 1)
 
 Output:
@@ -59,6 +60,7 @@ const { values, positionals } = parseArgs({
     config: { type: 'string' },
     seed: { type: 'string' },
     interval: { type: 'string' },
+    'mock-fleet': { type: 'string' },
     speed: { type: 'string' },
     port: { type: 'string' },
     serve: { type: 'string' },
@@ -166,7 +168,7 @@ async function pickSource(): Promise<WorldSource> {
   if (cfg.source !== 'auto') log(`bellwether-adapter: source=${cfg.source}`);
   return createSource(resolved, {
     log,
-    mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500) }),
+    mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500), fleet: ['0', 'false', 'off', 'no'].includes((values['mock-fleet'] ?? process.env.BELLWETHER_MOCK_FLEET ?? '').toLowerCase()) ? false : true }),
   });
 }
 
