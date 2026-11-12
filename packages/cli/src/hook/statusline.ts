@@ -96,7 +96,7 @@ export function vitalsDir(home = homedir()): string {
 /** A session id made safe for a file name, with a short hash so two ids never share a file. */
 export function cacheName(session: string): string {
   const safe = session.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48);
-  return `${safe}-${createHash('sha1').update(session).digest('hex').slice(0, 8)}.json`;
+  return `${safe}-${createHash('sha256').update(session).digest('hex').slice(0, 8)}.json`;
 }
 
 interface Cache {
