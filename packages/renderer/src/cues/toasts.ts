@@ -21,13 +21,15 @@ function clip(label: string): string {
 export function toastFor(e: CueEvent): Toast | undefined {
   const label = e.label ? clip(e.label) : undefined;
   const role = e.role ?? 'generic';
+  // A named member reads `Name (reviewer)`; an unnamed one just its role.
+  const who = e.name ? `${e.name} (${role})` : role;
   switch (e.kind) {
     case 'done': {
       const took = e.durationMs !== undefined ? ago(e.durationMs) : undefined;
-      return { text: [`${role} finished`, label, took].filter(Boolean).join(' · '), status: 'done', ...(e.role ? { role: e.role } : {}) };
+      return { text: [`${who} finished`, label, took].filter(Boolean).join(' · '), status: 'done', ...(e.role ? { role: e.role } : {}) };
     }
     case 'blocked':
-      return { text: [`${role} needs you`, label].filter(Boolean).join(' · '), status: 'blocked', ...(e.role ? { role: e.role } : {}) };
+      return { text: [`${who} needs you`, label].filter(Boolean).join(' · '), status: 'blocked', ...(e.role ? { role: e.role } : {}) };
     case 'spawn':
       return e.scope === 'party' && label ? { text: `New party: ${label}`, status: 'working', ...(e.role ? { role: e.role } : {}) } : undefined;
     case 'allDone':

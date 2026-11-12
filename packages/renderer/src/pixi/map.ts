@@ -9,7 +9,7 @@ import { MAP_HOME, navReduce, resolveParty, type Nav } from '../map/nav.js';
 import { CampScene, PANEL_W } from './camp.js';
 import type { MapArt } from '../map/assets.js';
 import { fitZoom, focusZoom, nearestParty, screenToWorld, stepCamera, type Camera } from '../map/camera.js';
-import { describeParty, type DetailRow } from '../map/detail.js';
+import { describeParty, type DetailRow, roleLabel } from '../map/detail.js';
 import { levelBadgeHtml, xpBarHtml } from '../map/level.js';
 import { agentsByRepo, campSize, campSlots, pop, townSize, townSlots } from '../map/growth.js';
 import { layoutMap, repoKey, settlementName, tileToWorld, TILE, type MapLayout } from '../map/layout.js';
@@ -785,7 +785,7 @@ export class MapScene {
     const camp = this.layout.camps.get(party.id);
     const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now, this.feed.vitalsOn);
     const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p>${this.camp ? `<button class="enter" data-enter="" title="Open the camp scene (Enter, or double-click the camp)">Enter camp</button>` : ""}<ul>${d.rows
-      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${xpBarHtml(r.level)}${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
+      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(roleLabel(r.role, r.name))}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${xpBarHtml(r.level)}${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
       .join('')}</ul>`;
     const body = this.panel.querySelector('#detail-body');
     if (body && body.innerHTML !== html) body.innerHTML = html;

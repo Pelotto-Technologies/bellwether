@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ACTIVITIES, type Activity } from '../src/map/activity.js';
 import { campPanel, campPanelHtml, esc } from '../src/map/camppanel.js';
 import { DEFAULT_CAMP_LOOK, parseCampLook } from '../src/map/camplook.js';
+import { describeParty, roleLabel } from '../src/map/detail.js';
 import { campPose, sweat, zzz } from '../src/map/pose.js';
 import { DEFAULT_VITALS } from '../src/theme.js';
 
@@ -118,5 +119,36 @@ describe('camp look', () => {
     expect(parseCampLook({})).toEqual(DEFAULT_CAMP_LOOK);
     expect(parseCampLook(undefined)).toEqual(DEFAULT_CAMP_LOOK);
     expect(parseCampLook({ camp: { tone: 'weird', sky: ['red'], glow: 3 } })).toEqual(DEFAULT_CAMP_LOOK);
+  });
+});
+
+describe('done versus idle at the fire', () => {
+  it('a finished member is labelled Resting and waves now and then; a waiting one is Dozing, eyes shut, with z\'s', () => {
+    expect(campPanel(party([m('1', { status: 'done' })]), 'api', 'x', 0).rows[0]).toMatchObject({ activity: 'done', doing: 'Resting' });
+    expect(campPanel(party([m('1', { status: 'idle' })]), 'api', 'x', 0).rows[0]).toMatchObject({ activity: 'idle', doing: 'Dozing' });
+    const anims = (a: Activity) => new Set(Array.from({ length: 200 }, (_, i) => campPose(a, i * 0.1, 0).anim));
+    expect(anims('done')).toEqual(new Set(['wave', 'idle']));
+    expect(anims('idle')).toEqual(new Set(['blink', 'idle']));
+    // Dozing sinks a pixel; content does not.
+    expect(campPose('idle', 2, 0).dy).toBe(1);
+    expect(campPose('done', 2, 0).dy).toBe(0);
+  });
+});
+
+describe('member names', () => {
+  it('shows Name · role in the panel rows, and the plain role without a name', () => {
+    const d = campPanel(party([m('1', { role: 'reviewer', name: 'Quill', status: 'done' }), m('2')]), 'api', 'coordinator', 0);
+    expect(d.rows[0]).toMatchObject({ role: 'reviewer', name: 'Quill' });
+    expect(d.rows[1]).not.toHaveProperty('name');
+    const html = campPanelHtml(d, DEFAULT_VITALS);
+    expect(html).toContain('<b>Quill · reviewer</b>');
+    expect(html).toContain('<b>implementer</b>');
+    expect(campPanelHtml(campPanel(party([m('1', { name: '<b>x</b>' })]), 'api', 'x', 0), DEFAULT_VITALS)).toContain('&lt;b&gt;x&lt;/b&gt; · implementer');
+  });
+  it('the map detail rows carry the name too', () => {
+    const d = describeParty(party([m('1', { role: 'reviewer', name: 'Quill' })]), 'api', 'x', 0);
+    expect(d.rows[0]).toMatchObject({ name: 'Quill' });
+    expect(roleLabel('reviewer', 'Quill')).toBe('Quill · reviewer');
+    expect(roleLabel('reviewer')).toBe('reviewer');
   });
 });

@@ -2,7 +2,7 @@ import type { Member, Party } from '@bellwether/adapter/core';
 import type { VitalsLook } from '../theme.js';
 import { barFill, isLow, modelLine } from '../vitals.js';
 import { activityLabel, activityOf, isTired, type Activity } from './activity.js';
-import { ago } from './detail.js';
+import { ago, roleLabel } from './detail.js';
 import { levelBadge, levelBadgeHtml, type LevelBadge, xpBarHtml } from './level.js';
 import { gitSummary } from '../gitline.js';
 
@@ -11,6 +11,8 @@ import { gitSummary } from '../gitline.js';
 export interface CampRow {
   paneId: string;
   role: string;
+  /** What the member is called, when something named it. */
+  name?: string;
   agent: string;
   status: Member['status'];
   activity: Activity;
@@ -60,6 +62,7 @@ export function campPanel(p: Party, settlement: string, beaconRole: string, now:
       return {
         paneId: m.paneId,
         role: m.role,
+        ...(m.name ? { name: m.name } : {}),
         agent: m.agent,
         status: m.status,
         activity: activityOf(m),
@@ -97,7 +100,7 @@ export function campPanelHtml(m: CampPanel, look: VitalsLook, faces: Record<stri
   const rows = m.rows
     .map((r) => {
       const face = faces[r.role];
-      return `<li class="mem ${r.status}${r.tired ? ' tired' : ''}" data-pane="${esc(r.paneId)}"><span class="face">${face ? `<img src="${face}" alt="">` : ''}</span><div class="body"><div class="top"><b>${esc(r.role)}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(
+      return `<li class="mem ${r.status}${r.tired ? ' tired' : ''}" data-pane="${esc(r.paneId)}"><span class="face">${face ? `<img src="${face}" alt="">` : ''}</span><div class="body"><div class="top"><b>${esc(roleLabel(r.role, r.name))}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(
         r.paneId,
       )}" title="Close this pane in Herdr (ends the agent)">close</button></div>${r.model ? `<div class="model">${esc(r.model)}</div>` : ''}${xpBarHtml(r.level)}${bar('HP', r.context, look.context, look.low)}${bar('SP', r.quota, look.quota, look.low)}<div class="act"><span class="st ${r.status}">&#9632;</span> ${esc(r.doing)}${
         r.tired ? ' <em>tired</em>' : ''

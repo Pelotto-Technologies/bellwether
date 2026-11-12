@@ -12,6 +12,8 @@ export interface CueEvent {
   partyId?: string;
   paneId?: string;
   role?: Role;
+  /** What the member is called, when something named it. */
+  name?: string;
   /** The party label. */
   label?: string;
   /** For `done`: how long the member had been working, when we saw it start. */
@@ -113,7 +115,7 @@ export class EventCore {
     for (const m of Object.values(after.members)) {
       const key = keyOf(partyId, m.paneId);
       const was = before.members[m.paneId];
-      const base = { at: t, partyId, paneId: m.paneId, role: m.role, label: after.label };
+      const base = { at: t, partyId, paneId: m.paneId, role: m.role, ...(m.name ? { name: m.name } : {}), label: after.label };
       if (!was) {
         if (m.status === 'working') this.workStart.set(key, t);
         out.push({ kind: 'spawn', scope: 'member', ...base });

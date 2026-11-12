@@ -55,6 +55,16 @@ describe('EventCore', () => {
     expect(e2).toMatchObject([{ kind: 'blocked', role: 'architect', label: 'auth-refresh' }]);
   });
 
+  it('carries a member\'s name into its done cue', () => {
+    const core = new EventCore({ quietMs: 0 });
+    const named = (status: Member['status']): Member => ({ ...member('a', status, 'reviewer'), name: 'Quill' });
+    const snap = snapshot([party('p', 'auth-refresh', [named('working'), member('b', 'working')])]);
+    core.process(emptyWorld(), snap, 0);
+    const [e] = core.process(applyDelta(emptyWorld(), snap), { t: 5, kind: 'member', partyId: 'p', member: named('done') }, 100);
+    expect(e).toMatchObject({ kind: 'done', name: 'Quill', role: 'reviewer' });
+    expect(toastFor(e!)?.text).toBe('Quill (reviewer) finished · auth-refresh');
+  });
+
   it('does not announce status that did not change, or a member that arrives already done', () => {
     const core = new EventCore({ quietMs: 0 });
     const p = party('p', 'x', [member('a', 'working'), member('b', 'working')]);
@@ -215,6 +225,8 @@ describe('toasts', () => {
     expect(toastFor({ kind: 'done', at: 0, role: 'reviewer', label: 'auth-refresh', durationMs: 12 * 60_000 })?.text).toBe('reviewer finished · auth-refresh · 12m');
     expect(toastFor({ kind: 'done', at: 0, role: 'reviewer', label: 'auth-refresh' })?.text).toBe('reviewer finished · auth-refresh');
     expect(toastFor({ kind: 'blocked', at: 0, role: 'implementer', label: 'billing-export' })?.text).toBe('implementer needs you · billing-export');
+    expect(toastFor({ kind: 'done', at: 0, role: 'reviewer', name: 'Quill', label: 'auth-refresh' })?.text).toBe('Quill (reviewer) finished · auth-refresh');
+    expect(toastFor({ kind: 'blocked', at: 0, role: 'implementer', name: 'Rook', label: 'billing-export' })?.text).toBe('Rook (implementer) needs you · billing-export');
     expect(toastFor({ kind: 'spawn', at: 0, scope: 'party', label: 'search-index' })?.text).toBe('New party: search-index');
     expect(toastFor({ kind: 'allDone', at: 0 })?.text).toBe('All quests complete');
     expect(toastFor({ kind: 'message', at: 0, role: 'architect' })).toBeUndefined();

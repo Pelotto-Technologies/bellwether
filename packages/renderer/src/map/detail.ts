@@ -4,9 +4,16 @@ import { levelBadge, type LevelBadge } from './level.js';
 
 /** Text for the zoomed "see the session" panel. Pure so it can be tested. */
 
+/** `Name · role` when the member has a name, else just the role. */
+export function roleLabel(role: string, name?: string): string {
+  return name ? `${name} · ${role}` : role;
+}
+
 export interface DetailRow {
   paneId: string;
   role: string;
+  /** What the member is called, when something named it. */
+  name?: string;
   status: string;
   agent: string;
   line: string;
@@ -36,6 +43,7 @@ export function describeParty(p: Party, settlement: string, beaconRole: string, 
     rows: members.map((m) => ({
       paneId: m.paneId,
       role: m.role,
+      ...(m.name ? { name: m.name } : {}),
       status: m.status,
       agent: m.agent,
       // The latest line we know: speech, then pane title, then how long it has been in this state.
