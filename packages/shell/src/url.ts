@@ -8,8 +8,9 @@ import type { ShellConfig } from './config.js';
 export function modeFromUrl(url: string): 'strip' | 'map' | undefined {
   try {
     const u = new URL(url);
-    // The renderer defaults to strip, so a URL without `mode=map` asks for strip.
-    return u.searchParams.get('mode') === 'map' ? 'map' : 'strip';
+    // The renderer defaults to strip, so a URL without `mode=map` asks for strip. `mode=camp` is the map with a camp open.
+    const m = u.searchParams.get('mode');
+    return m === 'map' || m === 'camp' ? 'map' : 'strip';
   } catch {
     return undefined;
   }

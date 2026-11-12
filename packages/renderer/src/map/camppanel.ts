@@ -3,6 +3,7 @@ import type { VitalsLook } from '../theme.js';
 import { barFill, isLow, modelLine } from '../vitals.js';
 import { activityLabel, activityOf, isTired, type Activity } from './activity.js';
 import { ago } from './detail.js';
+import { gitSummary } from '../gitline.js';
 
 /** The party breakdown window beside the camp scene: a pure HTML builder, so it can be tested. */
 
@@ -34,13 +35,11 @@ export interface CampPanel {
   rows: CampRow[];
 }
 
-/** `3 uncommitted`, `2 unpushed`, `no remote`: what the party's git state says. Nothing when unknown. */
+/** The party's git state in words (`3 uncommitted files`, `2 unpushed commits`); `clean` when known and clean, nothing when unknown. */
 function gitWords(g: Party['git']): string[] {
   if (!g) return [];
-  const out = [g.dirty > 0 ? `${g.dirty} uncommitted` : 'clean'];
-  if (g.ahead > 0) out.push(`${g.ahead} unpushed`);
-  if (g.noRemote) out.push('no remote');
-  return out;
+  const { long } = gitSummary(g);
+  return long.length ? long : ['clean'];
 }
 
 export function campPanel(p: Party, settlement: string, beaconRole: string, now: number, vitals = true): CampPanel {

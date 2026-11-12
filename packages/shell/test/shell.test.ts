@@ -50,6 +50,7 @@ describe('config', () => {
   it('normalizes junk to defaults', () => {
     expect(normalizeConfig(null)).toEqual(DEFAULT_CONFIG);
     expect(normalizeConfig({ mode: 'x', port: 'a', displayId: 'z', scale: 9 })).toEqual(DEFAULT_CONFIG);
+    expect(normalizeConfig({ mode: 'camp' }).mode).toBe('map');
   });
   it('derives url from port unless url is given', () => {
     expect(normalizeConfig({ port: 9000 }).url).toBe('http://127.0.0.1:9000/?transparent');
@@ -167,6 +168,7 @@ describe('assets', () => {
 describe('modeFromUrl', () => {
   it('reads the mode a navigation asks for', () => {
     expect(modeFromUrl('http://127.0.0.1:7341/?mode=map')).toBe('map');
+    expect(modeFromUrl('http://127.0.0.1:7341/?mode=camp&party=x')).toBe('map');
     expect(modeFromUrl('http://127.0.0.1:7341/?mode=strip')).toBe('strip');
     expect(modeFromUrl('http://127.0.0.1:7341/?transparent')).toBe('strip');
     expect(modeFromUrl('not a url')).toBeUndefined();

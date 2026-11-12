@@ -83,7 +83,7 @@ describe('camp panel', () => {
     expect(d.title).toBe('api');
     expect(d.branch).toBe('feat/x');
     expect(d.quest).toBe('Fix <it>');
-    expect(d.git).toEqual(['3 uncommitted', '1 unpushed', 'no remote']);
+    expect(d.git).toEqual(['3 uncommitted files', '1 unpushed commit', 'no remote']);
     expect(d.rows.map((r) => r.paneId)).toEqual(['1', '2']);
     expect(d.rows[0]).toMatchObject({ activity: 'blocked', doing: 'Needs you', line: 'Need a key', tired: false });
     expect(d.rows[1]).toMatchObject({ activity: 'edit', doing: 'Hammering · Edit', tired: true, model: 'Opus 5.5 · high', context: 12, quota: 80 });
@@ -102,7 +102,7 @@ describe('camp panel', () => {
     expect(html).toContain('data-close="1"');
     expect(html).toContain('data-close="2"');
     expect(html).toContain('Quest: Fix &lt;it&gt;');
-    expect(html).toContain('3 uncommitted · 1 unpushed · no remote');
+    expect(html).toContain('3 uncommitted files · 1 unpushed commit · no remote');
     expect(html).toContain('src="data:image/png;base64,AAAA"');
     // Low HP turns the context bar red; the quota bar keeps its own colour.
     expect(html).toContain(`background:${DEFAULT_VITALS.low}`);

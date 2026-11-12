@@ -11,6 +11,7 @@ import { pop } from '../map/growth.js';
 import { beaconAlpha, hash01, walkFrame } from '../sim.js';
 import { FRAME_NAMES, type FrameName } from '../sprites.js';
 import { birthTime, prefersReducedMotion, spawnPose } from '../spawn.js';
+import { memberBox, placeBubble, TAIL, type Rect } from '../map/bubble.js';
 import type { Theme } from '../theme.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
@@ -70,6 +71,8 @@ export class CampScene {
   private floorGlow!: Sprite;
   private views = new Map<string, MView>();
   private stations = new Map<string, Station>();
+  /** Bubbles placed so far this frame, so later ones keep clear of them. */
+  private bubbleBoxes: Rect[] = [];
   private sig = '';
   private partyId = '';
   private size = { w: 320, h: 220 };
@@ -191,6 +194,7 @@ export class CampScene {
     }
 
     // Members.
+    this.bubbleBoxes = [];
     const beaconPane = (members.find((m) => m.role === this.deps.theme.beacon) ?? members[0])?.paneId;
     for (const [id, v] of this.views) {
       if (!party.members[id]) {
@@ -354,18 +358,20 @@ export class CampScene {
       if (v.text.text !== say) v.text.text = say;
       const bw = v.text.width + 8;
       const bh = v.text.height + 6;
-      const lift = showMark ? 6 : 0;
-      const bx = Math.round(Math.min(this.size.w - bw - 2, Math.max(2, x - bw / 2)));
-      // The tail points at the speaker.
-      const tx = Math.round(Math.min(bw - 7, Math.max(7, x - bx)));
-      const key = `${say}|${tx}`;
+      const others: Rect[] = [...this.stations.values()].filter((o) => o.paneId !== m.paneId).map((o) => memberBox(o)).concat(this.bubbleBoxes);
+      const pl = placeBubble({ speaker: { x, y }, size: { w: bw, h: bh }, obstacles: others, scene: this.size, lift: showMark ? 6 : 0 });
+      this.bubbleBoxes.push({ x: pl.x, y: pl.y, w: bw, h: bh + TAIL });
+      const tx = pl.tailX;
+      const key = `${say}|${tx}|${pl.tailDown}`;
       if (key !== v.bubbleKey) {
         v.bubbleKey = key;
         const ink = { color: 0x1b1b24, width: 1 };
-        v.bg.clear().roundRect(0, 0, bw, bh, 3).fill({ color: 0xffffff, alpha: 0.95 }).stroke(ink).poly([tx - 3, bh - 0.5, tx + 3, bh - 0.5, tx, bh + 4]).fill({ color: 0xffffff }).moveTo(tx - 3, bh).lineTo(tx, bh + 4).lineTo(tx + 3, bh).stroke(ink);
+        const g = v.bg.clear().roundRect(0, 0, bw, bh, 3).fill({ color: 0xffffff, alpha: 0.95 }).stroke(ink);
+        if (pl.tailDown) g.poly([tx - 3, bh - 0.5, tx + 3, bh - 0.5, tx, bh + TAIL]).fill({ color: 0xffffff }).moveTo(tx - 3, bh).lineTo(tx, bh + TAIL).lineTo(tx + 3, bh).stroke(ink);
+        else g.poly([tx - 3, 0.5, tx + 3, 0.5, tx, -TAIL]).fill({ color: 0xffffff }).moveTo(tx - 3, 0).lineTo(tx, -TAIL).lineTo(tx + 3, 0).stroke(ink);
         v.text.position.set(4, 3);
       }
-      v.bubble.position.set(bx, Math.round(y - 37 - bh - lift));
+      v.bubble.position.set(pl.x, pl.tailDown ? pl.y : pl.y + TAIL);
     }
   }
 

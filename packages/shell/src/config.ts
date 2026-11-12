@@ -77,6 +77,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof raw !== 'object' || raw === null) return out;
   const r = raw as Record<string, unknown>;
   if (r.mode === 'strip' || r.mode === 'map') out.mode = r.mode;
+  else if (r.mode === 'camp') out.mode = 'map'; // camp is entered from the map, so a stored camp reopens the map
   if (typeof r.displayId === 'number' && Number.isFinite(r.displayId)) out.displayId = r.displayId;
   if (typeof r.pack === 'string' && /^[\w-]+$/.test(r.pack)) out.pack = r.pack;
    if (typeof r.session === 'string' && r.session.length > 0) out.session = r.session;
