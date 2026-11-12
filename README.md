@@ -201,6 +201,32 @@ listener. Finished hand-offs between teammates are inferred too.
 Too chatty? Hide bubbles from the tray menu, with `bubbles = false`, `?bubbles=0`, or by
 pressing `b` in the page.
 
+### Sounds and alerts
+
+Both are driven by the same events: an agent finishes, an agent starts waiting on you, a new
+party arrives, one agent messages another, and everyone is done.
+
+- **Sounds** are short chiptune cues, synthesized in the page with WebAudio (no audio files,
+  no samples). Each skin pack has its own waveform, key and tempo (`sounds` in `theme.json`).
+  `done` is a bright four-note climb, `blocked` two pings and a drop, `spawn` a soft hello, a
+  message a single very quiet blip, and a fanfare under 1.5 seconds when every agent is done.
+  Connecting or reconnecting never plays a cue per agent, a status that flaps back and forth
+  is announced once, and at most three cues play in any second. They are **on in the desktop
+  overlay** at volume 0.3 and **off in a plain browser tab or OBS source** (a tab left open
+  should not make noise); turn them on with `sounds = true`, `?sounds=1`, the `s` key or the
+  tray's **Sounds** box. A browser tab needs one click or key press before it may play sound.
+  In OBS, tick "Control audio via OBS" on the browser source to capture it.
+- **Alerts** are stream-style banners: a pixel-framed toast with the member's face that slides
+  in, holds about four seconds, slides out, one at a time (`reviewer finished · auth-refresh ·
+  12m`, `implementer needs you · billing-export`, `New party: search-index`, `All quests
+  complete`). They show role, party label and status only, never prompt or message text, and
+  fade instead of sliding when your OS asks for reduced motion. They are **off by default**.
+  Set `alerts = "top-right"` (or `top-left`, `top-center`), `?alerts=top-right`, press `a`, or
+  use the tray's **Alerts** submenu. The desktop strip window is a thin bar with no room for a
+  banner, so alerts apply to the map window, a browser tab, and OBS; in the strip, only an
+  explicit `?alerts=` URL turns them on. For OBS, use a source of its own: `?mode=alerts` is a
+  transparent page with nothing but toasts (see the [OBS guide](docs/obs.md)).
+
 ### Vitals
 
 When an agent reports them, each character gets two thin bars on the ground under its feet:
@@ -318,7 +344,7 @@ just create the workspace and tag pane 1.
 | A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
 The desktop overlay's **tray menu** has everything in one place: switch strip and map,
-Size, Labels, Chat bubbles, Vitals, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
+Size, Labels, Chat bubbles, Sounds, Alerts (map window), Vitals, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
 remembered between runs.
 
 ### Keyboard
@@ -329,6 +355,8 @@ remembered between runs.
 | `m` | page | toggle strip and map |
 | `b` | page | show or hide chat bubbles |
 | `v` | page | show or hide vitals (bars, model, quest) |
+| `s` | page | mute or unmute sounds |
+| `a` | page | turn alert banners on (top right) or off |
 | Esc | map | zoom back out |
 | double-click a member | strip, browser | focus that pane in Herdr |
 
@@ -344,6 +372,9 @@ scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
 bubbles = true           # false hides chat bubbles
 vitals = true            # false hides context/quota bars, model and quest
+sounds = true            # chiptune cues; unset: on in the desktop overlay, off in a browser or OBS
+volume = 0.3             # sound volume, 0 to 1
+alerts = "top-right"     # banners: off (default) | top-left | top-right | top-center
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
@@ -368,6 +399,10 @@ overlay after starting Herdr:
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
 | `?vitals=0` | Hide vitals: bars, model and quest. |
+| `?sounds=1` | Sound cues on (`0` off). |
+| `?volume=0.5` | Sound volume, 0 to 1 (default 0.3). |
+| `?alerts=top-right` | Alert banners: `top-left`, `top-right`, `top-center` or `off`. |
+| `?mode=alerts` | A transparent page with only alert banners, for an OBS source of its own. |
 | `?transparent` | No backdrop or status chip, for OBS. |
 | `?source=mock` | Mock agents inside the page, no adapter. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |

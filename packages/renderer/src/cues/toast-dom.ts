@@ -100,7 +100,7 @@ export class ToastView {
       this.el.style.transform = 'none';
       return;
     }
-    const off = (1 - eased) * 100;
-    this.el.style.transform = this.position === 'top-left' ? `translateX(${-off - 8}%)` : this.position === 'top-right' ? `translateX(${off + 8}%)` : `translateY(${-off - 20}px)`;
+    const off = (1 - eased) * 110;
+    this.el.style.transform = this.position === 'top-left' ? `translateX(${-off}%)` : this.position === 'top-right' ? `translateX(${off}%)` : `translateY(${-off * 0.6}px)`;
   }
 }

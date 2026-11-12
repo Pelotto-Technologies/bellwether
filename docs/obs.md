@@ -48,9 +48,36 @@ flags. `source = "live"` in `bellwether.toml` sets the default source (the defau
 | `?minimal` | Icon-only labels: a status icon under each party instead of a nameplate. |
 | `?bubbles=0` | Hide chat bubbles. Press `b` in an interact window to toggle. |
 | `?vitals=0` | Hide vitals (bars, model, quest). Press `v` in an interact window to toggle. |
+| `?sounds=1` | Play sound cues (off by default in a browser source). `?volume=0.5` sets the level, default 0.3. Press `s` in an interact window to mute. |
+| `?alerts=top-right` | Alert banners (also `top-left`, `top-center`, `off`). Press `a` to toggle. |
+| `?mode=alerts` | Only alert banners on a transparent page, no strip. See [Alerts and sound](#alerts-and-sound). |
 | `?mode=map` | Start in map mode instead of the strip. The default is the strip; press `m` to toggle. Map mode is not click-through, so the strip is usually what you want in OBS. |
 
 Options combine: `http://127.0.0.1:7341/?transparent&pack=aesir&scale=4`.
+
+## Alerts and sound
+
+**Alert box.** Bellwether can show a stream-alert style banner when an agent finishes, needs
+you, or a new party arrives, and when everything is done. Two ways to set it up:
+
+- On the strip's own source: `http://127.0.0.1:7341/?transparent&alerts=top-right`. The source
+  needs headroom above the strip for the banner (it is about 50 pixels tall and 420 wide);
+  1920 x 400 is plenty.
+- As its own source, so you can place alerts anywhere on the scene independently of the
+  strip: add a second Browser Source on `http://127.0.0.1:7341/?mode=alerts`, sized for
+  where you want banners (for example 480 x 120), and drag it into place. The page is
+  transparent and shows nothing until something happens. `?mode=alerts&alerts=top-left`
+  changes the corner inside the source.
+
+Banners show role, party label and status, never prompts or agent messages. They fade
+instead of sliding when the OS asks for reduced motion.
+
+**Audio.** Sounds are synthesized in the page, so OBS captures them as browser source audio:
+tick **Control audio via OBS** on the Browser Source (otherwise they play on the desktop, if
+at all), add `?sounds=1` (they are off by default in a browser source), and set the level
+with `?volume=` (default 0.3) or in OBS's audio mixer. An OBS browser source needs no click
+to start audio. With two sources (strip and alerts), enable sounds on only one so cues do not
+play twice.
 
 ## Sizing
 
