@@ -1,7 +1,8 @@
-import { rollup, type Member, type Role, type Status } from '@bellwether/adapter/core';
+import { rollup, type GitState, type Member, type Role, type Status } from '@bellwether/adapter/core';
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
+import { GIT_COLORS, gitParts, type GitPart } from '../gitline.js';
 import { assignRows, beaconAlpha, bob, bumps, hash01, slowFactor, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
 import { vitalsLook, type Theme } from '../theme.js';
@@ -40,6 +41,12 @@ interface Segment {
   tint?: string | undefined;
   leader: boolean;
   members: Member[];
+  /** Git state of the party (absent for a fellowship's leaders). */
+  git?: GitState | undefined;
+  /** Git counters that fit on the nameplate this frame; empty when hidden. */
+  gitShown: GitPart[];
+  /** Width of those counters, lead gap included. */
+  gitW: number;
   /** Width the segment takes along the strip: its characters or its nameplate, whichever is wider. */
   width: number;
   /** Pane id to the party that owns its speech. */
@@ -77,6 +84,8 @@ interface PartyView {
   plate?: NineSliceSprite;
   icon?: Sprite;
   chip: Graphics;
+  /** Git counters at the right end of the nameplate: dirty, ahead, no remote. */
+  gitTexts: Text[];
   members: Map<string, MemberView>;
   dir: 1 | -1;
   born: number;
@@ -276,8 +285,15 @@ export class StripScene {
     }
     const chip = new Graphics();
     root.addChild(chip, label);
+    // Only the art nameplate carries git counters (three slots: dirty, ahead, no remote).
+    const gitTexts = plate ? [0, 1, 2].map(() => new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0xffffff } })) : [];
+    for (const g of gitTexts) {
+      g.anchor.set(0, 0.5);
+      g.visible = false;
+      root.addChild(g);
+    }
     this.rowLayers[0]!.addChild(root);
-    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, gitTexts, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
     root.alpha = this.primed && !this.reduced ? 0 : 1;
     this.parties.set(id, view);
     return view;
@@ -285,11 +301,11 @@ export class StripScene {
 
   private trainFor(world: ReturnType<typeof groupFellowships>): Train[] {
     const trains: Train[] = [];
-    const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean): Segment => {
+    const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean, git?: GitState): Segment => {
       const sorted = [...members].sort((a, b) => a.paneId.localeCompare(b.paneId));
       // The nameplate carries the quest the whole party shares; a leader's plate stands for several parties and carries none.
       const named = leader || !this.feed.vitalsOn ? label : withQuest(label, sorted);
-      return { id, label: named, status: rollup(sorted), tint, leader, members: sorted, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
+      return { id, label: named, status: rollup(sorted), tint, leader, members: sorted, git, gitShown: [], gitW: 0, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
     };
     for (const f of world.fellowships) {
       const leaders = f.leaders.map((l) => l.member);
@@ -297,13 +313,13 @@ export class StripScene {
       const segments = [seg(`lead:${f.key}`, `★ ${f.name}`, leaders, (m) => partyOf.get(m.paneId)!, undefined, true)];
       for (const id of f.partyIds) {
         const p = world.world.parties[id]!;
-        segments.push(seg(id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => id, world.tints.get(id), false));
+        segments.push(seg(id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => id, world.tints.get(id), false, p.git));
       }
       trains.push({ id: `fellow:${f.key}`, fellowship: f, segments });
     }
     for (const p of Object.values(world.world.parties)) {
       if (world.byParty.has(p.id)) continue;
-      trains.push({ id: p.id, segments: [seg(p.id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => p.id, world.tints.get(p.id), false)] });
+      trains.push({ id: p.id, segments: [seg(p.id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => p.id, world.tints.get(p.id), false, p.git)] });
     }
     return trains;
   }
@@ -332,14 +348,34 @@ export class StripScene {
         const chrome = view.plate ? (6 * 2 + (view.icon ? 12 : 0)) * s : 0;
         // A nameplate may be a little wider than its characters, never much: long labels get an ellipsis.
         const room = Math.max(own * 1.25, 90 * s) - chrome;
-        view.label.text = seg.label;
-        let text = seg.label;
-        while (view.label.width > room && text.length > 4) {
-          text = `${text.slice(0, -2).trimEnd()}…`;
-          view.label.text = text;
+        const fit = (limit: number, minLen: number) => {
+          view.label.text = seg.label;
+          let text = seg.label;
+          while (view.label.width > limit && text.length > minLen) {
+            text = `${text.slice(0, -2).trimEnd()}…`;
+            view.label.text = text;
+          }
+          return text;
+        };
+        // Git counters ride at the right end of the plate; they are dropped when even a short label would not fit beside them.
+        const parts = view.plate && !this.minimal ? gitParts(seg.git) : [];
+        seg.gitShown = [];
+        seg.gitW = 0;
+        let text: string | undefined;
+        if (parts.length) {
+          parts.forEach((p, i) => (view.gitTexts[i]!.text = p.short));
+          const gitW = parts.reduce((n, _p, i) => n + view.gitTexts[i]!.width, 0) + (parts.length - 1) * 3 * s + 4 * s;
+          const t = fit(room - gitW, 8);
+          if (view.label.width <= room - gitW) {
+            text = t;
+            seg.gitShown = parts;
+            seg.gitW = gitW;
+          }
         }
+        text ??= fit(room, 4);
+        view.label.text = text;
         seg.label = text;
-        seg.width = Math.max(own + (seg.leader ? BANNER_W * s : 0), view.label.width + chrome);
+        seg.width = Math.max(own + (seg.leader ? BANNER_W * s : 0), view.label.width + chrome + seg.gitW);
       }
     }
     const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
@@ -473,6 +509,7 @@ export class StripScene {
         view.label.visible = !this.minimal;
         if (view.plate) view.plate.visible = !this.minimal;
         if (view.icon) view.icon.visible = true;
+        for (const g of view.gitTexts) g.visible = false;
         if (this.minimal) {
           // Minimal: only a status icon (or a coloured square without art) centred just under the feet.
           view.chip.clear();
@@ -487,7 +524,7 @@ export class StripScene {
           const padX = 6 * s;
           const padY = 3 * s;
           const iconW = view.icon ? 9 * s + 3 * s : 0;
-          const w = view.label.width + padX * 2 + iconW;
+          const w = view.label.width + padX * 2 + iconW + seg.gitW;
           const h = view.label.height + padY * 2;
           view.plate.width = w / s;
           view.plate.height = h / s;
@@ -501,6 +538,19 @@ export class StripScene {
             view.icon.position.set(center - w / 2 + padX, top + h / 2 - (9 * s) / 2);
           }
           this.drawChip(view, seg, center - w / 2, top + h, w, s);
+          // Counters right-aligned inside the plate: dirty amber, ahead green, no remote red.
+          let gx = center + w / 2 - padX;
+          for (let i = seg.gitShown.length - 1; i >= 0; i--) {
+            const g = view.gitTexts[i]!;
+            const kind = seg.gitShown[i]!.kind;
+            const pal = this.theme.palette;
+            const [hex, dflt] = kind === 'dirty' ? [pal.done, GIT_COLORS.dirty] : kind === 'ahead' ? [pal.working, GIT_COLORS.ahead] : [pal.blocked, GIT_COLORS.remote];
+            g.style.fill = hex ? hexNum(hex) : dflt;
+            gx -= g.width;
+            g.position.set(gx, top + h / 2);
+            g.visible = true;
+            gx -= 3 * s;
+          }
         } else {
           view.label.style.fill = hexNum(this.theme.palette[seg.status]);
           view.label.position.set(center, trainGround - figH * s - 4);

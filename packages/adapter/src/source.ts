@@ -10,6 +10,11 @@ export interface WorldSource {
   on(event: 'delta', fn: DeltaListener): void;
   /** Actions back to the world. Mock and replay sources no-op. */
   readonly actions: Action;
+  /**
+   * Local folder a party works in, for sources that know one (the git probe uses it).
+   * Undefined for remote machines and parties with no usable path.
+   */
+  partyFolder?(partyId: string): string | undefined;
 }
 
 /** Small base class so sources share listener bookkeeping without Node's EventEmitter. */

@@ -25,6 +25,16 @@ export interface World {
   parties: Record<string, Party>;
 }
 
+/** Git state of a party's folder; only present when the opt-in git probe is on. */
+export interface GitState {
+  /** Files with uncommitted changes, untracked ones included. */
+  dirty: number;
+  /** Commits not pushed to the upstream branch; 0 without an upstream. */
+  ahead: number;
+  /** The repository has no remote at all. */
+  noRemote: boolean;
+}
+
 /** One Herdr workspace. */
 export interface Party {
   /** Herdr workspace_id. */
@@ -39,17 +49,8 @@ export interface Party {
   status: Status;
   members: Record<string, Member>;
   tokens: Record<string, string>;
-  /** Working-tree state of the party's folder. Absent when unknown or git probing is off. */
+  /** Present only with the opt-in git probe, and only for parties on a local folder that is a repository. */
   git?: GitState;
-}
-
-export interface GitState {
-  /** Files with uncommitted changes (staged, unstaged or untracked). */
-  dirty: number;
-  /** Commits not yet pushed to the upstream branch; 0 when there is no upstream. */
-  ahead: number;
-  /** True when the repository has no remote at all. */
-  noRemote: boolean;
 }
 
 /** One pane running an agent. */

@@ -101,6 +101,7 @@ export class HooksSource extends BaseSource {
   private sessions = new Map<string, SessionState>();
   private subs = new Map<string, SubState>();
   private parties: Record<string, Party> = {};
+  private folders = new Map<string, string>();
   private offset = 0;
   private ino = 0;
   private pending: Buffer = Buffer.alloc(0);
@@ -129,6 +130,11 @@ export class HooksSource extends BaseSource {
   /** Current parties (read-only view). */
   get current(): Readonly<Record<string, Party>> {
     return this.parties;
+  }
+
+  /** Working directory of a party, for the opt-in git probe. */
+  partyFolder(partyId: string): string | undefined {
+    return this.folders.get(partyId);
   }
 
   async start(): Promise<void> {
@@ -352,8 +358,10 @@ export class HooksSource extends BaseSource {
     const activeSubs = new Map<string, number>();
     for (const sub of this.subs.values()) if (sub.status !== 'done') activeSubs.set(sub.session, (activeSubs.get(sub.session) ?? 0) + 1);
     const parties: Record<string, Party> = {};
+    this.folders = new Map();
     const partyFor = (cwd: string): Party => {
       const id = hooksPartyId(cwd);
+      if (cwd !== '(unknown)') this.folders.set(id, cwd);
       return (parties[id] ??= {
         id,
         label: baseName(cwd),

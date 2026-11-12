@@ -31,6 +31,7 @@ Output:
   --record <file>      append every delta to a .jsonl file
   --scrub              with --record: hash repo/branch/workspace labels, strip say text and titles
   --scrub-file <in> <out>  scrub an existing .jsonl recording and exit
+  --git                show uncommitted/unpushed counts per party (runs git in agents' folders; only for repos you trust)
   --actions            let the overlay send prompts and keys to agents (focus is always allowed)
   --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
@@ -62,6 +63,7 @@ const { values, positionals } = parseArgs({
     record: { type: 'string' },
     scrub: { type: 'boolean' },
     actions: { type: 'boolean' },
+    git: { type: 'boolean' },
     'scrub-file': { type: 'string' },
     print: { type: 'boolean' },
     'exit-with-parent': { type: 'boolean' },
@@ -144,6 +146,7 @@ async function pickSource(): Promise<WorldSource> {
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.hooks) cfg.source = 'hooks';
+  if (values.git) cfg.git = { ...cfg.git, enabled: true };
   if (values.events) cfg.hooks = { ...cfg.hooks, file: values.events };
   if (values.session) cfg.herdr.sessions = [values.session];
   if (values.all) cfg.herdr.sessions = 'all';

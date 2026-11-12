@@ -126,6 +126,25 @@ focus it or prompt it needs Herdr. Details in [`plugins/bellwether`](plugins/bel
 - **Speech bubbles** show what agents say, including messages one agent sends another
   (`@implementer Add ranking tests`).
 
+### Git at a glance
+
+With git turned on, a nameplate shows small counters at its right end: `±3` files with
+uncommitted changes (amber), `↑2` commits not pushed (green), and a red `∅` when the repository
+has no remote at all. A clean, pushed repository shows nothing. The counters are hidden in
+`minimal` mode and when the label would not fit beside them.
+
+It is **off by default**. Turn it on with `[git] enabled = true` in `bellwether.toml`, `--git`,
+or `BELLWETHER_GIT=1`. Bellwether then runs `git status` and `git remote` in each party's
+folder (the worktree checkout or the agent's working directory), at most once every 30 seconds
+per folder and shortly after an agent finishes. Remote machines and parties without a local
+folder are never probed.
+
+> **Trust warning.** Git can run programs named in a repository's own `.git/config` (filters,
+> textconv, hooks of a few kinds). Bellwether passes `-c core.fsmonitor=false`,
+> `-c safe.bareRepository=explicit` and `--no-optional-locks` and never uses a shell, but it
+> cannot rule out every configured helper. Only enable this when you trust the repos your agents
+> work in.
+
 New agents and worktrees arrive with a short spawn animation (skipped when your OS asks for
 reduced motion). Double-click a member in a browser tab to jump Herdr to that pane.
 
@@ -350,12 +369,16 @@ scrub = false            # true hashes repo/branch names in recordings
 sessions = "all"         # or ["default", "overlay-dev"]
 # socket = "..."         # explicit socket or pipe path
 
+[git]
+# enabled = true         # opt in: show uncommitted/unpushed counts per party (trust your repos, see "Git at a glance")
+# interval = 30          # seconds between probes of one folder (5 to 3600)
+
 [hooks]
 # file = "..."           # events file for source = "hooks" (default ~/.bellwether/events.jsonl)
 ```
 
 Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
-`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--events <file>`, `--port`), and the tray menu or
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--git` or `BELLWETHER_GIT=1`, `--events <file>`, `--port`), and the tray menu or
 page URL overrides those. `auto` decides once at startup (a one-second connect probe of the
 Herdr socket) and logs which source it picked; it does not switch later, so restart the
 overlay after starting Herdr:

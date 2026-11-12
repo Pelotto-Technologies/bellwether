@@ -233,6 +233,7 @@ interface Party {                    // one Herdr workspace
   status: Status;                   // rollup
   members: Record<string, Member>;
   tokens: Record<string, string>;   // workspace tokens (quest, etc.)
+  git?: { dirty: number; ahead: number; noRemote: boolean };  // opt-in probe of the party's folder
 }
 interface Member {                   // one pane with an agent
   paneId: string;
