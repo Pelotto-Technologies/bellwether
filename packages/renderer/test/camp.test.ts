@@ -42,6 +42,14 @@ describe('activityOf', () => {
     expect(activityOf({ status: 'working' })).toBe('think');
     expect(activityOf({ status: 'working', tool: 'Read' })).toBe('read');
   });
+  it('sends a working member with no known tool to its role\'s craft', () => {
+    expect(activityOf({ status: 'working', role: 'implementer' })).toBe('edit');
+    expect(activityOf({ status: 'working', role: 'reviewer' })).toBe('read');
+    expect(activityOf({ status: 'working', role: 'orchestrator' })).toBe('delegate');
+    expect(activityOf({ status: 'working', role: 'architect' })).toBe('think');
+    expect(activityOf({ status: 'working', role: 'implementer', tool: 'WebSearch' })).toBe('search');
+    expect(activityOf({ status: 'blocked', role: 'implementer' })).toBe('blocked');
+  });
   it('labels with the tool name only while a tool runs', () => {
     expect(activityLabel({ status: 'working', tool: 'Edit' })).toBe('Hammering · Edit');
     expect(activityLabel({ status: 'working' })).toBe('Thinking');

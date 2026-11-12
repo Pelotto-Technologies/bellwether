@@ -1,4 +1,4 @@
-import type { Member } from '@bellwether/adapter/core';
+import type { Member, Role } from '@bellwether/adapter/core';
 import { LOW_CONTEXT } from '../sim.js';
 
 /** What a member is doing at its station in the camp scene. Pure: no Pixi, no art. */
@@ -32,8 +32,25 @@ export function toolActivity(tool: string | undefined): Activity {
   return 'think';
 }
 
-/** Status poses win over tools; a working member shows its tool, or paces while thinking. */
-export function activityOf(m: Pick<Member, 'status' | 'tool'>): Activity {
+/**
+ * What a working member does when no tool is known: between tool calls, or always with a
+ * source that reports no tools (Herdr). Each role goes to its own craft, so an implementer
+ * stands at the workbench rather than the thinking board.
+ */
+export const ROLE_ACTIVITY: Record<Role, Activity> = {
+  orchestrator: 'delegate',
+  coordinator: 'delegate',
+  architect: 'think',
+  implementer: 'edit',
+  reviewer: 'read',
+  researcher: 'search',
+  writer: 'edit',
+  ops: 'shell',
+  generic: 'think',
+};
+
+/** Status poses win over tools; a working member shows its tool, or its role's craft when no tool is known. */
+export function activityOf(m: Pick<Member, 'status' | 'tool'> & { role?: Role }): Activity {
   switch (m.status) {
     case 'blocked':
       return 'blocked';
@@ -44,7 +61,7 @@ export function activityOf(m: Pick<Member, 'status' | 'tool'>): Activity {
     case 'unknown':
       return 'unknown';
     case 'working':
-      return toolActivity(m.tool);
+      return m.tool?.trim() ? toolActivity(m.tool) : m.role ? ROLE_ACTIVITY[m.role] : 'think';
   }
 }
 
@@ -62,7 +79,7 @@ const LABELS: Record<Activity, string> = {
 };
 
 /** A short word for the panel: `Hammering · Edit`. */
-export function activityLabel(m: Pick<Member, 'status' | 'tool'>): string {
+export function activityLabel(m: Pick<Member, 'status' | 'tool'> & { role?: Role }): string {
   const a = activityOf(m);
   return a !== 'blocked' && a !== 'done' && a !== 'idle' && a !== 'unknown' && m.tool ? `${LABELS[a]} · ${m.tool}` : LABELS[a];
 }
