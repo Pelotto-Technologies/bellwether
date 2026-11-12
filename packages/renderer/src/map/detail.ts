@@ -1,13 +1,30 @@
 import type { Party } from '@bellwether/adapter/core';
+import { modelLine } from '../vitals.js';
+import { levelBadge, type LevelBadge } from './level.js';
 
 /** Text for the zoomed "see the session" panel. Pure so it can be tested. */
+
+/** `Name · role` when the member has a name, else just the role. */
+export function roleLabel(role: string, name?: string): string {
+  return name ? `${name} · ${role}` : role;
+}
 
 export interface DetailRow {
   paneId: string;
   role: string;
+  /** What the member is called, when something named it. */
+  name?: string;
   status: string;
   agent: string;
   line: string;
+  /** `Opus 5.5 · high`, when the agent reports a model. */
+  model?: string;
+  /** Percent remaining, when reported. */
+  context?: number;
+  quota?: number;
+  quest?: string;
+  /** `Lv 3` and the XP bar, when the adapter reports levels. */
+  level?: LevelBadge;
 }
 
 export interface Detail {
@@ -17,7 +34,7 @@ export interface Detail {
   rows: DetailRow[];
 }
 
-export function describeParty(p: Party, settlement: string, beaconRole: string, now: number): Detail {
+export function describeParty(p: Party, settlement: string, beaconRole: string, now: number, vitals = true): Detail {
   const members = Object.values(p.members).sort((a, b) => (a.role === beaconRole ? -1 : 0) - (b.role === beaconRole ? -1 : 0) || a.paneId.localeCompare(b.paneId));
   return {
     title: p.label,
@@ -26,11 +43,24 @@ export function describeParty(p: Party, settlement: string, beaconRole: string, 
     rows: members.map((m) => ({
       paneId: m.paneId,
       role: m.role,
+      ...(m.name ? { name: m.name } : {}),
       status: m.status,
       agent: m.agent,
       // The latest line we know: speech, then pane title, then how long it has been in this state.
       line: m.say ?? m.title ?? `${m.status} for ${ago(now - m.lastChange)}`,
+      ...(vitals ? vitalRow(m) : {}),
+      ...(levelBadge(m) ? { level: levelBadge(m)! } : {}),
     })),
+  };
+}
+
+function vitalRow(m: Party['members'][string]): Pick<DetailRow, 'model' | 'context' | 'quota' | 'quest'> {
+  const model = modelLine(m);
+  return {
+    ...(model ? { model } : {}),
+    ...(m.vitals?.context !== undefined ? { context: m.vitals.context } : {}),
+    ...(m.vitals?.quota !== undefined ? { quota: m.vitals.quota } : {}),
+    ...(m.quest ? { quest: m.quest } : {}),
   };
 }
 

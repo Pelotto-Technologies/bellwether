@@ -1,4 +1,4 @@
-import { applyDelta, emptyWorld, MockSource, type Delta, type World } from '@bellwether/adapter/core';
+import { applyDelta, emptyWorld, MockSource, mockTotals, StatsSource, type Delta, type World } from '@bellwether/adapter/core';
 
 /** Longest line a bubble shows, so neighbouring bubbles stay readable. */
 const MAX_LINE = 48;
@@ -10,7 +10,21 @@ export interface Bubble {
   to?: { partyId: string; paneId: string } | undefined;
   /** Inferred by the renderer: no Herdr token backs it, so member updates never clear it. */
   local: boolean;
+  /** Which `say` raised it, so a journey can take the line back and hand it over later. */
+  id?: number;
 }
+
+/** A line the adapter said, as the map's couriers see it. */
+export interface SayEntry {
+  id: number;
+  partyId: string;
+  paneId: string;
+  text: string;
+  to?: { partyId: string; paneId: string } | undefined;
+}
+
+/** Entries nobody has drained (strip mode never does) are kept only this many. */
+const MAX_LOG = 32;
 
 /**
  * Holds the renderer's copy of the world and the speech bubbles currently showing.
@@ -19,8 +33,14 @@ export interface Bubble {
 export class FeedState {
   world: World = emptyWorld();
   private bubbles = new Map<string, Bubble>();
+  private seq = 0;
+  private log: SayEntry[] = [];
+  /** Counts snapshots (connect, reconnect): whoever holds lines for later should let them go when it changes. */
+  epoch = 0;
   /** Hide every bubble (the "chat bubbles" setting). Characters still walk over to talk. */
   bubblesOn = true;
+  /** Show vitals bars, model and quest (the "vitals" setting). */
+  vitalsOn = true;
   /** Set by the page: asks the adapter to focus a pane in Herdr (double-click a member). */
   onFocus: ((paneId: string) => void) | undefined;
   /** Set by the page: asks the adapter to close a pane in Herdr (the panel's close button). */
@@ -30,13 +50,42 @@ export class FeedState {
 
   apply(delta: Delta, now: number, local = false): void {
     this.world = applyDelta(this.world, delta);
-    if (delta.kind === 'say') this.bubbles.set(`${delta.partyId}/${delta.paneId}`, { text: delta.text, until: now + this.sayTtlMs, to: delta.to, local });
+    if (delta.kind === 'say') {
+      const id = ++this.seq;
+      this.bubbles.set(`${delta.partyId}/${delta.paneId}`, { text: delta.text, until: now + this.sayTtlMs, to: delta.to, local, id });
+      if (!local) {
+        this.log.push({ id, partyId: delta.partyId, paneId: delta.paneId, text: delta.text, to: delta.to });
+        if (this.log.length > MAX_LOG) this.log.shift();
+      }
+    }
     if (delta.kind === 'member' && delta.member.say === undefined) {
       // The say token expired or was cleared in Herdr.
       const key = `${delta.partyId}/${delta.member.paneId}`;
       if (this.bubbles.get(key)?.local === false) this.bubbles.delete(key);
     }
-    if (delta.kind === 'snapshot') this.bubbles.clear();
+    if (delta.kind === 'snapshot') {
+      this.bubbles.clear();
+      this.log = [];
+      this.epoch++;
+    }
+  }
+
+  /** The lines said since the last call. The map takes them to plan journeys; nothing else needs to call this. */
+  drainSays(): SayEntry[] {
+    const out = this.log;
+    this.log = [];
+    return out;
+  }
+
+  /** Takes a line back before it shows (the speaker is about to travel with it). Does nothing if a newer line replaced it. */
+  retract(e: SayEntry): void {
+    const key = `${e.partyId}/${e.paneId}`;
+    if (this.bubbles.get(key)?.id === e.id) this.bubbles.delete(key);
+  }
+
+  /** Shows a line now, with its full time to live from this moment: it arrived. */
+  deliver(e: SayEntry, now: number): void {
+    this.bubbles.set(`${e.partyId}/${e.paneId}`, { text: e.text, until: now + this.sayTtlMs, to: e.to, local: true, id: e.id });
   }
 
   private live(partyId: string, paneId: string, now: number): Bubble | undefined {
@@ -90,11 +139,13 @@ export function connectFeed(
   url: string | null,
   onDelta: (d: Delta) => void,
   onMode: (m: FeedMode) => void,
+  opts: { mockFleet?: boolean } = {},
 ): FeedHandle {
   const handle: FeedHandle = { mode: { kind: 'mock', reason: 'requested' }, stop: () => {} };
 
   const startMock = (reason: string) => {
-    const mock = new MockSource({ seed: 1, intervalMs: 1500 });
+    // The same fake levels and scripted quest as `pnpm mock`, so the page shows them without an adapter.
+    const mock = new StatsSource(new MockSource({ seed: 1, intervalMs: 1500, fleet: opts.mockFleet !== false }), { totals: mockTotals() });
     mock.on('delta', onDelta);
     void mock.start();
     handle.mode = { kind: 'mock', reason };

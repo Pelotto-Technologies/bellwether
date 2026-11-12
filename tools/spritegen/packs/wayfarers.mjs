@@ -4,6 +4,10 @@ export default {
   name: 'wayfarers',
   displayName: 'Wayfarers',
   description: 'An original fantasy quest party setting out from a hill country of burrow houses.',
+  // Camp scene: `tone` is 'camp' (wood and canvas) or 'outpost' (plating and holograms).
+  camp: { tone: 'camp', sky: ['#f2c27a', '#fdeccb'], glow: '#ffa040' },
+  // The fleet hub on the map: guildhouse, greathall, waystation, tower or generic (see themes.md).
+  hub: 'waystation',
   fallback: 'generic',
   palette: {
     q: '#2a2016', o: '#1a1410', e: '#1a1410', k: '#5a2620', n: '#ec8c7c',

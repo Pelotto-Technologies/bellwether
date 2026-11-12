@@ -47,6 +47,36 @@ Check what would ship without publishing:
 pnpm build && cd packages/cli && npm pack --dry-run
 ```
 
+## Alpha prereleases
+
+To try a build before releasing, dispatch the workflow on a branch: Actions, Release, "Run
+workflow", pick the branch (or `gh workflow run release.yml --ref <branch>`). The `alpha`
+job in `release.yml` runs only for `workflow_dispatch` on a ref other than `main`, and the
+dispatch uses that branch's copy of the file. The `plan`, `release` and `npm` jobs never
+run from a branch.
+
+The job:
+
+1. Takes the version in `packages/cli/package.json` and computes the next minor with an
+   `-alpha.<run number>` suffix (`0.3.3` gives `0.4.0-alpha.12`). It fails if the committed
+   version is not a plain `x.y.z` or the result has no prerelease suffix.
+2. Runs `pnpm install --frozen-lockfile` and `pnpm check`. The check runs before the version
+   is changed, because a test requires the plugin manifests to match the committed version.
+3. Sets the alpha version in the runner's working copy only, then runs
+   `pnpm publish --tag alpha --access public --no-git-checks` from `packages/cli` (with
+   `--provenance` on public repos). `prepack` stages the runtime exactly as for a release.
+
+It commits nothing and creates no git tag and no GitHub Release. `--tag alpha` is always
+passed, so the `latest` dist-tag cannot move. Like the `npm` job it needs `NPM_TOKEN` and is
+skipped, not failed, when the secret is unset. Each dispatch gets a new run number, so
+versions never repeat.
+
+Install an alpha with:
+
+```sh
+npm i -g @pelotto-tech/bellwether@alpha
+```
+
 ## Not automated
 
 - **Signing.** Release archives are unsigned. Signing (for example Sigstore/cosign

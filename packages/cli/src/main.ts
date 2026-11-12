@@ -3,9 +3,11 @@ import { AGENT_TARGETS, findTarget, type AgentTarget } from './agents/index.js';
 import { spawnSync } from 'node:child_process';
 import { adapterArgs, locateRuntime, RUN_COMMANDS, type RunCommand } from './run.js';
 import { launchOverlay } from './overlay.js';
-import { detect, eventHookCommand, install, sayHookCommand, systemContext, uninstall, type Outcome } from './install.js';
+import { detect, eventHookCommand, install, sayHookCommand, statusLineCommand, systemContext, uninstall, type Outcome } from './install.js';
 import { readFileSync } from 'node:fs';
 import { runSayHook } from './hook/say.js';
+import { runStatusLineHook } from './hook/statusline.js';
+import { formatPack, readPackInfo } from './pack.js';
 import { appendEvent, buildEmitEvent, eventsFile, parseFlags, runEventHook } from './hook/event.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
@@ -13,12 +15,18 @@ const USAGE = `usage: bellwether <command> [--agent <id>]...
 commands:
   agents      show which coding agents are present
   install     write the skill pack, role hook and message hook for each present agent;
-              --events also adds activity hooks so the overlay works without Herdr
+              --events also adds activity hooks so the overlay works without Herdr;
+              --statusline (Claude Code only) reports context, quota, model, effort and session
+              name for the overlay's vitals, wrapping any status line you already have
   uninstall   remove only what install wrote
-  overlay     open the desktop overlay (click-through, always on top, tray menu); --hooks reads agent sessions without Herdr
-  run         serve the overlay from live Herdr, or --hooks (adapter flags pass through)
-  emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop
-              [--session S --agent A --cwd D --role R --sub ID --sub-type T --tool T --detail TEXT]
+  overlay     open the desktop overlay (click-through, always on top, tray menu); uses Herdr if it is running, else agent events (--hooks forces events)
+  run         serve the overlay in a browser; Herdr if running, else agent events (--live, --hooks, --mock force one; adapter flags pass through)
+  emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop|vitals
+              [--session S --agent A --cwd D --role R --label NAME --sub ID --sub-type T --tool T --detail TEXT]
+              fleet: --ev start --role orchestrator --scope fleet (the master of many projects); --to SESSION --detail TEXT on prompt|tool|wait sends a message
+              vitals: --ev vitals [--ctx N --quota N --model M --effort E --name NAME] (N is percent remaining)
+  pack        print the active skin pack id on one line; --json adds where it came from and the packs available:
+              { "pack", "source": "shell"|"toml"|"env"|"default", "available": [...] }
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
   orchestrate [--cwd D] [--label L] [--role R] [--session S] [--timeout MS] [-- CMD...]
@@ -76,6 +84,18 @@ function main(argv: string[]): number {
     }
     return 0;
   }
+  if (cmd === 'hook' && rest[0] === 'statusline') {
+    // Claude Code's statusLine command: reads the status JSON, reports vitals, prints the line to show. Never prints errors.
+    let out = '';
+    try {
+      const flags = parseFlags(rest.slice(1));
+      out = runStatusLineHook({ stdin: readFileSync(0, 'utf8'), env: process.env, ...(flags.wrap ? { wrap: flags.wrap } : {}) });
+    } catch {
+      // swallow
+    }
+    process.stdout.write(out);
+    return 0;
+  }
   if (cmd === 'emit') {
     try {
       const flags = parseFlags(rest);
@@ -87,6 +107,20 @@ function main(argv: string[]): number {
       return 2;
     }
   }
+  if (cmd === 'pack') {
+    // main() is synchronous, so the file reads run behind a promise that prints and sets the exit code.
+    void readPackInfo().then(
+      (info) => {
+        console.log(formatPack(info, rest.includes('--json')));
+        if (!rest.includes('--json') && info.available.length && !info.available.includes(info.pack)) console.error(`bellwether: pack "${info.pack}" was not found among ${info.available.join(', ')}; the overlay falls back`);
+      },
+      (err: Error) => {
+        console.error(`bellwether pack: ${err.message}`);
+        process.exitCode = 2;
+      },
+    );
+    return 0;
+  }
   const ctx = systemContext();
   const targets = selectTargets(rest);
   switch (cmd) {
@@ -97,8 +131,12 @@ function main(argv: string[]): number {
       }
       return 0;
     case 'install':
-      report(install(ctx, targets, sayHookCommand(), rest.includes('--events') ? eventHookCommand() : undefined));
-      if (rest.includes('--events')) console.log('\nActivity hooks added. Run `bellwether overlay --hooks` to watch them (no Herdr needed).');
+      report(install(ctx, targets, sayHookCommand(), rest.includes('--events') ? eventHookCommand() : undefined, rest.includes('--statusline') ? statusLineCommand() : undefined));
+      if (rest.includes('--events')) console.log('\nActivity hooks added. Run `bellwether overlay` to watch them (no Herdr needed).');
+      if (rest.includes('--statusline')) {
+        const skipped = targets.filter((t) => !t.addStatusLine).map((t) => t.displayName);
+        console.log(`\nStatus line set: it reports context, quota, model, effort and session name (Claude Code only${skipped.length ? `; ${skipped.join(', ')} skipped` : ''}).`);
+      }
       return 0;
     case 'uninstall':
       report(uninstall(ctx, targets));

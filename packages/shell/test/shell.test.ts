@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { adapterArgs } from '../src/adapter-args.js';
 import { defaultMapBounds, mapWindowBounds, type DisplayInfo, pickDisplay, spanLayout, stripBounds, stripHeightFor, windowBounds } from '../src/bounds.js';
-import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
+import { DEFAULT_CONFIG, effectiveSounds, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
 import { errorPage, waitForReady } from '../src/ready.js';
 import { existsSync } from 'node:fs';
 import { adapterPaths, assetsDir } from '../src/paths.js';
@@ -50,6 +50,7 @@ describe('config', () => {
   it('normalizes junk to defaults', () => {
     expect(normalizeConfig(null)).toEqual(DEFAULT_CONFIG);
     expect(normalizeConfig({ mode: 'x', port: 'a', displayId: 'z', scale: 9 })).toEqual(DEFAULT_CONFIG);
+    expect(normalizeConfig({ mode: 'camp' }).mode).toBe('map');
   });
   it('derives url from port unless url is given', () => {
     expect(normalizeConfig({ port: 9000 }).url).toBe('http://127.0.0.1:9000/?transparent');
@@ -80,7 +81,7 @@ describe('adapterArgs', () => {
   it('reads all sessions by default', () => {
     expect(adapterArgs({ port: 7341 }, '/a/bin.js', '/r')).toEqual({
       command: 'node',
-      args: ['/a/bin.js', '--prefer-live', '--port', '7341', '--serve', '/r', '--exit-with-parent', '--all'],
+      args: ['/a/bin.js', '--auto', '--port', '7341', '--serve', '/r', '--exit-with-parent', '--all'],
     });
   });
   it('passes a chosen session instead of --all', () => {
@@ -104,7 +105,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Quest recap', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -113,7 +114,7 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Quest recap', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
   });
   it('offers skins and applies the choice to the renderer URL', () => {
     const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
@@ -167,6 +168,7 @@ describe('assets', () => {
 describe('modeFromUrl', () => {
   it('reads the mode a navigation asks for', () => {
     expect(modeFromUrl('http://127.0.0.1:7341/?mode=map')).toBe('map');
+    expect(modeFromUrl('http://127.0.0.1:7341/?mode=camp&party=x')).toBe('map');
     expect(modeFromUrl('http://127.0.0.1:7341/?mode=strip')).toBe('strip');
     expect(modeFromUrl('http://127.0.0.1:7341/?transparent')).toBe('strip');
     expect(modeFromUrl('not a url')).toBeUndefined();
@@ -294,5 +296,96 @@ describe('draggable map window', () => {
     expect(normalizeConfig({ mapAlwaysOnTop: true, mapBounds: { x: 1.4, y: 2, width: 500, height: 400 } })).toMatchObject({ mapAlwaysOnTop: true, mapBounds: { x: 1, y: 2, width: 500, height: 400 } });
     expect(normalizeConfig({ mapBounds: { x: 'a', y: 2, width: 5, height: 5 } }).mapBounds).toBeUndefined();
     expect(normalizeConfig({ mapAlwaysOnTop: 'yes' }).mapAlwaysOnTop).toBeUndefined();
+  });
+});
+
+describe('sounds and alerts', () => {
+  it('the Sounds checkbox follows the effective state and flips it, persisted and passed to the page', () => {
+    const on = buildMenuModel({ ...DEFAULT_CONFIG, sounds: true }, [], []);
+    expect(on.find((i) => i.kind === 'item' && i.label === 'Sounds')).toMatchObject({ checked: true, action: { type: 'pick-sounds', sounds: false } });
+    const off = buildMenuModel({ ...DEFAULT_CONFIG, sounds: false }, [], []);
+    expect(off.find((i) => i.kind === 'item' && i.label === 'Sounds')).toMatchObject({ checked: false, action: { type: 'pick-sounds', sounds: true } });
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-sounds', sounds: false });
+    expect(r.cfg.sounds).toBe(false);
+    expect(r.reload).toBe(true);
+    expect(applyAction(r.cfg, { type: 'pick-sounds', sounds: false }).reload).toBe(false);
+    expect(rendererUrl(r.cfg)).toContain('sounds=0');
+    expect(rendererUrl({ ...r.cfg, sounds: true })).toContain('sounds=1');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('sounds');
+    expect(normalizeConfig({ sounds: 'x' }).sounds).toBeUndefined();
+    expect(normalizeConfig({ sounds: false }).sounds).toBe(false);
+  });
+
+  it('sounds default on in the desktop overlay unless the tray or bellwether.toml says otherwise', () => {
+    expect(effectiveSounds({}, undefined)).toBe(true);
+    expect(effectiveSounds({}, false)).toBe(false);
+    expect(effectiveSounds({ sounds: true }, false)).toBe(true);
+    expect(effectiveSounds({ sounds: false }, true)).toBe(false);
+  });
+
+  it('the Alerts submenu picks a position, and only the map window gets it', () => {
+    const items = buildMenuModel({ ...DEFAULT_CONFIG, alerts: 'top-right' }, [], []);
+    const alerts = items.find((i) => i.kind === 'item' && i.label.startsWith('Alerts'));
+    const sub = alerts && alerts.kind === 'item' ? (alerts.submenu ?? []) : [];
+    expect(sub.map((i) => (i.kind === 'item' ? i.label : '-'))).toEqual(['Default (bellwether.toml)', 'Off', 'Top left', 'Top right', 'Top centre']);
+    expect(sub.find((i) => i.kind === 'item' && i.label === 'Top right')).toMatchObject({ checked: true });
+    const picked = applyAction({ ...DEFAULT_CONFIG, mode: 'map' }, { type: 'pick-alerts', alerts: 'top-left' });
+    expect(picked.cfg.alerts).toBe('top-left');
+    expect(picked.reload).toBe(true);
+    expect(rendererUrl(picked.cfg)).toContain('alerts=top-left');
+    expect(rendererUrl({ ...picked.cfg, mode: 'strip' })).not.toContain('alerts');
+    expect(applyAction({ ...picked.cfg, mode: 'strip' }, { type: 'pick-alerts', alerts: 'off' }).reload).toBe(false);
+    expect(applyAction(picked.cfg, { type: 'pick-alerts', alerts: undefined }).cfg.alerts).toBeUndefined();
+    expect(normalizeConfig({ alerts: 'top-center' }).alerts).toBe('top-center');
+    expect(normalizeConfig({ alerts: 'middle' }).alerts).toBeUndefined();
+  });
+});
+
+describe('vitals toggle', () => {
+  it('is a checkbox, on unless switched off, persisted and passed to the renderer', () => {
+    const item = (cfg: Parameters<typeof buildMenuModel>[0]) => buildMenuModel(cfg, [], []).find((i) => i.kind === 'item' && i.label === 'Vitals');
+    expect(item(DEFAULT_CONFIG)).toMatchObject({ checked: true, action: { type: 'toggle-vitals' } });
+    const off = applyAction(DEFAULT_CONFIG, { type: 'toggle-vitals' });
+    expect(off.cfg.vitals).toBe(false);
+    expect(off.reload).toBe(true);
+    expect(item(off.cfg)).toMatchObject({ checked: false });
+    expect(rendererUrl(off.cfg)).toContain('vitals=0');
+    const on = applyAction(off.cfg, { type: 'toggle-vitals' });
+    expect(on.cfg.vitals).toBe(true);
+    expect(rendererUrl(on.cfg)).toContain('vitals=1');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('vitals');
+    expect(normalizeConfig({ vitals: false }).vitals).toBe(false);
+    expect(normalizeConfig({ vitals: 'x' }).vitals).toBeUndefined();
+  });
+});
+
+describe('quest recap toggle', () => {
+  it('is a checkbox, on unless switched off, persisted and passed to the renderer', () => {
+    const item = (cfg: Parameters<typeof buildMenuModel>[0]) => buildMenuModel(cfg, [], []).find((i) => i.kind === 'item' && i.label === 'Quest recap');
+    expect(item(DEFAULT_CONFIG)).toMatchObject({ checked: true, action: { type: 'toggle-recap' } });
+    const off = applyAction(DEFAULT_CONFIG, { type: 'toggle-recap' });
+    expect(off.cfg.recap).toBe(false);
+    expect(off.reload).toBe(true);
+    expect(item(off.cfg)).toMatchObject({ checked: false });
+    expect(rendererUrl(off.cfg)).toContain('recap=0');
+    const on = applyAction(off.cfg, { type: 'toggle-recap' });
+    expect(on.cfg.recap).toBe(true);
+    expect(rendererUrl(on.cfg)).toContain('recap=1');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('recap');
+    expect(normalizeConfig({ recap: false }).recap).toBe(false);
+    expect(normalizeConfig({ recap: 'x' }).recap).toBeUndefined();
+  });
+});
+
+describe('userData folder', () => {
+  it('follows Electron: appData plus the app name', async () => {
+    const { userDataDir, appNameFromPackage } = await import('../src/config.js');
+    expect(userDataDir('app', { XDG_CONFIG_HOME: '/x' }, 'linux', '/h')).toBe(join('/x', 'app'));
+    expect(userDataDir('app', {}, 'linux', '/h')).toBe(join('/h', '.config', 'app'));
+    expect(userDataDir('app', {}, 'darwin', '/h')).toBe(join('/h', 'Library', 'Application Support', 'app'));
+    expect(userDataDir('app', { APPDATA: 'R' }, 'win32', '/h')).toBe(join('R', 'app'));
+    expect(appNameFromPackage({ name: 'n', productName: 'P' })).toBe('P');
+    expect(appNameFromPackage({ name: 'n' })).toBe('n');
+    expect(appNameFromPackage(null)).toBeUndefined();
   });
 });

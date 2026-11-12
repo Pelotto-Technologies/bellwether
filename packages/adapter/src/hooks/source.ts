@@ -5,7 +5,7 @@ import { resolveRole } from '../roles.js';
 import { diffParties } from '../herdr/mapper.js';
 import { rollup } from '../rollup.js';
 import { BaseSource } from '../source.js';
-import type { Member, Party, Role, Status } from '../types.js';
+import { fleetScope, type Member, type Party, type Role, type Status } from '../types.js';
 import { defaultEventsFile, type HookEvent, parseHookEvent } from './event.js';
 
 export interface HooksSourceOptions {
@@ -31,10 +31,21 @@ interface SessionState {
   agent: string;
   cwd: string;
   role?: string;
+  label?: string;
+  scope?: 'fleet';
   status: Status;
   title?: string;
   say?: string;
+  /** Session the current `say` is addressed to, as the writer named it; resolved when the world is built. */
+  sayTo?: string;
   sayId?: string;
+  context?: number;
+  quota?: number;
+  vitalsAt?: number;
+  model?: string;
+  effort?: string;
+  quest?: string;
+  tool?: string;
   lastEvent: number;
   lastChange: number;
 }
@@ -43,6 +54,7 @@ interface SubState {
   session: string;
   sub: string;
   subType?: string;
+  label?: string;
   status: Status;
   title?: string;
   lastEvent: number;
@@ -94,6 +106,7 @@ export class HooksSource extends BaseSource {
   private sessions = new Map<string, SessionState>();
   private subs = new Map<string, SubState>();
   private parties: Record<string, Party> = {};
+  private folders = new Map<string, string>();
   private offset = 0;
   private ino = 0;
   private pending: Buffer = Buffer.alloc(0);
@@ -122,6 +135,11 @@ export class HooksSource extends BaseSource {
   /** Current parties (read-only view). */
   get current(): Readonly<Record<string, Party>> {
     return this.parties;
+  }
+
+  /** Working directory of a party, for the opt-in git probe. */
+  partyFolder(partyId: string): string | undefined {
+    return this.folders.get(partyId);
   }
 
   async start(): Promise<void> {
@@ -234,10 +252,12 @@ export class HooksSource extends BaseSource {
     s.status = status;
   }
 
-  private say(s: SessionState, text: string | undefined): void {
+  private say(s: SessionState, text: string | undefined, to?: string): void {
     // History replayed at start is not chatter; only events that arrive live raise bubbles.
     if (!text || !this.live) return;
     s.say = text;
+    if (to && to !== s.id) s.sayTo = to;
+    else delete s.sayTo;
     s.sayId = String(++this.sayCount);
   }
 
@@ -251,7 +271,20 @@ export class HooksSource extends BaseSource {
     s.lastEvent = Math.max(s.lastEvent, e.t);
     s.agent = e.agent;
     if (e.role) s.role = e.role;
-    if (e.ev === 'start' && e.cwd) s.cwd = e.cwd;
+    if (e.label && !e.sub) s.label = e.label;
+    if (e.scope && !e.sub) s.scope = e.scope;
+    if ((e.ev === 'start' || s.cwd === '(unknown)') && e.cwd) s.cwd = e.cwd;
+
+    if (e.ev === 'vitals') {
+      // Vitals never change the status. A field the event omits keeps its last value.
+      if (e.ctx !== undefined) s.context = e.ctx;
+      if (e.quota !== undefined) s.quota = e.quota;
+      if (e.ctx !== undefined || e.quota !== undefined) s.vitalsAt = e.t;
+      if (e.model) s.model = e.model;
+      if (e.effort) s.effort = e.effort;
+      if (e.name) s.quest = e.name;
+      return;
+    }
 
     const subKey = e.sub ? `${e.session}:${e.sub}` : undefined;
     if (e.ev === 'sub_start' || e.ev === 'sub_stop') {
@@ -263,6 +296,7 @@ export class HooksSource extends BaseSource {
       }
       sub.lastEvent = e.t;
       if (e.subType) sub.subType = e.subType;
+      if (e.label) sub.label = e.label;
       if (e.ev === 'sub_start') {
         this.setStatus(sub, 'working', e.t);
         delete sub.doneAt;
@@ -283,6 +317,7 @@ export class HooksSource extends BaseSource {
       }
       sub.lastEvent = e.t;
       if (e.subType) sub.subType = e.subType;
+      if (e.label) sub.label = e.label;
       if (sub.status !== 'done') this.setStatus(sub, 'working', e.t);
       if (e.detail) sub.title = e.detail;
       if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
@@ -298,17 +333,22 @@ export class HooksSource extends BaseSource {
       case 'tool_done':
         this.setStatus(s, 'working', e.t);
         if (e.detail) s.title = e.detail;
-        if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
+        if (e.ev === 'tool' && e.tool) s.tool = e.tool;
+        else delete s.tool;
+        // A line with `to` is a message to that session; without it only a hand-off to a subagent speaks.
+        if (e.to && e.detail && e.ev !== 'tool_done') this.say(s, e.detail, e.to);
+        else if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
         break;
       case 'wait':
         this.setStatus(s, 'blocked', e.t);
         if (e.detail) {
           s.title = e.detail;
-          this.say(s, e.detail);
+          this.say(s, e.detail, e.to);
         }
         break;
       case 'stop':
         this.setStatus(s, 'done', e.t);
+        delete s.tool;
         break;
     }
   }
@@ -331,8 +371,10 @@ export class HooksSource extends BaseSource {
     const activeSubs = new Map<string, number>();
     for (const sub of this.subs.values()) if (sub.status !== 'done') activeSubs.set(sub.session, (activeSubs.get(sub.session) ?? 0) + 1);
     const parties: Record<string, Party> = {};
+    this.folders = new Map();
     const partyFor = (cwd: string): Party => {
       const id = hooksPartyId(cwd);
+      if (cwd !== '(unknown)') this.folders.set(id, cwd);
       return (parties[id] ??= {
         id,
         label: baseName(cwd),
@@ -350,6 +392,18 @@ export class HooksSource extends BaseSource {
       if (s.title) m.title = s.title;
       if (s.say) m.say = s.say;
       if (s.say && s.sayId) m.sayId = s.sayId;
+      // The target must be a session we know, else the line is a plain bubble at the speaker.
+      if (s.say && s.sayTo && this.sessions.has(s.sayTo)) m.sayTo = s.sayTo;
+      const scope = fleetScope(s.scope, role);
+      if (scope) m.scope = scope;
+      if (s.context !== undefined || s.quota !== undefined) {
+        m.vitals = { at: s.vitalsAt ?? s.lastEvent, ...(s.context !== undefined ? { context: s.context } : {}), ...(s.quota !== undefined ? { quota: s.quota } : {}) };
+      }
+      if (s.model) m.model = s.model;
+      if (s.effort) m.effort = s.effort;
+      if (s.quest) m.quest = s.quest;
+      if (s.label) m.name = s.label;
+      if (s.tool) m.tool = s.tool;
       partyFor(s.cwd).members[s.id] = m;
     }
     for (const sub of this.subs.values()) {
@@ -359,6 +413,7 @@ export class HooksSource extends BaseSource {
       const m: Member = { paneId: id, agent: parent.agent, role: subRole(sub.subType), status: sub.status, lastChange: sub.lastChange };
       const title = sub.title ?? sub.subType;
       if (title) m.title = title;
+      if (sub.label) m.name = sub.label;
       partyFor(parent.cwd).members[id] = m;
     }
     for (const p of Object.values(parties)) p.status = rollup(Object.values(p.members));

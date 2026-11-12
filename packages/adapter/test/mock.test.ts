@@ -41,3 +41,17 @@ describe('MockGenerator', () => {
     expect(says).toBeGreaterThan(0);
   });
 });
+
+describe('MockGenerator runner party', () => {
+  it('has an idle coordinator, a working leaf and a named finished leaf, and keeps them through the random walk', () => {
+    const g = new MockGenerator({ seed: 5 });
+    g.initial();
+    for (let i = 0; i < 300; i++) g.step(i);
+    const p = Object.values(g.current.parties).find((q) => q.label.endsWith('(runner)'))!;
+    const by = (role: string) => Object.values(p.members).find((m) => m.role === role)!;
+    expect(by('coordinator').status).toBe('idle');
+    expect(by('implementer').status).toBe('working');
+    expect(by('reviewer')).toMatchObject({ status: 'done', name: 'Quill' });
+    expect(p.status).toBe('done');
+  });
+});

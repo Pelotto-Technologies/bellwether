@@ -3,6 +3,10 @@ export default {
   name: 'neutral',
   displayName: 'Workshop Crew',
   description: 'A friendly, generic crew of builders, scribes and surveyors. Ships with Bellwether.',
+  // Camp scene: `tone` is 'camp' (wood and canvas) or 'outpost' (plating and holograms).
+  camp: { tone: 'camp', sky: ['#8fd0f0', '#e4f4fa'], glow: '#ffa84a' },
+  // The fleet hub on the map: guildhouse, greathall, waystation, tower or generic (see themes.md).
+  hub: 'guildhouse',
   fallback: 'generic',
   palette: {
     q: '#2a2238', o: '#1b1530', e: '#1b1530', k: '#5a2333', n: '#f08a8a',

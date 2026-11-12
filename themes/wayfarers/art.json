@@ -26,7 +26,9 @@
       "talk_0",
       "talk_1",
       "raise_0",
-      "blink_0"
+      "blink_0",
+      "work_0",
+      "work_1"
     ],
     "fps": {
       "walk": 8,
@@ -34,7 +36,8 @@
       "wave": 4,
       "talk": 6,
       "raise": 1,
-      "blink": 1
+      "blink": 1,
+      "work": 4
     },
     "layers": {
       "tip": "Frame name + \"_tip\": white status-light pixels. Tint with the status colour and draw over the base frame.",
@@ -118,6 +121,7 @@
     "tileset": "map/tileset.json",
     "props": "map/props.json",
     "settlement": "settlement",
+    "hub": "hub",
     "camp": "camp",
     "campfire": "campfire",
     "signpost": "signpost",
@@ -144,6 +148,24 @@
       "building": "#e8c44a",
       "background": "#1a1410"
     }
+  },
+  "camp": {
+    "atlas": "map/camp.json",
+    "tone": "camp",
+    "sky": [
+      "#f2c27a",
+      "#fdeccb"
+    ],
+    "glow": "#ffa040",
+    "stations": [
+      "edit",
+      "read",
+      "shell",
+      "search",
+      "delegate",
+      "think",
+      "blocked"
+    ]
   },
   "ui": {
     "sheet": "ui/ui.json",

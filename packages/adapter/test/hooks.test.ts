@@ -301,3 +301,20 @@ describe('config wiring', () => {
     expect((s as HooksSource).file).toBe('/x.jsonl');
   });
 });
+
+describe('label', () => {
+  it('parses on any event, cleaned and capped at 40 characters', () => {
+    const e = parseHookEvent(JSON.stringify({ v: 1, t: 5, ev: 'start', session: 's', label: `  Ada‮\n${'x'.repeat(60)}` }));
+    expect(e?.label).toBe(`Ada ${'x'.repeat(36)}`);
+    expect(parseHookEvent(JSON.stringify({ v: 1, t: 5, ev: 'tool', session: 's', label: '  ' }))?.label).toBeUndefined();
+  });
+
+  it('names the session member, and a subagent member apart from its parent; the quest name stays separate', async () => {
+    await make().start();
+    appendFileSync(file, line({ ev: 'start', session: 's', label: 'Ada' }) + line({ ev: 'vitals', session: 's', name: 'Fix the login' }));
+    appendFileSync(file, line({ ev: 'sub_start', session: 's', sub: 'a1', subType: 'explore', label: 'Scout' }));
+    await source.poll();
+    expect(party()!.members.s).toMatchObject({ name: 'Ada', quest: 'Fix the login' });
+    expect(party()!.members['s:a1']).toMatchObject({ name: 'Scout', role: 'researcher' });
+  });
+});

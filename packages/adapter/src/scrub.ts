@@ -9,7 +9,8 @@ export function hashLabel(value: string, prefix = ''): string {
 }
 
 function scrubMember(m: Member): Member {
-  const { title: _title, say: _say, ...rest } = m;
+  // Quest and display names are free text a person typed, so they go like `say` does; model, effort and the numbers are not identifying.
+  const { title: _title, say: _say, quest: _quest, name: _name, ...rest } = m;
   return rest;
 }
 
@@ -47,6 +48,9 @@ export function scrubDelta(d: Delta): Delta {
     case 'say':
       return { ...d, text: '' };
     case 'removed':
+      return d;
+    case 'moment':
+      // Ids, role, level and counters only: nothing to hash or drop.
       return d;
   }
 }

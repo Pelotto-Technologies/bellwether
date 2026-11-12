@@ -1,8 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Rect } from './bounds.js';
 
 export type Mode = 'strip' | 'map';
+
+export const ALERT_POSITIONS = ['off', 'top-left', 'top-right', 'top-center'] as const;
+export type AlertsSetting = (typeof ALERT_POSITIONS)[number];
 
 export interface ShellConfig {
   mode: Mode;
@@ -25,6 +29,14 @@ export interface ShellConfig {
   span?: boolean;
   /** Speech bubbles shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   bubbles?: boolean;
+  /** Sound cues on (true) or muted (false); undefined defers to bellwether.toml, then on: the desktop overlay plays sounds by default. */
+  sounds?: boolean;
+  /** Alert banner position in the map window; undefined defers to bellwether.toml, then off. The strip is a thin bar with no room for a banner. */
+  alerts?: AlertsSetting;
+  /** Vitals (bars, model, quest) shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
+  vitals?: boolean;
+  /** Quest recap shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
+  recap?: boolean;
   /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
   mapAlwaysOnTop?: boolean;
   /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
@@ -32,6 +44,11 @@ export interface ShellConfig {
 }
 
 export const DEFAULT_SCALE = 3;
+
+/** Whether sounds play: the tray choice, else bellwether.toml's `sounds`, else on (the desktop overlay's default). */
+export function effectiveSounds(cfg: Pick<ShellConfig, 'sounds'>, served?: boolean): boolean {
+  return cfg.sounds ?? served ?? true;
+}
 
 /** Scale the strip actually uses: the menu choice, else the adapter's served `scale`, else 3. */
 export function effectiveScale(cfg: Pick<ShellConfig, 'scale'>, served?: number): number {
@@ -57,12 +74,31 @@ export function configPath(userDataDir: string): string {
   return join(userDataDir, CONFIG_FILE);
 }
 
+/**
+ * Electron's `userData` folder, which holds `shell.json`: `<appData>/<app name>`, where appData is `%APPDATA%` on
+ * Windows, `~/Library/Application Support` on macOS and `$XDG_CONFIG_HOME` (else `~/.config`) elsewhere, and the
+ * app name is `productName` or `name` from the shell's package.json. For tools outside Electron (`bellwether pack`).
+ */
+export function userDataDir(appName: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home: string = homedir()): string {
+  const appData = platform === 'win32' ? (env.APPDATA ?? join(home, 'AppData', 'Roaming')) : platform === 'darwin' ? join(home, 'Library', 'Application Support') : (env.XDG_CONFIG_HOME ?? join(home, '.config'));
+  return join(appData, appName);
+}
+
+/** The app name Electron derives from a package.json: `productName`, else `name`. */
+export function appNameFromPackage(raw: unknown): string | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  const name = typeof r.productName === 'string' && r.productName ? r.productName : r.name;
+  return typeof name === 'string' && name ? name : undefined;
+}
+
 /** Merge untrusted JSON onto the defaults, dropping anything of the wrong type. */
 export function normalizeConfig(raw: unknown): ShellConfig {
   const out: ShellConfig = { ...DEFAULT_CONFIG };
   if (typeof raw !== 'object' || raw === null) return out;
   const r = raw as Record<string, unknown>;
   if (r.mode === 'strip' || r.mode === 'map') out.mode = r.mode;
+  else if (r.mode === 'camp') out.mode = 'map'; // camp is entered from the map, so a stored camp reopens the map
   if (typeof r.displayId === 'number' && Number.isFinite(r.displayId)) out.displayId = r.displayId;
   if (typeof r.pack === 'string' && /^[\w-]+$/.test(r.pack)) out.pack = r.pack;
    if (typeof r.session === 'string' && r.session.length > 0) out.session = r.session;
@@ -74,6 +110,10 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
   if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
+  if (typeof r.sounds === 'boolean') out.sounds = r.sounds;
+  if (typeof r.alerts === 'string' && (ALERT_POSITIONS as readonly string[]).includes(r.alerts)) out.alerts = r.alerts as AlertsSetting;
+  if (typeof r.vitals === 'boolean') out.vitals = r.vitals;
+  if (typeof r.recap === 'boolean') out.recap = r.recap;
   if (r.span === true) out.span = true;
   if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
   const b = r.mapBounds as Record<string, unknown> | null | undefined;

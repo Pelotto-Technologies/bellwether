@@ -1,27 +1,30 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { createSource, loadSourceConfig } from './config.js';
+import { createSource, loadSourceConfig, resolveAutoConfig } from './config.js';
 import { launchOrchestrator } from './herdr/launch.js';
 import { MockSource } from './mock.js';
 import { recordTo, ReplaySource } from './recording.js';
 import { scrubDelta, scrubFile } from './scrub.js';
+import { resolveStatsFile } from './stats-store.js';
 import { DEFAULT_PORT, DELTA_PATH, DeltaServer } from './server.js';
 import type { WorldSource } from './source.js';
 
 const USAGE = `bellwether-adapter: stream Herdr world deltas over WebSocket
 
-Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock):
+Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock; source may be mock, live, hooks or auto):
   --live               read the live Herdr TUI socket API
   --mock               generate mock agents
   --hooks              read agent sessions from the events file the Claude Code plugin writes (no Herdr)
   --events <file>      hooks: events file (default BELLWETHER_EVENTS or ~/.bellwether/events.jsonl)
-  --prefer-live        live Herdr unless bellwether.toml or BELLWETHER_SOURCE chose hooks (used by run and overlay)
+  --auto               live Herdr if a socket answers at startup, else hooks (default for run and overlay;
+                       bellwether.toml or BELLWETHER_SOURCE naming live, hooks or auto wins). --prefer-live is an alias
   --replay <file>      replay a recorded .jsonl (loops)
   --session <name>     live: one named session      --all   live: every running session
   --socket <path>      live: explicit socket/pipe path
   --config <file>      config file (default bellwether.toml)
   --seed <n>           mock seed (default 1)
   --interval <ms>      mock delta interval (default 1500)
+  --mock-fleet <0|1>   mock: 0 leaves out the fleet lead and its project nodes (also BELLWETHER_MOCK_FLEET=0); default 1
   --speed <n>          replay speed multiplier (default 1)
 
 Output:
@@ -30,6 +33,8 @@ Output:
   --record <file>      append every delta to a .jsonl file
   --scrub              with --record: hash repo/branch/workspace labels, strip say text and titles
   --scrub-file <in> <out>  scrub an existing .jsonl recording and exit
+  --git                show uncommitted/unpushed counts per party (runs git in agents' folders; only for repos you trust)
+  --no-stats           no XP, levels or quest recap (also BELLWETHER_STATS=0 or [stats] enabled = false); counters only are kept in ~/.bellwether/stats.json
   --actions            let the overlay send prompts and keys to agents (focus is always allowed)
   --pack <name>        skin pack for the served overlay (default from bellwether.toml, else neutral)
   --print              print every delta to stdout as JSON lines
@@ -46,6 +51,7 @@ const { values, positionals } = parseArgs({
     mock: { type: 'boolean' },
     hooks: { type: 'boolean' },
     events: { type: 'string' },
+    auto: { type: 'boolean' },
     'prefer-live': { type: 'boolean' },
     replay: { type: 'string' },
     session: { type: 'string' },
@@ -54,12 +60,15 @@ const { values, positionals } = parseArgs({
     config: { type: 'string' },
     seed: { type: 'string' },
     interval: { type: 'string' },
+    'mock-fleet': { type: 'string' },
     speed: { type: 'string' },
     port: { type: 'string' },
     serve: { type: 'string' },
     record: { type: 'string' },
     scrub: { type: 'boolean' },
     actions: { type: 'boolean' },
+    git: { type: 'boolean' },
+    'no-stats': { type: 'boolean' },
     'scrub-file': { type: 'string' },
     print: { type: 'boolean' },
     'exit-with-parent': { type: 'boolean' },
@@ -80,6 +89,9 @@ let clientPack: string | undefined = values.pack;
 let clientScale: number | undefined;
 let clientMinimal = false;
 let clientBubbles = true;
+let clientCues: Record<string, unknown> = {};
+let clientVitals = true;
+let clientRecap = true;
 
 if (values.help) {
   console.log(USAGE);
@@ -133,25 +145,35 @@ async function pickSource(): Promise<WorldSource> {
   clientScale = cfg.scale;
   clientMinimal = cfg.minimal ?? false;
   clientBubbles = cfg.bubbles ?? true;
+  clientCues = { ...(cfg.sounds !== undefined ? { sounds: cfg.sounds } : {}), ...(cfg.volume !== undefined ? { volume: cfg.volume } : {}), ...(cfg.alerts !== undefined ? { alerts: cfg.alerts } : {}) };
+  clientVitals = cfg.vitals ?? true;
+  clientRecap = cfg.recap ?? true;
   scrubConfig = cfg.scrub ?? false;
   actionsConfig = cfg.actions ?? false;
-  if (values['prefer-live'] && cfg.source !== 'hooks') cfg.source = 'live';
+  // run/overlay default: auto, unless the config or env already named live, hooks or auto.
+  if ((values.auto || values['prefer-live']) && cfg.source === 'mock') cfg.source = 'auto';
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.hooks) cfg.source = 'hooks';
+  if (values.git) cfg.git = { ...cfg.git, enabled: true };
   if (values.events) cfg.hooks = { ...cfg.hooks, file: values.events };
   if (values.session) cfg.herdr.sessions = [values.session];
   if (values.all) cfg.herdr.sessions = 'all';
   if (values.socket) cfg.herdr.socket = values.socket;
-  log(`bellwether-adapter: source=${cfg.source}`);
-  return createSource(cfg, {
+  // Stats are on unless switched off; createSource wraps the source only for an explicit `enabled: true`.
+  const statsFile = resolveStatsFile(cfg.stats, process.env, values['no-stats']);
+  if (statsFile) cfg.stats = { enabled: true, file: statsFile };
+  else delete cfg.stats;
+  const resolved = await resolveAutoConfig(cfg, { log });
+  if (cfg.source !== 'auto') log(`bellwether-adapter: source=${cfg.source}`);
+  return createSource(resolved, {
     log,
-    mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500) }),
+    mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500), fleet: ['0', 'false', 'off', 'no'].includes((values['mock-fleet'] ?? process.env.BELLWETHER_MOCK_FLEET ?? '').toLowerCase()) ? false : true }),
   });
 }
 
 const source = await pickSource();
-const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: { ...(clientPack ? { pack: clientPack } : {}), ...(clientScale ? { scale: clientScale } : {}), ...(clientMinimal ? { minimal: true } : {}), ...(clientBubbles ? {} : { bubbles: false }) }, actions: values.actions || actionsConfig, log });
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: { ...(clientPack ? { pack: clientPack } : {}), ...(clientScale ? { scale: clientScale } : {}), ...(clientMinimal ? { minimal: true } : {}), ...(clientBubbles ? {} : { bubbles: false }), ...(clientVitals ? {} : { vitals: false }), ...(clientRecap ? {} : { recap: false }), ...clientCues }, actions: values.actions || actionsConfig, log });
 server.attach(source);
 if (values.record) {
   const rec = recordTo(values.record);

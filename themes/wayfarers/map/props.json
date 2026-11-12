@@ -40,67 +40,27 @@
         "h": 20
       }
     },
-    "campfire_0": {
+    "hub": {
       "frame": {
         "x": 64,
         "y": 0,
-        "w": 16,
-        "h": 16
+        "w": 48,
+        "h": 48
       },
       "rotated": false,
       "trimmed": false,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 16,
-        "h": 16
+        "w": 48,
+        "h": 48
       },
       "sourceSize": {
-        "w": 16,
-        "h": 16
+        "w": 48,
+        "h": 48
       }
     },
-    "campfire_1": {
-      "frame": {
-        "x": 80,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
-      "sourceSize": {
-        "w": 16,
-        "h": 16
-      }
-    },
-    "campfire_2": {
-      "frame": {
-        "x": 96,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
-      "sourceSize": {
-        "w": 16,
-        "h": 16
-      }
-    },
-    "campfire_3": {
+    "campfire_0": {
       "frame": {
         "x": 112,
         "y": 0,
@@ -120,7 +80,7 @@
         "h": 16
       }
     },
-    "signpost": {
+    "campfire_1": {
       "frame": {
         "x": 128,
         "y": 0,
@@ -140,47 +100,67 @@
         "h": 16
       }
     },
-    "mount_walk_0": {
+    "campfire_2": {
       "frame": {
         "x": 144,
         "y": 0,
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       },
       "rotated": false,
       "trimmed": false,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       },
       "sourceSize": {
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       }
     },
-    "mount_walk_1": {
+    "campfire_3": {
       "frame": {
-        "x": 168,
+        "x": 160,
         "y": 0,
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       },
       "rotated": false,
       "trimmed": false,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       },
       "sourceSize": {
-        "w": 24,
-        "h": 20
+        "w": 16,
+        "h": 16
       }
     },
-    "mount_walk_2": {
+    "signpost": {
+      "frame": {
+        "x": 176,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      }
+    },
+    "mount_walk_0": {
       "frame": {
         "x": 192,
         "y": 0,
@@ -200,7 +180,7 @@
         "h": 20
       }
     },
-    "mount_walk_3": {
+    "mount_walk_1": {
       "frame": {
         "x": 216,
         "y": 0,
@@ -220,10 +200,50 @@
         "h": 20
       }
     },
-    "mount_idle": {
+    "mount_walk_2": {
       "frame": {
         "x": 0,
-        "y": 28,
+        "y": 48,
+        "w": 24,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 20
+      }
+    },
+    "mount_walk_3": {
+      "frame": {
+        "x": 24,
+        "y": 48,
+        "w": 24,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 20
+      }
+    },
+    "mount_idle": {
+      "frame": {
+        "x": 48,
+        "y": 48,
         "w": 24,
         "h": 20
       },
@@ -242,8 +262,8 @@
     },
     "banner_pole": {
       "frame": {
-        "x": 24,
-        "y": 28,
+        "x": 72,
+        "y": 48,
         "w": 16,
         "h": 24
       },
@@ -262,8 +282,8 @@
     },
     "banner_cloth_0": {
       "frame": {
-        "x": 40,
-        "y": 28,
+        "x": 88,
+        "y": 48,
         "w": 16,
         "h": 24
       },
@@ -282,8 +302,8 @@
     },
     "banner_cloth_1": {
       "frame": {
-        "x": 56,
-        "y": 28,
+        "x": 104,
+        "y": 48,
         "w": 16,
         "h": 24
       },
@@ -302,8 +322,8 @@
     },
     "glow": {
       "frame": {
-        "x": 72,
-        "y": 28,
+        "x": 120,
+        "y": 48,
         "w": 32,
         "h": 32
       },
@@ -322,8 +342,8 @@
     },
     "pin": {
       "frame": {
-        "x": 104,
-        "y": 28,
+        "x": 152,
+        "y": 48,
         "w": 7,
         "h": 7
       },
@@ -342,8 +362,8 @@
     },
     "pin_ring": {
       "frame": {
-        "x": 111,
-        "y": 28,
+        "x": 159,
+        "y": 48,
         "w": 9,
         "h": 9
       },
@@ -386,7 +406,7 @@
     "format": "RGBA8888",
     "size": {
       "w": 240,
-      "h": 60
+      "h": 80
     },
     "scale": "1"
   }

@@ -278,6 +278,156 @@ export function settlement(style) {
   return g;
 }
 
+/**
+ * The fleet hub: one building per pack, bigger than a settlement, with a bare mast at the centre column (x 23-24) up to the
+ * top row. The renderer lights a beacon above the mast, so nothing here encodes a status. `kind` is the pack's `hub`
+ * field; an unknown or missing kind draws the generic hall, so a pack that names none still gets a hub.
+ */
+export const HUB_KINDS = ['guildhouse', 'greathall', 'waystation', 'tower', 'generic'];
+
+export function hub(kind) {
+  switch (kind) {
+    case 'guildhouse': return hubGuildhouse();
+    case 'greathall': return hubGreathall();
+    case 'waystation': return hubWaystation();
+    case 'tower': return hubTower();
+    default: return hubGeneric();
+  }
+}
+
+function mast(g, top, bottom) {
+  g.rect(23, top, 2, bottom - top, 'q');
+  g.rect(23, top, 1, bottom - top, 'R');
+  g.set(23, top, 'a'); g.set(24, top, 'a');
+}
+
+/** A two-storey guild house: stone footing, timber walls, a wide red roof and a clock tower over the double door. */
+function hubGuildhouse() {
+  const g = new Grid(48, 48);
+  g.rect(3, 41, 42, 4, 'q'); g.rect(3, 41, 42, 1, 'r');
+  for (let x = 3; x < 45; x += 4) g.set(x, 43, 'Q');
+  g.rect(5, 24, 38, 17, 't');
+  for (let x = 5; x < 43; x += 6) g.rect(x, 24, 1, 17, 'T');
+  g.rect(5, 32, 38, 1, 'T'); g.rect(5, 40, 38, 1, 'T');
+  // Wide roof with a shaded half and a ridge.
+  for (let y = 14; y < 25; y++) for (let x = 1 + (24 - y); x <= 46 - (24 - y); x++) {
+    if (x < 1 || x > 46) continue;
+    g.set(x, y, (y + (x >> 2)) % 3 === 0 ? 'R' : x < 24 ? 'r' : 'R');
+  }
+  g.rect(8, 13, 32, 1, 'R');
+  // Clock tower.
+  g.rect(18, 6, 12, 12, 't'); g.rect(18, 6, 2, 12, 'T');
+  for (let y = 2; y < 7; y++) for (let x = 24 - (y - 1) * 2; x <= 23 + (y - 1) * 2; x++) g.set(x, y, x < 24 ? 'r' : 'R');
+  g.rect(21, 9, 6, 5, 'w'); g.rect(22, 10, 4, 3, 'p'); g.set(23, 10, 'k'); g.set(23, 11, 'k'); g.set(24, 11, 'k');
+  mast(g, 0, 3);
+  // Double door under an arch, with a banner on each side.
+  g.rect(19, 29, 10, 12, 'e'); g.rect(20, 30, 4, 11, 'k'); g.rect(25, 30, 4, 11, 'k'); g.set(23, 36, 'a'); g.set(25, 36, 'a');
+  g.rect(18, 28, 12, 1, 'a');
+  for (const bx of [14, 32]) { g.rect(bx, 26, 3, 8, 'u'); g.rect(bx, 26, 3, 1, 'a'); g.set(bx + 1, 34, 'u'); g.set(bx, 33, 'o'); g.set(bx + 2, 33, 'o'); }
+  for (const wx of [8, 36]) { g.rect(wx, 29, 4, 5, 'y'); g.rect(wx, 31, 4, 1, 'Y'); g.rect(wx + 1, 29, 1, 5, 'T'); }
+  g.outline('o');
+  return g;
+}
+
+/** A great hall: a long turf roof under crossed gable boards, carved posts, round shields and a rune over the door. */
+function hubGreathall() {
+  const g = new Grid(48, 48);
+  for (let y = 12; y < 27; y++) {
+    const inset = Math.max(0, 18 - y) >> 1;
+    for (let x = 1 + inset; x < 47 - inset; x++) {
+      g.set(x, y, y < 15 && hash(x, y, 31) < 0.65 ? 'w' : y === 26 ? 'K' : hash(x, y, 32) < 0.2 ? 'J' : 'L');
+    }
+  }
+  for (const gx of [3, 44]) for (let i = 0; i < 8; i++) { g.set(gx - i + 3, 4 + i, 'T'); g.set(gx + i - 3, 4 + i, 'T'); }
+  g.rect(20, 7, 8, 6, 'L'); g.rect(20, 7, 8, 1, 'w'); g.rect(22, 8, 4, 4, 'K');
+  mast(g, 0, 8);
+  for (let y = 27; y < 43; y++) for (let x = 4; x < 44; x++) g.set(x, y, x % 4 === 0 ? 'T' : 't');
+  g.rect(4, 42, 40, 1, 'T'); g.rect(4, 27, 40, 1, 'T');
+  // Carved posts and shields.
+  for (const px of [5, 41]) { g.rect(px, 24, 3, 19, 'T'); g.set(px + 1, 22, 'a'); g.rect(px, 23, 3, 1, 'a'); }
+  for (const sx of [12, 17, 31, 36]) {
+    for (let y = 30; y < 37; y++) for (let x = sx - 3; x <= sx + 3; x++) if (Math.hypot(x - sx, y - 33) < 3.4) g.set(x, y, (x + y) % 2 ? 'y' : 'Y');
+    g.set(sx, 33, 'a');
+  }
+  // Door with a lintel and a rune.
+  g.rect(20, 31, 8, 12, 'e'); g.rect(21, 32, 6, 11, 'k'); g.rect(23, 32, 2, 11, 'K');
+  g.rect(19, 29, 10, 2, 'a'); g.set(23, 30, 'T'); g.set(24, 30, 'T'); g.set(23, 29, 'T');
+  g.outline('o');
+  return g;
+}
+
+/** A waystation: a round hill-house with a lit map-room window, signpost arms and a pennant mast. */
+function hubWaystation() {
+  const g = new Grid(48, 48);
+  for (let y = 8; y < 46; y++) for (let x = 0; x < 48; x++) {
+    const dx = (x - 23.5) / 23.5, dy = (y - 46) / 38;
+    if (dx * dx + dy * dy > 1) continue;
+    g.set(x, y, hash(x, y, 41) < 0.12 ? 'J' : y < 13 || hash(x, y, 42) < 0.05 ? 'G' : 'L');
+  }
+  // Round door.
+  for (let y = 28; y < 46; y++) for (let x = 16; x < 32; x++) if (Math.hypot(x - 23.5, y - 37) < 9.4) g.set(x, y, 'p');
+  for (let y = 29; y < 46; y++) for (let x = 17; x < 31; x++) if (Math.hypot(x - 23.5, y - 37.5) < 8) g.set(x, y, 'k');
+  for (let y = 30; y < 46; y++) for (let x = 18; x < 30; x++) if (Math.hypot(x - 23.5, y - 38) < 6.6) g.set(x, y, x === 23 || x === 24 ? 'K' : 'u');
+  g.set(21, 38, 'a'); g.set(26, 38, 'a');
+  // The map-room window: round, with a cross-hatched chart behind it.
+  for (let y = 15; y < 25; y++) for (let x = 18; x < 30; x++) {
+    const d = Math.hypot(x - 23.5, (y - 19.5) * 1.15);
+    if (d < 5.4) g.set(x, y, d < 4.2 ? ((x + y) % 4 === 0 ? 'Y' : 'y') : 'p');
+  }
+  g.set(23, 19, 'k'); g.set(24, 19, 'k'); g.set(23, 20, 'k'); g.set(24, 20, 'k');
+  // Signposts on a post at the left, and a lantern post on the right.
+  g.rect(5, 30, 2, 15, 't'); g.rect(5, 30, 1, 15, 'T');
+  g.rect(1, 31, 9, 3, 't'); g.set(0, 32, 't'); g.rect(2, 36, 8, 3, 'T'); g.set(10, 37, 'T');
+  g.rect(41, 33, 2, 12, 't'); g.rect(40, 30, 4, 4, 'y'); g.rect(40, 30, 4, 1, 'Y');
+  // Chimney-mast with a string of pennants.
+  mast(g, 0, 9);
+  for (let i = 0; i < 4; i++) { g.set(25 + i, 2 + i, i % 2 ? 'a' : 'f'); g.set(21 - i, 2 + i, i % 2 ? 'f' : 'a'); }
+  g.outline('o');
+  return g;
+}
+
+/** A signal tower: a hex plinth, a ribbed steel shaft with lit slits, a dish and a mast. */
+function hubTower() {
+  const g = new Grid(48, 48);
+  g.rect(4, 40, 40, 5, 'q'); g.rect(4, 40, 40, 1, 'R'); g.rect(8, 37, 32, 3, 'r'); g.rect(8, 37, 32, 1, 'R');
+  for (let x = 6; x < 43; x += 5) g.set(x, 42, 'y');
+  // Shaft.
+  for (let y = 14; y < 38; y++) {
+    const w = 5 + ((y - 14) >> 2);
+    for (let x = 24 - w; x < 24 + w; x++) g.set(x, y, x < 24 ? 'r' : 'q');
+    if ((y - 14) % 6 === 5) g.rect(24 - w, y, 2 * w, 1, 'R');
+  }
+  for (const y of [18, 24, 30]) { g.rect(21, y, 6, 2, 'y'); g.rect(21, y + 1, 6, 1, 'Y'); }
+  // Airlock door at the foot.
+  g.rect(20, 29, 8, 8, 'e'); g.rect(23, 29, 2, 8, 'u'); g.rect(20, 28, 8, 1, 'R');
+  // Dish on a bracket, and the mast above.
+  g.rect(22, 12, 4, 3, 'q');
+  for (let y = 7; y < 14; y++) for (let x = 24; x < 44; x++) {
+    const d = Math.hypot((x - 34) / 10, (y - 14) / 7);
+    if (d < 1 && d > 0.62 && y < 13) g.set(x, y, x < 33 ? 'R' : 'r');
+  }
+  g.rect(33, 13, 2, 3, 'q'); g.set(34, 8, 'y');
+  for (const [x, y] of [[8, 25], [9, 24], [10, 23], [11, 22], [12, 21]]) g.set(x, y, 'q');
+  for (const sx of [7, 38]) { g.rect(sx, 32, 4, 5, 'u'); g.rect(sx, 32, 4, 1, 'v'); g.rect(sx, 34, 4, 1, 'W'); }
+  mast(g, 0, 14);
+  g.set(22, 3, 'R'); g.set(25, 3, 'R'); g.set(21, 5, 'R'); g.set(26, 5, 'R');
+  g.outline('o');
+  return g;
+}
+
+/** The generic hall for a pack that names no hub: a plain hall with a hip roof, a door, two windows and a mast. */
+function hubGeneric() {
+  const g = new Grid(48, 48);
+  g.rect(4, 41, 40, 4, 'q'); g.rect(4, 41, 40, 1, 'r');
+  g.rect(6, 25, 36, 16, 'p'); g.rect(6, 25, 2, 16, 'P');
+  for (let y = 14; y < 26; y++) for (let x = 3 + (25 - y); x <= 44 - (25 - y); x++) g.set(x, y, x < 24 ? 'r' : 'q');
+  g.rect(21, 30, 6, 11, 'e'); g.rect(22, 31, 4, 10, 'k');
+  for (const wx of [10, 34]) { g.rect(wx, 29, 4, 5, 'y'); g.rect(wx, 31, 4, 1, 'Y'); }
+  mast(g, 0, 14);
+  g.outline('o');
+  return g;
+}
+
 export function tent(style) {
   if (style.building === 'dome') {
     // A small landing pod: half-sphere shell with a lit hatch.

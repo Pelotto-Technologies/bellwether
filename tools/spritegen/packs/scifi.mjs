@@ -5,6 +5,10 @@ export default {
   name: 'scifi',
   displayName: 'Deep Space',
   description: 'An original sci-fi survey crew working a glass-domed outpost on a violet-mossed alien world.',
+  // Camp scene: `tone` is 'camp' (wood and canvas) or 'outpost' (plating and holograms).
+  camp: { tone: 'outpost', sky: ['#0e1636', '#3c2a70'], glow: '#5ae8ff' },
+  // The fleet hub on the map: guildhouse, greathall, waystation, tower or generic (see themes.md).
+  hub: 'tower',
   fallback: 'generic',
   palette: {
     q: '#1a2438', o: '#0c1020', e: '#0c1020', k: '#5a2638', n: '#f08a9a',

@@ -46,6 +46,25 @@ Parsed by `packages/renderer/src/theme.ts`. Colours are `#rrggbb`.
 | `roles.<role>` | `body`, `accent`, `hat` (`none cap hood helm point`), `prop` (`none staff lantern hammer book`). `roles.generic` is required; missing roles use it. |
 | `art` | Path to `art.json`, relative to the pack. |
 | `sayTtlMs` | How long a speech bubble stays (default 6000). |
+| `sounds` | Optional flavour of the sound cues, see below. |
+
+### sounds
+
+Every field is optional; missing or invalid ones use the default (square, C4, major, 126 bpm).
+The cues are tiny original motifs written as scale degrees, played in this key and tempo.
+
+```json
+"sounds": { "wave": "triangle", "root": "G3", "scale": "dorian", "tempo": 100 }
+```
+
+| Key | Meaning |
+|---|---|
+| `wave` | Oscillator: `square`, `triangle`, `sawtooth` or `sine`. |
+| `root` | Tonic: a note name (`C4`, `F#3`, `Bb4`; middle C is C4) or a MIDI number, 36 to 84. |
+| `scale` | `major`, `minor`, `dorian`, `lydian`, `pentatonic`, `minorPentatonic` or `wholeTone`. |
+| `tempo` | Beats per minute, 80 to 200 (clamped); keeps the all-done fanfare under 1.5 seconds. |
+
+Give your pack a combination none of the public packs use, so it is recognisable by ear.
 
 ## art.json
 
@@ -56,7 +75,8 @@ pack folder.
 - `name`, `displayName`, `description`, `license`.
 - `character`: `size` `{w,h}` (24x32), `facing` (`right`), `anchor` `{x,y}` as
   fractions (bottom-centre of the feet), `frames` (must include `walk_N`, `idle_N`,
-  `wave_N`, `talk_N`, `raise_N`, `blink_N`), `fps` per animation.
+  `wave_N`, `talk_N`, `raise_N`, `blink_N`; the camp scene also plays `work_0..1`, a
+  hammering pose, and shows `talk` instead when a sheet has none), `fps` per animation.
 - `roles.<role>`: `sheet` (a sprite sheet JSON), `displayName`, `cloak` (`#rrggbb`),
   `light` (tip tint). `fallback` names the role used for roles you leave out
   (default `generic`, which must exist).
@@ -65,6 +85,7 @@ pack folder.
   horizontally).
 - `ui`: `sheet`, `bubble` and `nameplate` (`{frame, slice[, tail]}`, 9-slice margin in
   pixels), `minimapFrame`, `statusIcons` (frame per status, default `status_<status>`).
+- `map.hub`: optional frame in `map/props.json` for the fleet hub (the public packs use a guild house, great hall, map room or signal tower; the spritegen pack field `hub` picks one of `guildhouse`, `greathall`, `waystation`, `tower`, `generic`). A pack without it gets a generic hub.
 - `map`: `tileset`, `props`, frame names for `settlement`, `camp`, `campfire`,
   `signpost`, `mount`, `banner`, `glow`, `pin`, and `minimap` colours. These are used by map mode
   (`packages/renderer/src/map/` and `src/pixi/map.ts`); `art.ts` does not validate
@@ -90,6 +111,41 @@ on grass) and `autotile`. Paths and water are 16-tile autotiles: N=1, E=2, S=4, 
 neighbours with the same terrain, giving `path_<mask>` and `water_<mask>` (alternate
 with `water_<mask>_b` to shimmer). `map/props.json` is a normal spritesheet with the
 settlement, camp, campfire frames, signpost, mount, banner pieces, glow and pins.
+
+## Camp scene
+
+The camp scene (click a camp, then **Enter camp**) draws one party at its stations around a
+fire. It needs a second atlas, `map/camp.json` + `map/camp.png` (a normal spritesheet, found
+the same way as `props`), and an optional `camp` block in `art.json`:
+
+```json
+"camp": { "atlas": "map/camp.json", "tone": "camp", "sky": ["#8fd0f0", "#e4f4fa"], "glow": "#ffa84a" }
+```
+
+| Key | Meaning |
+|---|---|
+| `tone` | `camp` (wood and canvas) or `outpost` (plating and holograms). The renderer uses it for the ground (a trodden clearing or a plated bay), the sky (clouds and sun, or stars and a moon) and the light. Default `camp`. |
+| `sky` | Two `#rrggbb` colours: top of the sky, then the horizon. |
+| `glow` | Colour of the fire's light (also used for its sparks). |
+| `stations` | Informational: the activity stations the atlas draws. |
+
+A pack with no `camp.*` files borrows the neutral pack's camp art (and look), so it still
+renders. The frames the renderer asks for by name (all anchored bottom-centre unless noted):
+
+| Frames | What |
+|---|---|
+| `floor_0..3` | 16x16 clearing tiles. |
+| `fire_0..3` | The fire (or energy core), about 44x40, with the ground ring at the bottom. |
+| `tent` | A tent or pod, about 44x34. |
+| `tall_0..1`, `low_0..1` | Scenery: trees or pylons, bushes or rocks or crates. |
+| `st_edit_0..3`, `st_read_0..3`, `st_shell_0..3`, `st_search_0..3`, `st_delegate_0..3`, `st_think_0..3` | One animated prop per activity (anvil, lectern, cauldron, lookout, map table, easel in the camp packs), 32x32 with the ground at row 31. The member stands beside it. |
+| `st_blocked_0..1` | A signal lamp, unlit then lit. |
+| `seat` | A log or bench drawn over the legs of a sitting member (done, idle, unknown). |
+| `fx_alert_0..1`, `fx_question`, `fx_zzz_0..2`, `fx_sweat` | Marks beside and above the head. |
+| `crate_0..1`, `cart`, `cart_loaded` | Git: crates for uncommitted files (up to nine), a loaded cart while commits are unpushed. |
+
+Which activity a member plays is decided in the core from its status and tool name
+(`packages/renderer/src/map/activity.ts`), so a pack only supplies art.
 
 ## UI
 

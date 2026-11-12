@@ -24,5 +24,6 @@
     "generic": { "body": "#8a98b4", "accent": "#5ae8ff", "hat": "none", "prop": "none" }
   },
   "art": "art.json",
-  "sayTtlMs": 6000
+  "sayTtlMs": 6000,
+  "sounds": { "wave": "sine", "root": "A4", "scale": "wholeTone", "tempo": 160 }
 }

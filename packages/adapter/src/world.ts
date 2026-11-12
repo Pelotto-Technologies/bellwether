@@ -58,6 +58,9 @@ export function applyDelta(world: World, delta: Delta): World {
       const members = { ...party.members, [member.paneId]: { ...member, say: delta.text } };
       return { ...world, parties: { ...world.parties, [party.id]: { ...party, members } } };
     }
+    case 'moment':
+      // A moment is an event, not state: the world does not change.
+      return world;
   }
 }
 

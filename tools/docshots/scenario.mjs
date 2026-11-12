@@ -117,4 +117,24 @@ export function crowdFeed(count = 32) {
   return [{ t: T0, kind: 'snapshot', world }, { t: T0 + 600_000, kind: 'snapshot', world }];
 }
 
+/** One worktree with a busy crew, for the camp scene: every member at a different station, with vitals and git state. */
+export function campFeed() {
+  const vit = (context, quota = 64) => ({ vitals: { context, quota, at: T0 }, model: 'Opus 5.5', effort: 'high' });
+  const members = [
+    member('c:p1', 'coordinator', 'claude', 'working', { tool: 'Task', title: 'Handing out the next tasks', ...vit(71) }),
+    member('c:p2', 'architect', 'claude', 'done', { title: 'Module split drafted', ...vit(58) }),
+    member('c:p3', 'implementer', 'claude', 'working', { tool: 'Edit', title: 'Wiring up the login handler', ...vit(46) }),
+    member('c:p4', 'implementer', 'codex', 'working', { tool: 'Bash', title: 'Running the test suite' }),
+    member('c:p5', 'reviewer', 'copilot', 'blocked', { say: 'Which token lifetime do we want?' }),
+    member('c:p6', 'researcher', 'claude', 'working', { tool: 'WebSearch', title: 'Comparing session libraries', ...vit(13, 40) }),
+    member('c:p7', 'writer', 'claude', 'idle', { title: 'Docs are up to date', ...vit(88) }),
+  ];
+  const p = party('c', 'atlas', '/src/atlas', 'auth', true, members);
+  p.git = { dirty: 7, ahead: 2, noRemote: false };
+  const world = { machine: 'local', parties: { c: p } };
+  const d = [{ t: T0, kind: 'snapshot', world }];
+  for (let i = 0; i < 60; i++) d.push({ t: T0 + 300 + i * 4000, kind: 'say', partyId: 'c', paneId: 'c:p5', text: 'Which token lifetime do we want?' });
+  return d;
+}
+
 export const toJsonl = (deltas) => deltas.map((x) => JSON.stringify(x)).join('\n') + '\n';

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { type DisplayInfo, mapWindowBounds, pickDisplay, type Rect, spanLayout, windowBounds } from './bounds.js';
 import { adapterArgs } from './adapter-args.js';
-import { configPath, effectiveScale, loadConfig, saveConfig, validScale, type ShellConfig } from './config.js';
+import { configPath, effectiveScale, effectiveSounds, loadConfig, saveConfig, validScale, type ShellConfig } from './config.js';
 import { adapterPaths, assetsDir, missingBuilds } from './paths.js';
 import { applyAction, buildMenuModel, type MenuAction, type MenuItem } from './tray-menu.js';
 import { errorPage, waitForReady } from './ready.js';
@@ -21,6 +21,8 @@ let adapter: ChildProcess | undefined;
 let sessions: string[] = [];
 /** Scale served by the adapter from bellwether.toml; the window height follows it unless the tray overrides. */
 let servedScale: number | undefined;
+/** `sounds` served from bellwether.toml, when set; the tray's Sounds box starts from it. */
+let servedSounds: boolean | undefined;
 const paths = adapterPaths();
 
 function displays(): DisplayInfo[] {
@@ -76,9 +78,12 @@ async function startAdapter(): Promise<void> {
 async function refreshServedScale(): Promise<void> {
   try {
     const res = await fetch(new URL('config.json', cfg.url).toString(), { signal: AbortSignal.timeout(1000) });
-    servedScale = res.ok ? validScale(((await res.json()) as { scale?: unknown }).scale) : undefined;
+    const served = res.ok ? ((await res.json()) as { scale?: unknown; sounds?: unknown }) : {};
+    servedScale = validScale(served.scale);
+    servedSounds = typeof served.sounds === 'boolean' ? served.sounds : undefined;
   } catch {
     servedScale = undefined;
+    servedSounds = undefined;
   }
 }
 
@@ -152,7 +157,7 @@ function placeWindows(reload = false): void {
     // Map mode needs clicks; strip mode lets them fall through to whatever is underneath.
     if (cfg.mode === 'map') w.setIgnoreMouseEvents(false);
     else w.setIgnoreMouseEvents(true, { forward: true });
-    const url = rendererUrl(cfg, p.slice);
+    const url = rendererUrl({ ...cfg, sounds: effectiveSounds(cfg, servedSounds) }, p.slice);
     if (reload || loaded.get(w) !== url) {
       loaded.set(w, url);
       void w.loadURL(url);
@@ -176,7 +181,8 @@ function createWindow(): BrowserWindow {
     focusable: false,
     alwaysOnTop: true,
     backgroundColor: '#00000000',
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    // Sound cues start without a click: the overlay is click-through, so no gesture ever arrives.
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, autoplayPolicy: 'no-user-gesture-required' },
   });
   // The page switches mode by navigating to `?mode=...` (the `m` key, the on-screen exit button).
   // Turn that into a real mode change so the window is resized too, instead of loading it in place.
@@ -212,6 +218,7 @@ function toElectron(items: MenuItem[]): MenuItemConstructorOptions[] {
       enabled: i.enabled ?? true,
       ...(i.checked !== undefined ? { type: 'checkbox' as const, checked: i.checked } : {}),
       ...(act ? { click: () => void dispatch(act) } : {}),
+      ...(i.submenu ? { submenu: toElectron(i.submenu) } : {}),
     };
   });
 }
@@ -232,7 +239,7 @@ function raiseWindow(): void {
 }
 
 function rebuildMenu(): void {
-  const menu = Menu.buildFromTemplate(toElectron(buildMenuModel(cfg, displays(), sessions)));
+  const menu = Menu.buildFromTemplate(toElectron(buildMenuModel({ ...cfg, sounds: effectiveSounds(cfg, servedSounds) }, displays(), sessions)));
   menu.on('menu-will-close', () => setTimeout(raiseWindow, 150));
   tray?.setContextMenu(menu);
 }

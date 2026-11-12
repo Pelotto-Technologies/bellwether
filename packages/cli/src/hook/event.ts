@@ -18,7 +18,7 @@ export const SUPPORTED_HOOK_EVENTS = [
 export type SupportedHookEvent = (typeof SUPPORTED_HOOK_EVENTS)[number];
 
 /** Kept in step with packages/adapter/src/hooks/event.ts (the CLI does not depend on the adapter). */
-export type EventKind = 'start' | 'prompt' | 'tool' | 'tool_done' | 'wait' | 'stop' | 'end' | 'sub_start' | 'sub_stop';
+export type EventKind = 'start' | 'prompt' | 'tool' | 'tool_done' | 'wait' | 'stop' | 'end' | 'sub_start' | 'sub_stop' | 'vitals';
 
 export interface NormalizedEvent {
   v: 1;
@@ -32,6 +32,20 @@ export interface NormalizedEvent {
   tool?: string;
   detail?: string;
   role?: string;
+  /** What to call this session (or subagent, with `sub`). At most 40 characters. */
+  label?: string;
+  /** `fleet`: the master of a fleet of projects (with role `orchestrator`). */
+  scope?: 'fleet';
+  /** `prompt`, `tool` and `wait` only: the session this line is a message to. */
+  to?: string;
+  /** `vitals` only: percent of the context window remaining. */
+  ctx?: number;
+  /** `vitals` only: percent of the 5-hour usage quota remaining. */
+  quota?: number;
+  model?: string;
+  effort?: string;
+  /** `vitals` only: the session's human name. */
+  name?: string;
 }
 
 export const EVENT_FOR_HOOK: Record<SupportedHookEvent, EventKind> = {
@@ -61,7 +75,29 @@ export const COPILOT_HOOK_EVENTS: Record<string, SupportedHookEvent> = {
   sessionEnd: 'SessionEnd',
 };
 
-export const EVENT_KINDS: readonly EventKind[] = ['start', 'prompt', 'tool', 'tool_done', 'wait', 'stop', 'end', 'sub_start', 'sub_stop'];
+export const EVENT_KINDS: readonly EventKind[] = ['start', 'prompt', 'tool', 'tool_done', 'wait', 'stop', 'end', 'sub_start', 'sub_stop', 'vitals'];
+
+export const MAX_MODEL = 40;
+export const MAX_EFFORT = 16;
+export const MAX_QUEST = 80;
+export const MAX_NAME = 40;
+
+/** Kept in step with packages/adapter/src/sanitize.ts: controls, line separators and bidi characters are dropped. */
+const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
+/** One line of display text, capped at `max` characters. Undefined when nothing is left. */
+export function cleanText(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const out = value.replace(/[\t\n\r\u2028\u2029]/g, ' ').replace(UNSAFE, '').replace(/\s+/g, ' ').trim();
+  return out ? Array.from(out).slice(0, max).join('').trim() : undefined;
+}
+
+/** A percentage 0-100, rounded and clamped; numbers and numeric strings only. */
+export function cleanPercent(value: unknown): number | undefined {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return undefined;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
 
 export const MAX_DETAIL = 72;
 export const ROTATE_BYTES = 5 * 1024 * 1024;
@@ -147,9 +183,31 @@ export function passThrough(p: Obj, now: number): NormalizedEvent | undefined {
     const v = str(p[k]);
     if (v) out[k] = v;
   }
+  const label = cleanText(p.label, MAX_NAME);
+  if (label) out.label = label;
+  applyFleet(out, p.scope, p.to);
   const d = str(p.detail);
   if (d) out.detail = shorten(d);
+  if (out.ev === 'vitals') applyVitals(out, p);
   return out;
+}
+
+/** `scope` counts only as `fleet`; `to` only on the kinds that can carry a message. */
+function applyFleet(out: NormalizedEvent, scope: unknown, to: unknown): void {
+  if (typeof scope === 'string' && scope.trim().toLowerCase() === 'fleet') out.scope = 'fleet';
+  const target = str(to);
+  if (target && (out.ev === 'prompt' || out.ev === 'tool' || out.ev === 'wait')) out.to = target.slice(0, 200);
+}
+
+function applyVitals(out: NormalizedEvent, from: Obj): void {
+  for (const k of ['ctx', 'quota'] as const) {
+    const n = typeof from[k] === 'number' ? cleanPercent(from[k]) : undefined;
+    if (n !== undefined) out[k] = n;
+  }
+  for (const [k, max] of [['model', MAX_MODEL], ['effort', MAX_EFFORT], ['name', MAX_QUEST]] as const) {
+    const v = cleanText(from[k], max);
+    if (v) out[k] = v;
+  }
 }
 
 /** Map one hook payload to its normalized line, or undefined for events and payloads we do not track. */
@@ -226,9 +284,24 @@ export function buildEmitEvent(flags: EmitArgs, env: Record<string, string | und
     const v = str(flags[flag]);
     if (v) out[key] = v;
   }
+  const label = cleanText(flags.label, MAX_NAME);
+  if (label) out.label = label;
+  applyFleet(out, flags.scope, flags.to);
   const detail = str(flags.detail);
   if (detail) out.detail = shorten(detail);
   if ((ev === 'sub_start' || ev === 'sub_stop') && !out.sub) throw new Error(`--sub is required for ${ev}`);
+  if (ev === 'vitals') {
+    for (const k of ['ctx', 'quota'] as const) {
+      if (flags[k] === undefined) continue;
+      const n = cleanPercent(flags[k]);
+      if (n === undefined) throw new Error(`--${k} must be a number from 0 to 100`);
+      out[k] = n;
+    }
+    applyVitals(out, { model: flags.model, effort: flags.effort, name: flags.name });
+    if (out.ctx === undefined && out.quota === undefined && !out.model && !out.effort && !out.name) {
+      throw new Error('vitals needs at least one of --ctx, --quota, --model, --effort, --name');
+    }
+  }
   return out;
 }
 

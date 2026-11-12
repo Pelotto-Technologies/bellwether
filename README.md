@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Your AI coding agents, as a party of tiny pixel characters.</b><br>
-  A desktop and stream overlay for <a href="https://herdr.dev">Herdr</a>.
+  A desktop and stream overlay for Claude Code, GitHub Copilot CLI and anything that can run a command.
 </p>
 
 <p align="center">
@@ -13,16 +13,21 @@
 
 ![Agents arriving, handing off work and getting unblocked on the strip](docs/images/strip-story.gif)
 
-You run a handful of agents in Herdr: an orchestrator, a few implementers in their own
-worktrees, a reviewer. Bellwether turns each of them into a little character walking along
-the bottom of your screen, grouped into parties by workspace. At a glance you can see who is
-working, who is done, who is stuck waiting on you, and who just told whom to do what.
+Run a few coding agents at once and it gets hard to tell which one is working, which one
+finished and which one is stuck waiting on you. Bellwether turns each agent session into a
+little character walking along the bottom of your screen, grouped into parties by working
+directory. At a glance you can see who is working, who is done, and who is blocked.
 
-It works with Claude Code, GitHub Copilot CLI and anything else Herdr recognizes, and it
-comes in four art styles.
+It works with Claude Code and GitHub Copilot CLI through their hooks, and with anything else
+that can run a command (`bellwether emit`). No other software is needed. It comes in four art
+styles.
+
+[Herdr](https://herdr.dev) is an optional power-up. When it is running, Bellwether also reads
+Herdr's workspaces, so you can click a character to focus its pane, prompt agents from the
+overlay, and see agents' messages to each other as chat bubbles.
 
 - [Quickstart](#quickstart)
-- [A tour](#a-tour): reading the strip, sizes, map mode, agents talking, fellowships
+- [A tour](#a-tour): reading the strip, sizes, map mode, camp, agents talking, fellowships
 - [Skins](#skins): Workshop Crew, Aesir, Wayfarers, Deep Space
 - [Giving agents a role](#giving-agents-a-role)
 - [Where to show it](#where-to-show-it): desktop, OBS, browser
@@ -30,37 +35,48 @@ comes in four art styles.
 
 ## Quickstart
 
-You need Node 20+ and [Herdr](https://herdr.dev) running with at least one agent.
+You need Node 20+ and Claude Code or GitHub Copilot CLI. No Herdr required.
 
 ```sh
-npm install -g @pelotto-tech/bellwether
+npm i -g @pelotto-tech/bellwether
 
-bellwether install     # role tags and chat hooks for Claude Code and Copilot CLI
-bellwether overlay     # the desktop overlay, with a tray menu
+bellwether install --events   # activity hooks for Claude Code and Copilot CLI
+bellwether overlay            # the desktop overlay, with a tray menu
 ```
 
-That is the whole loop: start agents in Herdr and a party appears for each workspace. The
-first `bellwether overlay` downloads Electron into `~/.bellwether/electron` (about 100 MB,
-once). Prefer a browser tab or OBS? `bellwether run` serves the same overlay at
-<http://127.0.0.1:7341/>.
+Start (or restart) an agent session and a character appears. The first `bellwether overlay`
+downloads Electron into `~/.bellwether/electron` (about 100 MB, once). Prefer a browser tab
+or OBS? `bellwether run` serves the same overlay at <http://127.0.0.1:7341/>.
+
+Letting a coding agent do the setup? Point it at [`RECIPE.md`](RECIPE.md).
 
 Want to look before connecting anything? From a checkout, `pnpm install && pnpm mock` serves
 fake agents on the same port.
+
+### Using Herdr?
+
+Run `bellwether install` (or `install --events`, which includes it) to add role tags and
+chat hooks for your agents, then `bellwether overlay` as before. At startup Bellwether looks
+for a running Herdr and uses it when it finds one; otherwise it reads the agent events
+file. To force one, pass `--live` or `--hooks`, or set `source` in `bellwether.toml`
+(see [Configuration](#configuration)). The two are not merged: with Herdr running you see
+Herdr's agents, not the hooks-only sessions.
 
 Already installed? After upgrading, run `bellwether install` again so your agents get the
 newest hooks (chat bubbles need the one added in 0.1.11).
 
 ## Without Herdr
 
-Herdr is optional. Bellwether can draw your agents straight from their own hooks: Claude Code
-(CLI and local Code sessions in the desktop app, subagents included), GitHub Copilot CLI, and
-any other tool through a small event format. Each session is an agent, each working directory
-a party, and subagents show up as extra agents under their session while they run.
+Bellwether draws your agents straight from their own hooks: Claude Code (CLI and local Code
+sessions in the desktop app, subagents included), GitHub Copilot CLI, and any other tool
+through a small event format. Each session is an agent, each working directory a party, and
+subagents show up as extra agents under their session while they run.
 
 ```sh
 npm i -g @pelotto-tech/bellwether@latest
 bellwether install --events      # adds activity hooks to Claude Code and Copilot CLI
-bellwether overlay --hooks       # or source = "hooks" in bellwether.toml
+bellwether install --statusline  # optional, Claude Code: context and quota bars, model, quest (see Vitals)
+bellwether overlay               # uses the events file when Herdr is not running
 ```
 
 Prefer a Claude Code plugin to editing settings? Skip `--events` and use:
@@ -89,7 +105,7 @@ Or append JSON lines yourself. The format is in [`docs/EVENTS.md`](docs/EVENTS.m
 
 Event lines hold a tool name and file (never prompt text) in `~/.bellwether/events.jsonl`. They
 cover sessions on this machine only; cloud sessions are not visible, and clicking an agent to
-focus it or prompt it still needs Herdr. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
+focus it or prompt it needs Herdr. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
 
 ## A tour
 
@@ -109,6 +125,25 @@ focus it or prompt it still needs Herdr. Details in [`plugins/bellwether`](plugi
   carrying a banner striped in every worktree's colour (`★ atlas` above).
 - **Speech bubbles** show what agents say, including messages one agent sends another
   (`@implementer Add ranking tests`).
+
+### Git at a glance
+
+With git turned on, a nameplate shows small counters at its right end: `±3` files with
+uncommitted changes (amber), `↑2` commits not pushed (green), and a red `∅` when the repository
+has no remote at all. A clean, pushed repository shows nothing. The counters are hidden in
+`minimal` mode and when the label would not fit beside them.
+
+It is **off by default**. Turn it on with `[git] enabled = true` in `bellwether.toml`, `--git`,
+or `BELLWETHER_GIT=1`. Bellwether then runs `git status` and `git remote` in each party's
+folder (the worktree checkout or the agent's working directory), at most once every 30 seconds
+per folder and shortly after an agent finishes. Remote machines and parties without a local
+folder are never probed.
+
+> **Trust warning.** Git can run programs named in a repository's own `.git/config` (filters,
+> textconv, hooks of a few kinds). Bellwether passes `-c core.fsmonitor=false`,
+> `-c safe.bareRepository=explicit` and `--no-optional-locks` and never uses a shell, but it
+> cannot rule out every configured helper. Only enable this when you trust the repos your agents
+> work in.
 
 New agents and worktrees arrive with a short spawn animation (skipped when your OS asks for
 reduced motion). Double-click a member in a browser tab to jump Herdr to that pane.
@@ -154,8 +189,9 @@ with a glow in its status colour, and roads join it all up.
 
 Click a glow, or an orchestrator, to zoom in. A panel lists every member with role, agent,
 status and latest line, and each member has a **close** button that closes its pane in
-Herdr after a confirm. Esc, the ✕ or a click on empty ground zooms back out, and the
-**Exit map** button returns to the strip.
+Herdr after a confirm. The panel's **Enter camp** button (or Enter, or a double-click on the
+camp) goes inside it, see [Camp](#camp). Esc, the ✕ or a click on empty ground zooms back out,
+and the **Exit map** button returns to the strip.
 
 ![Zoomed into a settlement with the detail panel open](docs/images/map-detail.png)
 
@@ -170,8 +206,65 @@ The strip itself always floats on top and lets clicks through.
 Orchestrators stand at their repo's settlement and **ride a mount** out to each new
 worktree they spawn, with a trail back home. Settlements gain a building for every four
 agents and camps gain a tent for every two members, with a small pop as each goes up.
+Everyone else mostly stays put at their camp: a small shuffle every few seconds, and they
+only walk when it means something (a message to a teammate, a new worktree to ride out to).
 
 ![An orchestrator riding out as new worktrees arrive](docs/images/map-story.gif)
+
+### Fleet
+
+If one master pane drives several projects (a runner such as Flock, or your own script),
+tag it `role=orchestrator` with `scope=fleet` and it stands at a **hub** in the middle of
+the map, with roads to every settlement. Each settlement flies a pennant in its worst
+status, and the hub's beacon shows the worst across the fleet next to the master's own
+status. Click the hub for a panel with the master and one line per project (no camp to
+enter). A message between parties, or to the master, is shown as a short **journey** along
+the roads: the speaker walks over, the bubble appears on arrival, then they walk home.
+Toasts then also name the settlement. In strip mode the master walks at the front under
+its own violet banner. Without the tag nothing changes: the map is drawn exactly as before.
+See [Fleet: one master for many projects](docs/runners.md#fleet-one-master-for-many-projects).
+
+![A fleet master at the hub with roads to three projects](docs/images/fleet-map.png)
+
+### Camp
+
+Zoom into a worktree and **Enter camp** (or press Enter, or double-click the camp) to see its
+party at work, like a pixel camp screen: a campfire in the middle, a tent or two, and every
+member at its own station. Esc or **Back to map** returns to the zoomed map, and a second Esc
+zooms out.
+
+![Inside a camp: members at their stations, and the party window](docs/images/map-camp.png)
+
+What a member does follows what its agent reports. Where it reports the running tool (the
+hooks source does today), the member works at the matching station; without a tool name it
+falls back on status:
+
+| Member is | Station and animation |
+|---|---|
+| using an editing tool (Edit, Write, apply_patch, ...) | hammering at an anvil, sparks flying |
+| reading or searching files (Read, Grep, Glob, ...) | reading a book on a lectern, turning pages |
+| running a shell command (Bash, PowerShell, ...) | tinkering at a bubbling cauldron |
+| on the web (WebSearch, WebFetch) | scouting with a spyglass at a lookout post |
+| delegating (Task, Agent) | giving orders at a map table |
+| working with no tool, or an unknown one | pacing in front of an easel |
+| blocked | hand raised, a flashing `!` and a signal lamp |
+| done | resting on a log (and waving now and then) |
+| idle | dozing on a log, with rising z's |
+| unknown | sitting, with a question mark |
+
+An agent running low on context (under 20%) droops and sweats at its station. If the party's
+git state is known, the camp shows it: a crate for every few uncommitted files (up to nine)
+and a loaded handcart while there are unpushed commits. Nothing is drawn without git state.
+Speech bubbles appear over the speaker.
+
+The window beside the scene is the party breakdown: branch, quest and party status, git state,
+and one row per member with a portrait, role, agent, model and effort, HP and SP bars (the
+same vitals as the map panel, hidden with `v`), what it is doing, its latest line and the
+**close** button. Double-click a row to focus that pane in Herdr.
+
+Every skin brings its own camp: wood and canvas for Workshop Crew, Aesir and Wayfarers, an
+outpost bay of plating, holo-lecterns and pods for Deep Space. A skin without camp art
+borrows Workshop Crew's.
 
 ### Agents talking to each other
 
@@ -184,6 +277,81 @@ listener. Finished hand-offs between teammates are inferred too.
 
 Too chatty? Hide bubbles from the tray menu, with `bubbles = false`, `?bubbles=0`, or by
 pressing `b` in the page.
+
+### Sounds and alerts
+
+Both are driven by the same events: an agent finishes, an agent starts waiting on you, a new
+party arrives, one agent messages another, and everyone is done.
+
+- **Sounds** are short chiptune cues, synthesized in the page with WebAudio (no audio files,
+  no samples). Each skin pack has its own waveform, key and tempo (`sounds` in `theme.json`).
+  `done` is a bright four-note climb, `blocked` two pings and a drop, `spawn` a soft hello, a
+  message a single very quiet blip, and a fanfare under 1.5 seconds when every agent is done.
+  Connecting or reconnecting never plays a cue per agent, a status that flaps back and forth
+  is announced once, and at most three cues play in any second. They are **on in the desktop
+  overlay** at volume 0.3 and **off in a plain browser tab or OBS source** (a tab left open
+  should not make noise); turn them on with `sounds = true`, `?sounds=1`, the `s` key or the
+  tray's **Sounds** box. A browser tab needs one click or key press before it may play sound.
+  In OBS, tick "Control audio via OBS" on the browser source to capture it.
+- **Alerts** are stream-style banners: a pixel-framed toast with the member's face that slides
+  in, holds about four seconds, slides out, one at a time (`reviewer finished · auth-refresh ·
+  12m`, `implementer needs you · billing-export`, `New party: search-index`, `All quests
+  complete`). They show role, party label and status only, never prompt or message text, and
+  fade instead of sliding when your OS asks for reduced motion. They are **off by default**.
+  Set `alerts = "top-right"` (or `top-left`, `top-center`), `?alerts=top-right`, press `a`, or
+  use the tray's **Alerts** submenu. The desktop strip window is a thin bar with no room for a
+  banner, so alerts apply to the map window, a browser tab, and OBS; in the strip, only an
+  explicit `?alerts=` URL turns them on. For OBS, use a source of its own: `?mode=alerts` is a
+  transparent page with nothing but toasts (see the [OBS guide](docs/obs.md)).
+
+### Vitals
+
+When an agent reports them, each character gets two thin bars on the ground under its feet:
+**HP** is the percent of its context window left, **stamina** is the percent of the 5-hour
+usage quota left. Below 20% HP the bar turns red and the whole group walks slower. The party
+nameplate adds the agent session's name as its quest (`atlas · auth — Fix the login flow`)
+when every member that has one shares it, and the map's detail panel lists each member's
+model, effort, both bars with their percentages, and quest.
+
+Only Claude Code provides this data today, through its status line, and only the fields it
+sends: no quota bar without a Claude.ai subscription, no effort on models that lack it. Run
+`bellwether install --statusline` to turn it on. If you already have a status line,
+Bellwether wraps it and prints its output unchanged; `bellwether uninstall` puts it back.
+Other tools can report the same numbers with `bellwether emit --ev vitals` (see
+[the event format](docs/EVENTS.md)). Nothing is estimated: an agent that does not report a
+number gets no bar for it. Icon-only labels hide vitals, as do the tray menu's **Vitals**
+checkbox, `vitals = false`, `?vitals=0`, and the `v` key in the page.
+
+### Levels and quest recap
+
+A little RPG progression, on by default, so finishing work feels good. Every role has a level
+(every implementer shares the implementer level, every reviewer the reviewer level), shown as
+`Lv 3` with a thin XP bar in the map's detail panel and the camp's party window. XP comes from:
+
+- **20 XP** for each finished task (a working-to-done transition after at least 5 seconds of work),
+- **2 XP** for each minute spent working,
+- **5 XP** when a blocked agent gets unblocked within two minutes.
+
+The curve gets steeper: level 2 takes 40 XP, level 3 100, level 4 180, and each level needs
+20 XP more than the one before. When a role levels up, a ▲ and sparkles float over the agent
+with the words LEVEL UP (still, without sparkles, if you prefer reduced motion), and a rising
+chime plays if sounds are on.
+
+When a party that was working has been done (or idle) for ten seconds, **Quest complete**
+opens a pixel results window with the time, who took part, tasks finished, time spent waiting
+on you, tools used by kind, XP earned and any levels gained. It closes by itself after about
+twelve seconds, or on a click or Esc. It shows in the map and camp windows and in browser or
+OBS pages; the thin desktop strip gets a one-line banner instead (when alerts are on). Turn the
+card off with the tray's **Quest recap** checkbox, `recap = false`, or `?recap=0`.
+
+Where it lives: `~/.bellwether/stats.json` (`BELLWETHER_STATS=<path>` or `[stats] file` moves it).
+Only counters are stored: XP, finished tasks, time working and blocked, tool counts by kind and
+messages sent, per role, plus lifetime totals. Never prompts, speech, repository, branch or
+party names. The file is written privately (mode 0600), at most every 30 seconds and when the
+adapter stops, and a missing or damaged file just starts you at level 1. Turn all of it off with
+`[stats] enabled = false`, `--no-stats` or `BELLWETHER_STATS=0`; no levels, no recap, no file.
+The mock shows made-up levels and a scripted quest in its first half minute and never writes the
+file; replays do not either.
 
 ### Fellowships: orchestrators and worktrees
 
@@ -238,6 +406,8 @@ See [writing a skin pack](docs/themes.md).
 
 ## Giving agents a role
 
+Driving Bellwether from a runner or orchestration framework? See [docs/runners.md](docs/runners.md).
+
 Roles decide which character a pane gets: `orchestrator`, `coordinator`, `architect`,
 `implementer`, `reviewer`, `researcher`, `writer`, `ops`, or `generic` (the default). They
 are checked in this order:
@@ -284,7 +454,7 @@ just create the workspace and tag pane 1.
 | A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
 The desktop overlay's **tray menu** has everything in one place: switch strip and map,
-Size, Labels, Chat bubbles, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
+Size, Labels, Chat bubbles, Sounds, Alerts (map window), Vitals, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
 remembered between runs.
 
 ### Keyboard
@@ -294,7 +464,14 @@ remembered between runs.
 | Ctrl+Alt+M (Cmd+Alt+M) | anywhere, desktop overlay | toggle strip and map |
 | `m` | page | toggle strip and map |
 | `b` | page | show or hide chat bubbles |
+| `v` | page | show or hide vitals (bars, model, quest) |
+| `s` | page | mute or unmute sounds |
+| `a` | page | turn alert banners on (top right) or off |
 | Esc | map | zoom back out |
+| Enter | map, zoomed on a camp | enter the camp |
+| double-click a camp | map | enter the camp |
+| Esc, or the Back button | camp | back to the map |
+| double-click a row | camp window | focus that pane in Herdr |
 | double-click a member | strip, browser | focus that pane in Herdr |
 
 ## Configuration
@@ -302,32 +479,56 @@ remembered between runs.
 Put a `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
-source = "live"          # "live" for real Herdr, "hooks" for agent events without Herdr, "mock" for fake agents
+source = "auto"          # auto (default for run and overlay): Herdr if it answers at startup, else agent events
+                         # live: Herdr only | hooks: agent events only, no Herdr | mock: fake agents
 pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
 scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
 bubbles = true           # false hides chat bubbles
+vitals = true            # false hides context/quota bars, model and quest
+recap = true             # false hides the quest recap card
+sounds = true            # chiptune cues; unset: on in the desktop overlay, off in a browser or OBS
+volume = 0.3             # sound volume, 0 to 1
+alerts = "top-right"     # banners: off (default) | top-left | top-right | top-center
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
 sessions = "all"         # or ["default", "overlay-dev"]
 # socket = "..."         # explicit socket or pipe path
 
+[git]
+# enabled = true         # opt in: show uncommitted/unpushed counts per party (trust your repos, see "Git at a glance")
+# interval = 30          # seconds between probes of one folder (5 to 3600)
+
+[stats]
+# enabled = false        # no XP, levels or quest recap (default: on; only counters are stored)
+# file = "..."           # default ~/.bellwether/stats.json (or BELLWETHER_STATS=<path>, =0 to disable)
+
 [hooks]
 # file = "..."           # events file for source = "hooks" (default ~/.bellwether/events.jsonl)
 ```
 
 Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
-`--session <name>` or `--all`, `BELLWETHER_SOURCE=live` or `hooks`, `--hooks`, `--events <file>`, `--port`), and the tray menu or
-page URL overrides those:
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--git` or `BELLWETHER_GIT=1`, `--events <file>`, `--no-stats` or `BELLWETHER_STATS=0`, `--port`), and the tray menu or
+page URL overrides those. `auto` decides once at startup (a one-second connect probe of the
+Herdr socket) and logs which source it picked; it does not switch later, so restart the
+overlay after starting Herdr:
 
 | URL option | Effect |
 |---|---|
 | `?pack=aesir` | Skin pack. |
 | `?scale=4` | Pixel scale, 1 to 6. |
 | `?mode=map` | Start in map mode. |
+| `?mode=camp&party=<id, label or branch>` | Open one party's camp scene (first party if `party` is left out), for OBS. |
+| `?panel=0` | Camp scene without the party window. |
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
+| `?vitals=0` | Hide vitals: bars, model and quest. |
+| `?recap=0` | Hide the quest recap card (and its banner). |
+| `?sounds=1` | Sound cues on (`0` off). |
+| `?volume=0.5` | Sound volume, 0 to 1 (default 0.3). |
+| `?alerts=top-right` | Alert banners: `top-left`, `top-right`, `top-center` or `off`. |
+| `?mode=alerts` | A transparent page with only alert banners, for an OBS source of its own. |
 | `?transparent` | No backdrop or status chip, for OBS. |
 | `?source=mock` | Mock agents inside the page, no adapter. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
@@ -339,12 +540,15 @@ page URL overrides those:
 | `bellwether agents` | Show which coding agents are on PATH and which config dirs exist. |
 | `bellwether install [--agent claude\|copilot]` | Add the skill, role hook and message hook to each present agent. Safe to re-run. |
 | `bellwether uninstall` | Remove only what `install` wrote. |
-| `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: agent events, no Herdr). |
+| `bellwether overlay [--hooks]` | Open the desktop overlay (Herdr if running, else agent events; `--hooks` forces events). |
 | `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
-| `bellwether emit --ev <kind> ...` | Append one activity event from any tool. |
-| `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
+| `bellwether install --statusline` | Claude Code only: report context, quota, model, effort and session name for vitals, wrapping any status line you have. |
+| `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--label NAME` names the member; `--ev vitals --ctx N --quota N ...` for vitals). |
+| `bellwether hook statusline` | Status line body: reports vitals from the JSON on stdin, then prints the line. |
+| `bellwether run` | Serve the overlay on port 7341 (Herdr if running, else agent events; `--live`, `--hooks`, `--mock` force one). |
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
+| `bellwether pack [--json]` | Print the active skin pack id; `--json` adds where it came from (`shell`, `env`, `toml`, `default`) and the packs available. |
 | `bellwether record F [--scrub]` | Run live and append deltas to `F`. |
 | `bellwether replay F [--speed n]` | Serve the overlay from a recording. |
 | `bellwether scrub IN OUT` | Rewrite a recording with repo, branch and label names hashed and speech removed. |

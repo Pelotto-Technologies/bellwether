@@ -1,7 +1,8 @@
 // Pure mapping from Herdr protocol records to the Bellwether world model.
 import { isOrchestrationLabel, resolveRole } from '../roles.js';
+import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_NAME, MAX_QUEST } from '../sanitize.js';
 import { rollup } from '../rollup.js';
-import type { Delta, Member, Party, Status } from '../types.js';
+import { fleetScope, isRole, type Delta, type Member, type Party, type Role, type Status } from '../types.js';
 import type { AgentInfo, AgentStatusChanged, PaneInfo, SessionSnapshot, WorkspaceInfo } from './protocol.js';
 
 const STATUSES = new Set<Status>(['working', 'done', 'blocked', 'idle', 'unknown']);
@@ -21,21 +22,82 @@ export interface MapContext {
   branches?: ReadonlyMap<string, string>;
 }
 
+/** `hide=1` (also `true`, `yes`, `on`) removes a pane from the overlay, agent or not. */
+export function isHidden(tokens: Record<string, string>): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(tokens.hide?.trim().toLowerCase() ?? '');
+}
+
+/** The `state` token: the only statuses a runner may set. `unknown` is not one of them. Anything else is ignored. */
+export function stateToken(tokens: Record<string, string>): Exclude<Status, 'unknown'> | undefined {
+  const v = tokens.state?.trim().toLowerCase();
+  return v === 'done' || v === 'idle' || v === 'working' || v === 'blocked' ? v : undefined;
+}
+
+/** Roles that sit idle for days while their party's work goes on; a finished leaf is `done`, they are not. */
+const NEVER_SETTLED: ReadonlySet<Role> = new Set<Role>(['orchestrator', 'coordinator']);
+
+/**
+ * A worktree member whose status goes working to idle has finished its task, so it reads as `done`
+ * until it works again. Herdr marks a pane `done` only until someone looks at it, then `idle`; a run's
+ * leaf panes are never looked at one by one. Pure; `prev` is the member as last shown. Never applies to
+ * orchestrators and coordinators, to parties that are not a linked worktree, or to a first sight of a pane.
+ */
+export function settledStatus(prev: Pick<Member, 'status'> | undefined, raw: Status, role: Role, isWorktree: boolean): Status {
+  if (raw !== 'idle' || !isWorktree || !prev || NEVER_SETTLED.has(role)) return raw;
+  return prev.status === 'working' || prev.status === 'done' ? 'done' : raw;
+}
+
+/** Applies `settledStatus` to every member of `next` against how `prev` showed them, and rolls the parties up again. */
+export function settleFinished(prev: Record<string, Party>, next: Record<string, Party>): Record<string, Party> {
+  const out: Record<string, Party> = {};
+  for (const [id, party] of Object.entries(next)) {
+    let members = party.members;
+    for (const m of Object.values(party.members)) {
+      if (m.statusFromToken) continue;
+      const status = settledStatus(prev[id]?.members[m.paneId], m.status, m.role, party.isWorktree);
+      if (status !== m.status) members = { ...members, [m.paneId]: { ...m, status } };
+    }
+    out[id] = members === party.members ? party : { ...party, members, status: rollup(Object.values(members)) };
+  }
+  return out;
+}
+
 export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = false): Member | undefined {
-  if (!pane.agent) return undefined;
   const tokens = pane.tokens ?? {};
-  const name = 'name' in pane ? pane.name : undefined;
+  if (isHidden(tokens)) return undefined;
+  // A pane with no agent (a plain shell) is no party member, unless a `role` token opts it in.
+  if (!pane.agent && !isRole(tokens.role?.trim().toLowerCase())) return undefined;
+  const agentName = 'name' in pane ? pane.name : undefined;
   const seq = 'state_change_seq' in pane ? pane.state_change_seq : undefined;
   const m: Member = {
     paneId: pane.pane_id,
-    agent: pane.agent,
-    role: resolveRole({ tokens, agentName: name, title: pane.title, orchestrationRoot }),
+    agent: pane.agent || 'shell',
+    role: resolveRole({ tokens, agentName, title: pane.title, orchestrationRoot }),
     status: toStatus(pane.agent_status),
     lastChange: seq ?? pane.revision ?? 0,
   };
+  const state = stateToken(tokens);
+  if (state) {
+    m.status = state;
+    m.statusFromToken = true;
+  }
+  const scope = fleetScope(tokens.scope, m.role);
+  if (scope) m.scope = scope;
   if (pane.title) m.title = pane.title;
+  const name = cleanText(tokens.name, MAX_NAME);
+  if (name) m.name = name;
   if (tokens.say) m.say = tokens.say;
   if (tokens.say && tokens.say_id) m.sayId = tokens.say_id;
+  const context = cleanPercent(tokens.ctx);
+  const quota = cleanPercent(tokens.quota);
+  // Pane tokens carry no timestamp, so `at` is the pane's revision: it changes when the pane does.
+  if (context !== undefined || quota !== undefined) m.vitals = { at: m.lastChange, ...(context !== undefined ? { context } : {}), ...(quota !== undefined ? { quota } : {}) };
+  const model = cleanText(tokens.model, MAX_MODEL);
+  if (model) m.model = model;
+  const effort = cleanText(tokens.effort, MAX_EFFORT);
+  if (effort) m.effort = effort;
+  const quest = cleanText(tokens.quest, MAX_QUEST);
+  if (quest) m.quest = quest;
   return m;
 }
 
@@ -54,6 +116,24 @@ export function partyFromWorkspace(ws: WorkspaceInfo, members: Record<string, Me
   const branch = ctx.branches?.get(ws.workspace_id);
   if (branch) p.branch = branch;
   return p;
+}
+
+/**
+ * Local folder of each party: the worktree checkout path Herdr reports, else the cwd of
+ * the workspace's lowest-numbered agent pane. Only parties in `parties` get an entry.
+ */
+export function foldersFromSnapshot(snap: SessionSnapshot, parties: Record<string, Party>, ctx: MapContext): Record<string, string> {
+  const out: Record<string, string> = {};
+  const recs = [...(snap.agents ?? []), ...(snap.panes ?? [])].sort((a, b) => paneNumber(a.pane_id) - paneNumber(b.pane_id));
+  for (const ws of snap.workspaces) {
+    const id = partyId(ctx.session, ws.workspace_id);
+    const party = parties[id];
+    if (!party) continue;
+    const cwd = recs.find((r) => r.workspace_id === ws.workspace_id && r.pane_id in party.members && r.cwd)?.cwd;
+    const folder = ws.worktree?.checkout_path || cwd;
+    if (folder) out[id] = folder;
+  }
+  return out;
 }
 
 /** Trailing pane number of an id like `w1:p3`, for ordering panes within a workspace. */
@@ -135,7 +215,9 @@ export function resolveTargetPane(target: string, records: Array<PaneInfo | Agen
   return (
     records.find((r) => r.pane_id === t)?.pane_id ??
     records.find((r) => 'name' in r && typeof r.name === 'string' && r.name.toLowerCase() === lower)?.pane_id ??
-    records.find((r) => r.terminal_id === t)?.pane_id
+    records.find((r) => r.terminal_id === t)?.pane_id ??
+    // A project node is a pane with no agent, called by its `name` token: `say_to=<project>` reaches it.
+    records.find((r) => r.tokens?.name?.trim().toLowerCase() === lower)?.pane_id
   );
 }
 
@@ -157,17 +239,23 @@ export function applyStatusChange(
   const prev = party?.members[ev.pane_id];
   // The agent left its pane (back to the shell): only a re-read can say what remains.
   if (!party || !prev || ev.agent === null) return undefined;
-  const member: Member = { ...prev, status: toStatus(ev.agent_status), lastChange: prev.lastChange + 1 };
+  // A `state` token pins the status; otherwise a working-to-idle turn in a worktree is a finished one.
+  const status = prev.statusFromToken ? prev.status : settledStatus(prev, toStatus(ev.agent_status), prev.role, party.isWorktree);
+  const member: Member = { ...prev, status, lastChange: prev.lastChange + 1 };
   if (ev.agent) member.agent = ev.agent;
   if (ev.title) member.title = ev.title;
   const members = { ...party.members, [member.paneId]: member };
-  const status = rollup(Object.values(members));
-  const next: Party = { ...party, members, status };
-  return { party: next, member, rollupChanged: status !== party.status };
+  const partyStatus = rollup(Object.values(members));
+  const next: Party = { ...party, members, status: partyStatus };
+  return { party: next, member, rollupChanged: partyStatus !== party.status };
 }
 
 function sameMember(a: Member, b: Member): boolean {
-  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo;
+  return a.agent === b.agent && a.role === b.role && a.scope === b.scope && a.status === b.status && a.title === b.title && a.name === b.name && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
+}
+
+function sameVitals(a: Member, b: Member): boolean {
+  return a.vitals?.context === b.vitals?.context && a.vitals?.quota === b.vitals?.quota && a.model === b.model && a.effort === b.effort && a.quest === b.quest && a.tool === b.tool;
 }
 
 function samePartyHeader(a: Party, b: Party): boolean {

@@ -7,3 +7,5 @@ export * from './source.js';
 export * from './actions.js';
 export * from './mock.js';
 export { createRng } from './random.js';
+export * from './stats.js';
+export * from './stats-source.js';

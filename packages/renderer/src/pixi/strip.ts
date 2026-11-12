@@ -1,13 +1,16 @@
-import { rollup, type Member, type Role, type Status } from '@bellwether/adapter/core';
+import { rollup, type GitState, type Member, type Role, type Status } from '@bellwether/adapter/core';
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
-import { assignRows, beaconAlpha, bob, bumps, hash01, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
+import { GIT_COLORS, gitParts, type GitPart } from '../gitline.js';
+import { assignRows, beaconAlpha, bob, bumps, hash01, slowFactor, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
-import type { Theme } from '../theme.js';
+import { vitalsLook, type Theme } from '../theme.js';
+import { barFill, hasVitals, isLow, lowestContext, withQuest } from '../vitals.js';
 import { DoubleTap } from '../doubletap.js';
 import { birthTime, prefersReducedMotion, spawnPose, type SpawnPose } from '../spawn.js';
 import { drawPuff } from './spawnfx.js';
+import { LevelFx } from './levelfx.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
@@ -20,6 +23,8 @@ interface MemberView {
   bubbleSkin?: NineSliceSprite;
   bubbleTail?: Sprite;
   glow: Graphics;
+  /** Context and quota bars under the feet. */
+  vit: Graphics;
   bubble: Container;
   bubbleText: Text;
   bubbleBg: Graphics;
@@ -36,7 +41,15 @@ interface Segment {
   status: Status;
   tint?: string | undefined;
   leader: boolean;
+  /** Banner, tether and chip colour of a leader segment; gold unless it leads a fleet. */
+  color?: number | undefined;
   members: Member[];
+  /** Git state of the party (absent for a fellowship's leaders). */
+  git?: GitState | undefined;
+  /** Git counters that fit on the nameplate this frame; empty when hidden. */
+  gitShown: GitPart[];
+  /** Width of those counters, lead gap included. */
+  gitW: number;
   /** Width the segment takes along the strip: its characters or its nameplate, whichever is wider. */
   width: number;
   /** Pane id to the party that owns its speech. */
@@ -74,6 +87,8 @@ interface PartyView {
   plate?: NineSliceSprite;
   icon?: Sprite;
   chip: Graphics;
+  /** Git counters at the right end of the nameplate: dirty, ahead, no remote. */
+  gitTexts: Text[];
   members: Map<string, MemberView>;
   dir: 1 | -1;
   born: number;
@@ -81,6 +96,8 @@ interface PartyView {
 
 /** Colour of a leader's banner pole, tether and nameplate chip. */
 const GOLD = 0xe8c547;
+/** The fleet lead's banner, so it is told apart from a project's gold one at a glance. */
+const FLEET_COLOR = 0x7b5cff;
 /** Width reserved for a leader's banner, in art pixels. */
 const BANNER_W = 18;
 
@@ -115,6 +132,7 @@ export class StripScene {
   /** False until the first world arrives, so what already exists does not play an arrival. */
   private primed = false;
   private reduced = prefersReducedMotion();
+  private levelFx = new LevelFx(prefersReducedMotion());
 
   private doubleTap = new DoubleTap();
   /** One container per depth row, back rows first so they draw behind. */
@@ -143,7 +161,7 @@ export class StripScene {
       this.rowLayers.push(row);
     }
     this.layer.addChild(...[...this.rowLayers].reverse());
-    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer);
+    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer, this.levelFx.layer);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
@@ -221,10 +239,12 @@ export class StripScene {
     sprite.anchor.set(0.5, 1);
     const figure = this.art ? new Figure(this.art, this.theme) : undefined;
     const glow = new Graphics();
+    const vit = new Graphics();
+    vit.eventMode = 'none';
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24, wordWrap: true, wordWrapWidth: 180 } });
     const bubble = new Container();
-    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
+    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, vit, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
     if (this.art) {
       const ui = this.art.art.ui;
       const sl = ui.bubble.slice;
@@ -245,7 +265,7 @@ export class StripScene {
     body.on('pointertap', () => {
       if (this.doubleTap.tap(paneId, performance.now())) this.feed.onFocus?.(paneId);
     });
-    party.root.addChild(body, glow);
+    party.root.addChild(vit, body, glow);
     this.bubbleLayer.addChild(bubble);
     party.members.set(paneId, view);
     return view;
@@ -271,8 +291,15 @@ export class StripScene {
     }
     const chip = new Graphics();
     root.addChild(chip, label);
+    // Only the art nameplate carries git counters (three slots: dirty, ahead, no remote).
+    const gitTexts = plate ? [0, 1, 2].map(() => new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0xffffff } })) : [];
+    for (const g of gitTexts) {
+      g.anchor.set(0, 0.5);
+      g.visible = false;
+      root.addChild(g);
+    }
     this.rowLayers[0]!.addChild(root);
-    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
+    const view: PartyView = { root, label, ...(plate ? { plate } : {}), ...(icon ? { icon } : {}), chip, gitTexts, members: new Map(), dir: 1, born: birthTime(this.t, this.primed, this.reduced) };
     root.alpha = this.primed && !this.reduced ? 0 : 1;
     this.parties.set(id, view);
     return view;
@@ -280,29 +307,45 @@ export class StripScene {
 
   private trainFor(world: ReturnType<typeof groupFellowships>): Train[] {
     const trains: Train[] = [];
-    const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean): Segment => {
+    const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean, git?: GitState): Segment => {
       const sorted = [...members].sort((a, b) => a.paneId.localeCompare(b.paneId));
-      return { id, label, status: rollup(sorted), tint, leader, members: sorted, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
+      // The nameplate carries the quest the whole party shares; a leader's plate stands for several parties and carries none.
+      const named = leader || !this.feed.vitalsOn ? label : withQuest(label, sorted);
+      return { id, label: named, status: rollup(sorted), tint, leader, members: sorted, git, gitShown: [], gitW: 0, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
     };
+    // The fleet lead walks at the front of a small group of its own, under a violet banner instead of gold.
+    if (world.fleet.length) {
+      const name = world.fleet[0]!.member.name ?? 'fleet';
+      const partyOf = new Map(world.fleet.map((l) => [l.member.paneId, l.partyId]));
+      const lead = seg('lead:fleet', `★ ${name}`, world.fleet.map((l) => l.member), (m) => partyOf.get(m.paneId)!, undefined, true);
+      lead.color = FLEET_COLOR;
+      trains.push({ id: 'fellow:fleet', fellowship: { key: 'fleet', name, leaders: world.fleet, partyIds: [] }, segments: [lead] });
+    }
     for (const f of world.fellowships) {
       const leaders = f.leaders.map((l) => l.member);
       const partyOf = new Map(f.leaders.map((l) => [l.member.paneId, l.partyId]));
       const segments = [seg(`lead:${f.key}`, `★ ${f.name}`, leaders, (m) => partyOf.get(m.paneId)!, undefined, true)];
       for (const id of f.partyIds) {
         const p = world.world.parties[id]!;
-        segments.push(seg(id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => id, world.tints.get(id), false));
+        segments.push(seg(id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => id, world.tints.get(id), false, p.git));
       }
       trains.push({ id: `fellow:${f.key}`, fellowship: f, segments });
     }
     for (const p of Object.values(world.world.parties)) {
       if (world.byParty.has(p.id)) continue;
-      trains.push({ id: p.id, segments: [seg(p.id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => p.id, world.tints.get(p.id), false)] });
+      trains.push({ id: p.id, segments: [seg(p.id, p.branch ? `${p.label} · ${p.branch}` : p.label, Object.values(p.members), () => p.id, world.tints.get(p.id), false, p.git)] });
     }
     return trains;
   }
 
+  /** A role levelled up: a ▲, sparkles and "LEVEL UP" over the member that earned it. */
+  levelUp(partyId: string, paneId: string): void {
+    this.levelFx.trigger(partyId, paneId, this.t);
+  }
+
   update(dt: number, now: number): void {
     this.t += dt;
+    this.levelFx.begin();
     this.fx.clear();
     const { height } = this.app.screen;
     const width = this.worldWidth();
@@ -325,14 +368,34 @@ export class StripScene {
         const chrome = view.plate ? (6 * 2 + (view.icon ? 12 : 0)) * s : 0;
         // A nameplate may be a little wider than its characters, never much: long labels get an ellipsis.
         const room = Math.max(own * 1.25, 90 * s) - chrome;
-        view.label.text = seg.label;
-        let text = seg.label;
-        while (view.label.width > room && text.length > 4) {
-          text = `${text.slice(0, -2).trimEnd()}…`;
-          view.label.text = text;
+        const fit = (limit: number, minLen: number) => {
+          view.label.text = seg.label;
+          let text = seg.label;
+          while (view.label.width > limit && text.length > minLen) {
+            text = `${text.slice(0, -2).trimEnd()}…`;
+            view.label.text = text;
+          }
+          return text;
+        };
+        // Git counters ride at the right end of the plate; they are dropped when even a short label would not fit beside them.
+        const parts = view.plate && !this.minimal ? gitParts(seg.git) : [];
+        seg.gitShown = [];
+        seg.gitW = 0;
+        let text: string | undefined;
+        if (parts.length) {
+          parts.forEach((p, i) => (view.gitTexts[i]!.text = p.short));
+          const gitW = parts.reduce((n, _p, i) => n + view.gitTexts[i]!.width, 0) + (parts.length - 1) * 3 * s + 4 * s;
+          const t = fit(room - gitW, 8);
+          if (view.label.width <= room - gitW) {
+            text = t;
+            seg.gitShown = parts;
+            seg.gitW = gitW;
+          }
         }
+        text ??= fit(room, 4);
+        view.label.text = text;
         seg.label = text;
-        seg.width = Math.max(own + (seg.leader ? BANNER_W * s : 0), view.label.width + chrome);
+        seg.width = Math.max(own + (seg.leader ? BANNER_W * s : 0), view.label.width + chrome + seg.gitW);
       }
     }
     const spanOf = (t: Train) => t.segments.reduce((n, g) => n + g.width, 0) + (t.segments.length - 1) * gap;
@@ -388,7 +451,9 @@ export class StripScene {
       const shared = this.adopted?.get(train.id);
       if (shared) tv.walker = shared;
       const status = statusOf.get(train.id)!;
-      tv.walker = stepWalker(tv.walker, status, lane, span, dt);
+      // Low on context slows the whole group: it walks as one, at its weakest member's pace.
+      const slow = this.feed.vitalsOn ? slowFactor(lowestContext(train.segments.flatMap((g) => g.members))) : 1;
+      tv.walker = stepWalker(tv.walker, status, lane, span, dt, slow);
       // Now and then a group changes its mind and wanders back. Only the lead window decides; the others follow it.
       if (leads && SPEED[status] > 0 && Math.random() < dt / 20) tv.walker = { ...tv.walker, dir: tv.walker.dir === 1 ? -1 : 1 };
     }
@@ -432,6 +497,7 @@ export class StripScene {
             if (mv.figure) mv.figure.destroy();
             else mv.sprite.destroy();
             mv.glow.destroy();
+            mv.vit.destroy();
             mv.bubble.destroy({ children: true });
             view.members.delete(paneId);
           }
@@ -449,6 +515,7 @@ export class StripScene {
           const sayParty = seg.sayParty.get(m.paneId)!;
           if (art) this.drawArtMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
           else this.drawMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
+          this.levelFx.drawFor(sayParty, m.paneId, mv.x, trainGround - figH * s, s, this.t);
         });
         const x1 = x0 + own;
         extents.push({ seg, x0: tv.walker.x + off, x1: tv.walker.x + off + seg.width, fig0: x0, fig1: x1 });
@@ -463,6 +530,7 @@ export class StripScene {
         view.label.visible = !this.minimal;
         if (view.plate) view.plate.visible = !this.minimal;
         if (view.icon) view.icon.visible = true;
+        for (const g of view.gitTexts) g.visible = false;
         if (this.minimal) {
           // Minimal: only a status icon (or a coloured square without art) centred just under the feet.
           view.chip.clear();
@@ -477,7 +545,7 @@ export class StripScene {
           const padX = 6 * s;
           const padY = 3 * s;
           const iconW = view.icon ? 9 * s + 3 * s : 0;
-          const w = view.label.width + padX * 2 + iconW;
+          const w = view.label.width + padX * 2 + iconW + seg.gitW;
           const h = view.label.height + padY * 2;
           view.plate.width = w / s;
           view.plate.height = h / s;
@@ -491,6 +559,19 @@ export class StripScene {
             view.icon.position.set(center - w / 2 + padX, top + h / 2 - (9 * s) / 2);
           }
           this.drawChip(view, seg, center - w / 2, top + h, w, s);
+          // Counters right-aligned inside the plate: dirty amber, ahead green, no remote red.
+          let gx = center + w / 2 - padX;
+          for (let i = seg.gitShown.length - 1; i >= 0; i--) {
+            const g = view.gitTexts[i]!;
+            const kind = seg.gitShown[i]!.kind;
+            const pal = this.theme.palette;
+            const [hex, dflt] = kind === 'dirty' ? [pal.done, GIT_COLORS.dirty] : kind === 'ahead' ? [pal.working, GIT_COLORS.ahead] : [pal.blocked, GIT_COLORS.remote];
+            g.style.fill = hex ? hexNum(hex) : dflt;
+            gx -= g.width;
+            g.position.set(gx, top + h / 2);
+            g.visible = true;
+            gx -= 3 * s;
+          }
         } else {
           view.label.style.fill = hexNum(this.theme.palette[seg.status]);
           view.label.position.set(center, trainGround - figH * s - 4);
@@ -500,6 +581,7 @@ export class StripScene {
       this.drawTrain(tv, train, extents, dir, trainGround, figW, figH, s);
     }
     this.adopted = undefined;
+    this.levelFx.end(this.t);
     if (trains.length) this.primed = true;
   }
 
@@ -519,7 +601,7 @@ export class StripScene {
   /** A coloured bar under a nameplate in the party's fellowship tint (gold for a leader). */
   private drawChip(view: PartyView, seg: Segment, x: number, y: number, w: number, s: number): void {
     view.chip.clear();
-    const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : undefined;
+    const color = seg.leader ? (seg.color ?? GOLD) : seg.tint ? hexNum(seg.tint) : undefined;
     if (color === undefined) return;
     view.chip.rect(x, y, w, 2 * s).fill(color);
   }
@@ -535,24 +617,51 @@ export class StripScene {
     if (!f) return;
     const left = extents[0]!.x0;
     const right = extents[extents.length - 1]!.x1;
-    tv.tether.rect(left, groundY + 1.5 * s, right - left, s).fill({ color: GOLD, alpha: 0.7 });
+    const lead = extents.find((e) => e.seg.leader)!;
+    const gold = lead.seg.color ?? GOLD;
+    tv.tether.rect(left, groundY + 1.5 * s, right - left, s).fill({ color: gold, alpha: 0.7 });
     for (const { seg, x0, x1 } of extents) {
-      const color = seg.leader ? GOLD : seg.tint ? hexNum(seg.tint) : GOLD;
+      const color = seg.leader ? gold : seg.tint ? hexNum(seg.tint) : gold;
       tv.tether.rect(x0, groundY + 1.5 * s, x1 - x0, 2 * s).fill(color);
     }
-    const lead = extents.find((e) => e.seg.leader)!;
     // The pole stands just ahead of the leader at head height; the flag streams forward from it.
     const poleX = dir === 1 ? lead.fig1 + 2 * s : lead.fig0 - 2 * s;
     const fw = (BANNER_W - 4) * s;
     const fh = 10 * s;
     const top = groundY - figH * s;
     tv.banner.rect(poleX - s / 2, top - 2 * s, s, groundY - top + 2 * s).fill(0x2a2118);
-    tv.banner.rect(poleX - 1.5 * s, top - 4 * s, 3 * s, 2 * s).fill(GOLD);
+    tv.banner.rect(poleX - 1.5 * s, top - 4 * s, 3 * s, 2 * s).fill(gold);
     const stripes = extents.filter((e) => !e.seg.leader && e.seg.tint).map((e) => hexNum(e.seg.tint!));
     const fx = dir === 1 ? poleX + s / 2 : poleX - s / 2 - fw;
     const n = Math.max(1, stripes.length);
-    (stripes.length ? stripes : [GOLD]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
+    (stripes.length ? stripes : [gold]).forEach((c, i) => tv.banner.rect(fx, top + (fh / n) * i, fw, fh / n).fill(c));
     tv.banner.rect(fx, top, fw, fh).stroke({ color: 0x2a2118, width: s, alignment: 1 });
+  }
+
+  /**
+   * Two thin bars on the ground under a member's feet: context remaining on top (the theme's
+   * `low` colour below 20%), the 5-hour quota under it. Hidden in icon-only mode, when vitals are
+   * off, and for members that report nothing: an absent number is never drawn as empty.
+   */
+  private drawVitals(mv: MemberView, m: Member, cx: number, groundY: number, charW: number): void {
+    const g = mv.vit;
+    g.clear();
+    if (this.minimal || !this.feed.vitalsOn || !hasVitals(m)) return;
+    const s = this.scale;
+    const look = vitalsLook(this.theme);
+    // Neighbours stand 0.7 characters apart, so a bar is narrower than that and never touches the next one.
+    const w = Math.max(4, Math.min(14, Math.floor(charW * 0.55)));
+    const x = Math.round(cx - (w * s) / 2);
+    const y = groundY + s;
+    g.rect(x - s, y, (w + 2) * s, 4 * s).fill({ color: hexNum(this.theme.outline), alpha: 0.85 });
+    const bar = (row: number, pct: number | undefined, color: string) => {
+      g.rect(x, y + row * s, w * s, s).fill({ color: 0x000000, alpha: 0.45 });
+      const n = barFill(pct, w);
+      if (n > 0) g.rect(x, y + row * s, n * s, s).fill(hexNum(color));
+    };
+    const v = m.vitals!;
+    bar(1, v.context, isLow(v.context) ? look.low : look.context);
+    bar(2, v.quota, look.quota);
   }
 
   /** Sprite-sheet member: pick the animation, tint the cloak and the status light from their masks. */
@@ -566,6 +675,7 @@ export class StripScene {
     mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: this.feed.talking(sayParty, m.paneId, now), t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
     this.arrive(mv, mv.figure!.container, cx, groundY, seg.status);
 
+    this.drawVitals(mv, m, cx, groundY, art.character.w);
     mv.bubble.visible = !!text;
     if (text) {
       const ui = art.ui.bubble;
@@ -613,6 +723,7 @@ export class StripScene {
     }
 
     const text = this.feed.say(sayParty, m.paneId, now);
+    this.drawVitals(mv, m, cx, groundY, SPRITE_W);
     mv.bubble.visible = !!text;
     if (text) {
       if (mv.bubbleText.text !== text) {

@@ -8,6 +8,7 @@ import { Image } from './canvas.mjs';
 import { encodePng, decodePng } from './png.mjs';
 import { drawCharacter, ANIMATIONS, FRAMES, W, H, isTip, isCloak } from './character.mjs';
 import * as Wd from './world.mjs';
+import * as Cp from './camp.mjs';
 import neutral from './packs/neutral.mjs';
 import aesir from './packs/aesir.mjs';
 import wayfarers from './packs/wayfarers.mjs';
@@ -31,7 +32,7 @@ const WORLD_STYLE = {
       1: '#ffffff40', 2: '#ffffff70', 3: '#ffffffa8', 4: '#ffffffe0',
     },
     // Roofs for the cottage reuse r/R; give them a warm red.
-    overrides: { settlement: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78', v: '#d8d8e0' } },
+    overrides: { settlement: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78', v: '#d8d8e0' }, hub: { r: '#c4473a', R: '#9a3328', q: '#8a8a96', Q: '#6a6a78' } },
     minimap: { grass: '#6cb851', path: '#a87b4f', water: '#4a9ad9', tree: '#2f7040', building: '#c4473a', background: '#1b1530' },
   },
   aesir: {
@@ -60,6 +61,7 @@ WORLD_STYLE.wayfarers = {
   palette: { ...WORLD_STYLE.neutral.palette, g: '#74b850', G: '#9ad66c', h: '#56983c', L: '#5aa848', K: '#367838', J: '#8ad06a', o: '#1a1410' },
   overrides: {
     settlement: { L: '#6cb84e', J: '#8ad06a', G: '#9ad66c', p: '#c4a46a', k: '#5a3a1e', K: '#3a2410', u: '#3e8a3a', a: '#e8c44a', y: '#ffe08a', q: '#8a6a4a', v: '#d8d8e0', f: '#ff9ab8' },
+    hub: { L: '#6cb84e', J: '#8ad06a', G: '#9ad66c', p: '#c4a46a', k: '#5a3a1e', K: '#3a2410', u: '#3e8a3a', a: '#e8c44a', y: '#ffe08a', q: '#8a6a4a', v: '#d8d8e0', f: '#ff9ab8' },
     mount: { t: '#e8dcc0', m: '#e8dcc0', b: '#8a6a4a', B: '#6a4e34', y: '#8a3a2a', Y: '#6a2a1e' },
     ui: { p: '#fbf6ea', P: '#e8dfca', w: '#fbf6ea', W: '#e0d6c0' },
   },
@@ -85,6 +87,12 @@ WORLD_STYLE.scifi = {
 };
 WORLD_STYLE.neutral.overrides.mount = { t: '#4a2e1c', m: '#4a2e1c', y: '#3a6ab8', Y: '#2a4e8a' };
 WORLD_STYLE.neutral.overrides.ui = { p: '#ffffff', P: '#e0e0e0' };
+
+/** Activity stations: id, drawing function in camp.mjs, frame count. The ids are the renderer's activity names. */
+const CAMP_STATIONS = [
+  ['edit', 'stEdit', 4], ['read', 'stRead', 4], ['shell', 'stShell', 4], ['search', 'stSearch', 4],
+  ['delegate', 'stDelegate', 4], ['think', 'stThink', 4], ['blocked', 'stBlocked', 2],
+];
 
 const TIP_MASK = { g: '#d9d9d9', G: '#ffffff', z: '#ffffff' };
 const CLOAK_MASK = { c: '#ffffff', C: '#9a9a9a' };
@@ -180,6 +188,8 @@ export function renderPack(pack) {
   const props = [
     { name: 'settlement', grid: Wd.settlement(style), palette: ov('settlement') },
     { name: 'camp', grid: Wd.tent(style), palette: ov('settlement') },
+    // The fleet hub: the pack's `hub` field picks the building; a pack with none gets the generic hall.
+    { name: 'hub', grid: Wd.hub(pack.hub ?? 'generic'), palette: ov('hub') },
     ...[0, 1, 2, 3].map((f) => ({ name: `campfire_${f}`, grid: Wd.campfire(f), palette: { ...style.palette, r: '#e8402a', O: '#ff9a2a', y: '#ffe36a', t: '#8a5a33', T: '#5e3b20', q: '#5a5a66' } })),
     { name: 'signpost', grid: Wd.signpost(), palette: style.palette },
     ...[0, 1, 2, 3, 4].map((f) => ({ name: f < 4 ? `mount_walk_${f}` : 'mount_idle', grid: Wd.mount(style, f), palette: ov('mount') })),
@@ -196,6 +206,35 @@ export function renderPack(pack) {
     campfire: [0, 1, 2, 3].map((f) => `campfire_${f}`),
     mount_walk: [0, 1, 2, 3].map((f) => `mount_walk_${f}`),
     banner_cloth: ['banner_cloth_0', 'banner_cloth_1'],
+  }));
+
+  // Camp scene.
+  const camp = { tone: 'camp', sky: ['#8fd0f0', '#e4f4fa'], glow: '#ffa84a', ...pack.camp };
+  const tech = camp.tone === 'outpost';
+  const cpal = Cp.campPalette(style, tech);
+  const cpalTent = { ...cpal, ...(style.overrides.settlement ?? {}) };
+  const four = [0, 1, 2, 3];
+  const campItems = [
+    ...four.map((v) => ({ name: `floor_${v}`, grid: Cp.floorTile(tech, v), palette: cpal })),
+    ...four.map((f) => ({ name: `fire_${f}`, grid: Cp.fire(tech, f), palette: cpal })),
+    { name: 'tent', grid: Cp.bigTent(style, tech), palette: cpalTent },
+    ...[0, 1].map((v) => ({ name: `tall_${v}`, grid: Cp.tall(style, tech, v), palette: cpal })),
+    ...[0, 1].map((v) => ({ name: `low_${v}`, grid: Cp.low(style, tech, v), palette: cpal })),
+    ...CAMP_STATIONS.flatMap(([id, fn, n]) => Array.from({ length: n }, (_, f) => ({ name: `st_${id}_${f}`, grid: Cp[fn](tech, f), palette: cpal }))),
+    { name: 'seat', grid: Cp.seat(tech), palette: cpal },
+    ...[0, 1].map((f) => ({ name: `fx_alert_${f}`, grid: Cp.fxAlert(f), palette: cpal })),
+    { name: 'fx_question', grid: Cp.fxQuestion(), palette: cpal },
+    ...[0, 1, 2].map((s) => ({ name: `fx_zzz_${s}`, grid: Cp.fxZzz(s), palette: cpal })),
+    { name: 'fx_sweat', grid: Cp.fxSweat(), palette: cpal },
+    ...[0, 1].map((v) => ({ name: `crate_${v}`, grid: Cp.crate(tech, v), palette: cpal })),
+    { name: 'cart', grid: Cp.cart(tech, false), palette: cpal },
+    { name: 'cart_loaded', grid: Cp.cart(tech, true), palette: cpal },
+  ];
+  const campAtlas = atlas(campItems);
+  png('map/camp.png', campAtlas.img);
+  json('map/camp.json', sheetJson('camp.png', { w: campAtlas.img.w, h: campAtlas.img.h }, campAtlas.placed, {
+    fire: four.map((f) => `fire_${f}`),
+    ...Object.fromEntries(CAMP_STATIONS.map(([id, , n]) => [`st_${id}`, Array.from({ length: n }, (_, f) => `st_${id}_${f}`)])),
   }));
 
   // UI.
@@ -220,7 +259,7 @@ export function renderPack(pack) {
     character: {
       size: { w: W, h: H }, facing: 'right', anchor: { x: 0.5, y: 30 / 32 },
       frames: FRAMES.map((f) => f.name),
-      fps: { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1 },
+      fps: { walk: 8, idle: 2, wave: 4, talk: 6, raise: 1, blink: 1, work: 4 },
       layers: {
         tip: 'Frame name + "_tip": white status-light pixels. Tint with the status colour and draw over the base frame.',
         cloak: 'Frame name + "_cloak": grey cloak pixels. Tint and draw over the base frame to recolour the cloak.',
@@ -232,11 +271,12 @@ export function renderPack(pack) {
     strip: { ground: 'sprites/ground.json', tiles: ['ground_0', 'ground_1', 'ground_2', 'ground_3'] },
     map: {
       tileset: 'map/tileset.json', props: 'map/props.json',
-      settlement: 'settlement', camp: 'camp', campfire: 'campfire', signpost: 'signpost', mount: 'mount_walk',
+      settlement: 'settlement', hub: 'hub', camp: 'camp', campfire: 'campfire', signpost: 'signpost', mount: 'mount_walk',
       banner: { pole: 'banner_pole', cloth: 'banner_cloth', tint: true },
       glow: { frame: 'glow', tint: true }, pin: { frame: 'pin', ring: 'pin_ring', tint: true },
       minimap: style.minimap,
     },
+    camp: { atlas: 'map/camp.json', tone: camp.tone, sky: camp.sky, glow: camp.glow, stations: CAMP_STATIONS.map(([id]) => id) },
     ui: {
       sheet: 'ui/ui.json',
       bubble: { frame: 'bubble', slice: 8, tail: 'bubble_tail' },

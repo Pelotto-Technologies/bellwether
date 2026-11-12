@@ -44,7 +44,7 @@ describe('HerdrSessionSource against a mock pipe server', () => {
     expect(deltas[1]).toMatchObject({ kind: 'party', party: { id: 'default/w1', status: 'working' } });
     herdr.push(idle!);
     await until(() => deltas.length >= 4);
-    expect(deltas[2]).toMatchObject({ kind: 'member', member: { status: 'idle' } });
+    expect(deltas[2]).toMatchObject({ kind: 'member', member: { status: 'done' } });
 
     // Herdr closes the pane: the event only invalidates; the re-read decides.
     herdr.snapshot.panes = herdr.snapshot.panes.filter((p) => p.pane_id !== 'w1:p3');

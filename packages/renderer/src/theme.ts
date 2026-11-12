@@ -1,4 +1,5 @@
 import { ROLES, STATUSES, type Role, type Status } from '@bellwether/adapter/core';
+import { parseSounds, type SoundStyle } from './cues/style.js';
 
 export const HATS = ['none', 'cap', 'hood', 'helm', 'point'] as const;
 export const PROPS = ['none', 'staff', 'lantern', 'hammer', 'book'] as const;
@@ -12,6 +13,19 @@ export interface RoleLook {
   prop: Prop;
 }
 
+/** Bar colours for agent vitals. */
+export interface VitalsLook {
+  /** Context window remaining (HP). */
+  context: string;
+  /** 5-hour quota remaining (stamina). */
+  quota: string;
+  /** The context bar once it runs low. */
+  low: string;
+}
+
+/** Used when a pack does not describe vitals, so existing packs need no change. */
+export const DEFAULT_VITALS: VitalsLook = { context: '#4cc38a', quota: '#4aa8ff', low: '#ff5a4d' };
+
 export interface Theme {
   name: string;
   /** Role whose member carries the party's status light. */
@@ -22,6 +36,14 @@ export interface Theme {
   ground: string;
   roles: Record<Role, RoleLook>;
   sayTtlMs: number;
+  /** Flavour of the sound cues (optional `sounds` block in theme.json; defaults apply). */
+  sounds: SoundStyle;
+  /** Optional in a pack; read through `vitalsLook()`. */
+  vitals?: VitalsLook;
+}
+
+export function vitalsLook(theme: Pick<Theme, 'vitals'>): VitalsLook {
+  return theme.vitals ?? DEFAULT_VITALS;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -33,6 +55,11 @@ function color(value: unknown, where: string): string {
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+function parseVitals(v: Record<string, unknown>): VitalsLook {
+  const pick = (k: keyof VitalsLook) => (v[k] === undefined ? DEFAULT_VITALS[k] : color(v[k], `vitals.${k}`));
+  return { context: pick('context'), quota: pick('quota'), low: pick('low') };
 }
 
 /**
@@ -70,6 +97,8 @@ export function parseTheme(raw: unknown): Theme {
         return [r, entry ? look(entry, `roles.${r}`) : generic];
       }),
     ) as Record<Role, RoleLook>,
+    ...(t.vitals && typeof t.vitals === 'object' ? { vitals: parseVitals(t.vitals as Record<string, unknown>) } : {}),
     sayTtlMs: typeof t.sayTtlMs === 'number' && t.sayTtlMs > 0 ? t.sayTtlMs : 6000,
+    sounds: parseSounds(t.sounds),
   };
 }

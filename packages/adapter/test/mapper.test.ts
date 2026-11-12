@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyStatusChange, diffParties, paneIds, partiesFromSnapshot } from '../src/herdr/mapper.js';
+import { applyStatusChange, diffParties, foldersFromSnapshot, paneIds, partiesFromSnapshot } from '../src/herdr/mapper.js';
 import type { AgentStatusChanged } from '../src/herdr/protocol.js';
 import path from 'node:path';
 import { loadCapture, loadSnapshot, RESEARCH_FIXTURES } from './mock-herdr.js';
@@ -58,7 +58,8 @@ describe('applyStatusChange over the recorded capture', () => {
       parties = { ...parties, [res.party.id]: res.party };
       statuses.push(`${res.member.status}/${res.party.status}/${res.rollupChanged}`);
     }
-    expect(statuses).toEqual(['working/working/true', 'idle/idle/true']);
+    // w1 is a linked worktree: the architect's working-to-idle turn reads as finished.
+    expect(statuses).toEqual(['working/working/true', 'done/done/true']);
   });
 
   it('treats claude and copilot panes the same (mixed-agents fixture)', () => {
@@ -70,8 +71,8 @@ describe('applyStatusChange over the recorded capture', () => {
       parties = { ...parties, [res.party.id]: res.party };
       seen.push(`${res.member.agent}:${res.member.status}`);
     }
-    expect(seen).toEqual(['claude:working', 'copilot:working', 'copilot:blocked', 'claude:idle', 'copilot:working', 'copilot:done']);
-    expect(parties['default/w1']!.status).toBe('idle');
+    expect(seen).toEqual(['claude:working', 'copilot:working', 'copilot:blocked', 'claude:done', 'copilot:working', 'copilot:done']);
+    expect(parties['default/w1']!.status).toBe('done');
     expect(parties['default/w2']!.status).toBe('done');
   });
 
@@ -177,5 +178,20 @@ describe('messages between agents (say_to)', () => {
     ]);
     expect(diffParties(a, b, 2).filter((d) => d.kind === 'say')).toHaveLength(1);
     expect(diffParties(a, a, 3)).toEqual([]);
+  });
+});
+
+describe('foldersFromSnapshot', () => {
+  it('prefers the worktree checkout path, then a member pane cwd, and skips parties without one', () => {
+    const snap = loadSnapshot();
+    const parties = partiesFromSnapshot(snap, ctx);
+    const folders = foldersFromSnapshot(snap, parties, ctx);
+    const ws1 = snap.workspaces.find((w) => w.workspace_id === 'w1')!;
+    expect(folders['default/w1']).toBe(ws1.worktree?.checkout_path ?? snap.panes.find((p) => p.pane_id === 'w1:p3')?.cwd);
+    // A workspace with no worktree info falls back to its pane's cwd.
+    const bare = { ...snap, workspaces: snap.workspaces.map((w) => ({ ...w, worktree: null })) };
+    const cwd = snap.panes.find((p) => p.pane_id === 'w1:p3')?.cwd;
+    expect(foldersFromSnapshot(bare, parties, ctx)['default/w1']).toBe(cwd || undefined);
+    expect(Object.keys(folders).every((id) => id in parties)).toBe(true);
   });
 });

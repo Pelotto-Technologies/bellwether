@@ -34,3 +34,20 @@ export function summonPlan(now: number, from: Pt, to: Pt): SummonPlan {
 export function parkSpot(rider: Pt, dir: 1 | -1): Pt {
   return { x: rider.x - dir * 10, y: rider.y };
 }
+
+/** A leg of a journey takes this many seconds at the least and at the most, whatever the distance. */
+export const LEG_MIN_S = 2;
+export const LEG_MAX_S = 6;
+
+export interface LegPlan {
+  secs: number;
+  /** Speed that makes the leg take exactly that long. */
+  speed: number;
+}
+
+/** Like `summonPlan` but for a leg along roads: the pace scales with the distance, so a trip reads the same near or far. */
+export function legPlan(dist: number): LegPlan {
+  if (dist <= 0) return { secs: 0, speed: 0 };
+  const secs = Math.min(LEG_MAX_S, Math.max(LEG_MIN_S, dist / RIDE_SPEED));
+  return { secs, speed: dist / secs };
+}

@@ -19,6 +19,7 @@ themes/<pack>/
   sprites/ground.*    # strip-mode ground tiles (16x16, tile horizontally)
   map/tileset.*       # 16x16 map tiles: grass, flowers, overlays, path and water autotiles
   map/props.*         # settlement, camp, campfire, signpost, mount, banner, glow, pins
+  map/camp.*          # camp scene: fire, stations per activity, seat, effects, git props (docs/themes.md)
   ui/ui.*             # speech bubble + tail, nameplate, minimap frame (9-slice), status icons
 ```
 
@@ -28,8 +29,8 @@ themes/<pack>/
 ## Character sheets
 
 Characters are 24x32 and face right; mirror them to walk left. The anchor is the
-bottom-centre of the feet (`art.json` → `character.anchor`). A sheet has 12 columns
-(`walk_0..3`, `idle_0..1`, `wave_0..1`, `talk_0..1`, `raise_0`, `blink_0`) and three rows:
+bottom-centre of the feet (`art.json` → `character.anchor`). A sheet has 14 columns
+(`walk_0..3`, `idle_0..1`, `wave_0..1`, `talk_0..1`, `raise_0`, `blink_0`, `work_0..1`) and three rows:
 
 1. the frame in colour;
 2. `<frame>_tip`: the status light in white/grey. Tint it with the status colour and

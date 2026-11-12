@@ -233,22 +233,39 @@ interface Party {                    // one Herdr workspace
   status: Status;                   // rollup
   members: Record<string, Member>;
   tokens: Record<string, string>;   // workspace tokens (quest, etc.)
+  git?: { dirty: number; ahead: number; noRemote: boolean };  // opt-in probe of the party's folder
 }
 interface Member {                   // one pane with an agent
   paneId: string;
   agent: string;                    // 'claude', 'codex', ...
   role?: string;                    // 'architect' from tokens.role, else fallback chain
+  scope?: 'fleet';                  // tokens.scope; only with role 'orchestrator': the master of many projects, drawn at the map hub
   status: Status;
   title?: string;
   say?: string;                     // tokens.say, cleared on TTL expiry
+  vitals?: { context?: number; quota?: number; at: number }; // percent remaining, 0-100; absent = unknown
+  model?: string;                   // display name, e.g. "Opus 5.5" (tokens.model)
+  effort?: string;                  // e.g. "high" (tokens.effort)
+  quest?: string;                   // the session's human name (tokens.quest)
+  tool?: string;                    // tool running now; hooks source only
+  level?: number;                   // level of the member's ROLE; added by the stats decorator
+  xp?: { have: number; next: number }; // progress inside the level (have of next XP)
   lastChange: number;               // state_change_seq
 }
 type Delta = { t: number; kind: 'snapshot'; world: World }
            | { t: number; kind: 'member'; partyId: string; member: Member }
            | { t: number; kind: 'party'; party: Party }
            | { t: number; kind: 'removed'; partyId: string; paneId?: string }
-           | { t: number; kind: 'say'; partyId: string; paneId: string; text: string };
+           | { t: number; kind: 'say'; partyId: string; paneId: string; text: string; to?: { partyId: string; paneId: string } }
+           | { t: number; kind: 'moment'; moment: 'level_up' | 'quest_complete'; partyId: string;
+               paneId?: string; role?: Role; level?: number; recap?: Recap };
+type Recap = { durationMs: number; members: Partial<Record<Role, number>>; tasks: number; blockedMs: number;
+               tools: Partial<Record<'edit'|'read'|'search'|'shell'|'delegate'|'plan'|'other', number>>;
+               xp: number; levelUps: { role: Role; level: number }[] };
 ```
+
+`moment` never changes the world; the stats decorator (`StatsSource`, README "Levels and quest
+recap") emits it and annotates members with `level` and `xp`.
 
 Deltas are what gets recorded to `events.jsonl`, so replay is exact and the renderer
 never needs Herdr.

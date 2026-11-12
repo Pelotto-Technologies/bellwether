@@ -20,6 +20,21 @@ export const SPEED: Record<Status, number> = {
   blocked: 0,
 };
 
+/** Context remaining (percent) below which an agent is "low on HP". */
+export const LOW_CONTEXT = 20;
+/** Walking speed multiplier at 0% context. */
+const MIN_SLOW = 0.5;
+
+/**
+ * How fast a group walks given its least-healthy member's context remaining: full speed
+ * from `LOW_CONTEXT` up (or when unknown, which is never guessed), easing down to half
+ * speed at 0.
+ */
+export function slowFactor(context: number | undefined): number {
+  if (context === undefined || !Number.isFinite(context) || context >= LOW_CONTEXT) return 1;
+  return MIN_SLOW + (1 - MIN_SLOW) * (Math.max(0, context) / LOW_CONTEXT);
+}
+
 /** Splits the strip into one lane per walking group, in a stable order. Lanes are equal unless `weights` says a group needs more room. */
 export function layoutLanes(ids: string[], width: number, margin = 16, weights: Record<string, number> = {}): Map<string, Lane> {
   const lanes = new Map<string, Lane>();
@@ -38,14 +53,14 @@ export function layoutLanes(ids: string[], width: number, margin = 16, weights: 
 /**
  * Advances a party. `x` is the left edge of the group; the group is `span` pixels
  * wide and bounces between the lane edges. Members keep their order and simply
- * turn around, so nobody teleports. Blocked parties stand still.
+ * turn around, so nobody teleports. Blocked parties stand still. `speedFactor` slows a group (see `slowFactor`).
  */
-export function stepWalker(w: Walker, status: Status, lane: Lane, span: number, dt: number): Walker {
+export function stepWalker(w: Walker, status: Status, lane: Lane, span: number, dt: number, speedFactor = 1): Walker {
   const min = lane.start;
   const max = Math.max(min, lane.end - span);
   // A group wider than its lane cannot bounce; keep its heading rather than flipping every frame.
   if (max <= min) return { x: min, dir: w.dir };
-  const x = Math.min(max, Math.max(min, w.x + w.dir * SPEED[status] * dt));
+  const x = Math.min(max, Math.max(min, w.x + w.dir * SPEED[status] * speedFactor * dt));
   let dir = w.dir;
   if (x >= max && dir === 1) dir = -1;
   else if (x <= min && dir === -1) dir = 1;

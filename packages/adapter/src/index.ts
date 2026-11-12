@@ -5,3 +5,7 @@ export * from './scrub.js';
 export * from './config.js';
 export * from './herdr/index.js';
 export * from './hooks/index.js';
+export * from './sanitize.js';
+export * from './auto.js';
+export * from './git.js';
+export * from './stats-store.js';

@@ -4,7 +4,7 @@ import type { Action } from '../actions.js';
 import type { WorldSource } from '../source.js';
 import type { Delta, Party, World } from '../types.js';
 import { type Connector, HerdrConnection, HerdrError } from './connection.js';
-import { applyStatusChange, diffParties, type MapContext, paneIds, partiesFromSnapshot } from './mapper.js';
+import { applyStatusChange, diffParties, foldersFromSnapshot, type MapContext, paneIds, partiesFromSnapshot, settleFinished } from './mapper.js';
 import { discoverSessions, resolveTarget, type SessionTarget } from './paths.js';
 import {
   AGENT_STATUS_CHANGED,
@@ -47,6 +47,7 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
   readonly session: string;
   private parties: Record<string, Party> = {};
   private branches = new Map<string, string>();
+  private folders: Record<string, string> = {};
   private lifecycle?: HerdrConnection;
   private status?: HerdrConnection;
   private rpc?: HerdrConnection;
@@ -231,6 +232,11 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
     },
   };
 
+  /** Local folder of a party in this session, when Herdr reports one. */
+  folderOf(partyId: string): string | undefined {
+    return this.folders[partyId];
+  }
+
   /** Whether this session currently has a member in `paneId`. */
   hasPane(paneId: string): boolean {
     return Object.values(this.parties).some((p) => paneId in p.members);
@@ -244,7 +250,8 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
   }
 
   private applySnapshot(snap: SessionSnapshot): void {
-    const next = partiesFromSnapshot(snap, this.ctx);
+    const next = settleFinished(this.parties, partiesFromSnapshot(snap, this.ctx));
+    this.folders = foldersFromSnapshot(snap, next, this.ctx);
     const t = this.now();
     if (!this.hasSnapshot) {
       this.hasSnapshot = true;
@@ -363,6 +370,15 @@ export class HerdrSource extends EventEmitter implements WorldSource {
     const child = this.children.find((c) => c.hasPane(paneId));
     if (!child) throw new Error(`no pane ${paneId} in any session`);
     return child.actions;
+  }
+
+  /** Local folder of a party, from the session that owns it. Herdr here is always the local machine. */
+  partyFolder(partyId: string): string | undefined {
+    for (const c of this.children) {
+      const f = c.folderOf(partyId);
+      if (f) return f;
+    }
+    return undefined;
   }
 
   world(): World {
