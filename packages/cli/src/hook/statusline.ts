@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -96,7 +95,17 @@ export function vitalsDir(home = homedir()): string {
 /** A session id made safe for a file name, with a short hash so two ids never share a file. */
 export function cacheName(session: string): string {
   const safe = session.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48);
-  return `${safe}-${createHash('sha256').update(session).digest('hex').slice(0, 8)}.json`;
+  return `${safe}-${fnv1a(session)}.json`;
+}
+
+/** 32-bit FNV-1a as 8 hex digits. Only tells file names apart; nothing here is secret. */
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
 }
 
 interface Cache {
