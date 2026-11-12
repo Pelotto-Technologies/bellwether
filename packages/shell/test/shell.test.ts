@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { adapterArgs } from '../src/adapter-args.js';
 import { defaultMapBounds, mapWindowBounds, type DisplayInfo, pickDisplay, spanLayout, stripBounds, stripHeightFor, windowBounds } from '../src/bounds.js';
-import { DEFAULT_CONFIG, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
+import { DEFAULT_CONFIG, effectiveSounds, loadConfig, normalizeConfig, saveConfig } from '../src/config.js';
 import { errorPage, waitForReady } from '../src/ready.js';
 import { existsSync } from 'node:fs';
 import { adapterPaths, assetsDir } from '../src/paths.js';
@@ -294,5 +294,47 @@ describe('draggable map window', () => {
     expect(normalizeConfig({ mapAlwaysOnTop: true, mapBounds: { x: 1.4, y: 2, width: 500, height: 400 } })).toMatchObject({ mapAlwaysOnTop: true, mapBounds: { x: 1, y: 2, width: 500, height: 400 } });
     expect(normalizeConfig({ mapBounds: { x: 'a', y: 2, width: 5, height: 5 } }).mapBounds).toBeUndefined();
     expect(normalizeConfig({ mapAlwaysOnTop: 'yes' }).mapAlwaysOnTop).toBeUndefined();
+  });
+});
+
+describe('sounds and alerts', () => {
+  it('the Sounds checkbox follows the effective state and flips it, persisted and passed to the page', () => {
+    const on = buildMenuModel({ ...DEFAULT_CONFIG, sounds: true }, [], []);
+    expect(on.find((i) => i.kind === 'item' && i.label === 'Sounds')).toMatchObject({ checked: true, action: { type: 'pick-sounds', sounds: false } });
+    const off = buildMenuModel({ ...DEFAULT_CONFIG, sounds: false }, [], []);
+    expect(off.find((i) => i.kind === 'item' && i.label === 'Sounds')).toMatchObject({ checked: false, action: { type: 'pick-sounds', sounds: true } });
+    const r = applyAction(DEFAULT_CONFIG, { type: 'pick-sounds', sounds: false });
+    expect(r.cfg.sounds).toBe(false);
+    expect(r.reload).toBe(true);
+    expect(applyAction(r.cfg, { type: 'pick-sounds', sounds: false }).reload).toBe(false);
+    expect(rendererUrl(r.cfg)).toContain('sounds=0');
+    expect(rendererUrl({ ...r.cfg, sounds: true })).toContain('sounds=1');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('sounds');
+    expect(normalizeConfig({ sounds: 'x' }).sounds).toBeUndefined();
+    expect(normalizeConfig({ sounds: false }).sounds).toBe(false);
+  });
+
+  it('sounds default on in the desktop overlay unless the tray or bellwether.toml says otherwise', () => {
+    expect(effectiveSounds({}, undefined)).toBe(true);
+    expect(effectiveSounds({}, false)).toBe(false);
+    expect(effectiveSounds({ sounds: true }, false)).toBe(true);
+    expect(effectiveSounds({ sounds: false }, true)).toBe(false);
+  });
+
+  it('the Alerts submenu picks a position, and only the map window gets it', () => {
+    const items = buildMenuModel({ ...DEFAULT_CONFIG, alerts: 'top-right' }, [], []);
+    const alerts = items.find((i) => i.kind === 'item' && i.label.startsWith('Alerts'));
+    const sub = alerts && alerts.kind === 'item' ? (alerts.submenu ?? []) : [];
+    expect(sub.map((i) => (i.kind === 'item' ? i.label : '-'))).toEqual(['Default (bellwether.toml)', 'Off', 'Top left', 'Top right', 'Top centre']);
+    expect(sub.find((i) => i.kind === 'item' && i.label === 'Top right')).toMatchObject({ checked: true });
+    const picked = applyAction({ ...DEFAULT_CONFIG, mode: 'map' }, { type: 'pick-alerts', alerts: 'top-left' });
+    expect(picked.cfg.alerts).toBe('top-left');
+    expect(picked.reload).toBe(true);
+    expect(rendererUrl(picked.cfg)).toContain('alerts=top-left');
+    expect(rendererUrl({ ...picked.cfg, mode: 'strip' })).not.toContain('alerts');
+    expect(applyAction({ ...picked.cfg, mode: 'strip' }, { type: 'pick-alerts', alerts: 'off' }).reload).toBe(false);
+    expect(applyAction(picked.cfg, { type: 'pick-alerts', alerts: undefined }).cfg.alerts).toBeUndefined();
+    expect(normalizeConfig({ alerts: 'top-center' }).alerts).toBe('top-center');
+    expect(normalizeConfig({ alerts: 'middle' }).alerts).toBeUndefined();
   });
 });

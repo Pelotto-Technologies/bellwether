@@ -70,3 +70,21 @@ describe('bubbles', () => {
     expect(() => parseSourceConfig('bubbles = "no"')).toThrow(/bubbles/);
   });
 });
+
+describe('sounds, volume and alerts', () => {
+  it('reads them from toml and leaves them unset otherwise', () => {
+    expect(parseSourceConfig('sounds = false\nvolume = 0.5\nalerts = "top-left"')).toMatchObject({ sounds: false, volume: 0.5, alerts: 'top-left' });
+    expect(parseSourceConfig('sounds = true').sounds).toBe(true);
+    const bare = parseSourceConfig('source = "mock"');
+    expect(bare.sounds).toBeUndefined();
+    expect(bare.volume).toBeUndefined();
+    expect(bare.alerts).toBeUndefined();
+  });
+
+  it('rejects bad values', () => {
+    expect(() => parseSourceConfig('sounds = "loud"')).toThrow(/sounds/);
+    expect(() => parseSourceConfig('volume = 1.5')).toThrow(/volume/);
+    expect(() => parseSourceConfig('volume = "x"')).toThrow(/volume/);
+    expect(() => parseSourceConfig('alerts = "bottom"')).toThrow(/alerts/);
+  });
+});

@@ -1,4 +1,5 @@
 import { ROLES, STATUSES, type Role, type Status } from '@bellwether/adapter/core';
+import { parseSounds, type SoundStyle } from './cues/style.js';
 
 export const HATS = ['none', 'cap', 'hood', 'helm', 'point'] as const;
 export const PROPS = ['none', 'staff', 'lantern', 'hammer', 'book'] as const;
@@ -22,6 +23,8 @@ export interface Theme {
   ground: string;
   roles: Record<Role, RoleLook>;
   sayTtlMs: number;
+  /** Flavour of the sound cues (optional `sounds` block in theme.json; defaults apply). */
+  sounds: SoundStyle;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -71,5 +74,6 @@ export function parseTheme(raw: unknown): Theme {
       }),
     ) as Record<Role, RoleLook>,
     sayTtlMs: typeof t.sayTtlMs === 'number' && t.sayTtlMs > 0 ? t.sayTtlMs : 6000,
+    sounds: parseSounds(t.sounds),
   };
 }

@@ -1,5 +1,7 @@
 import { Application } from 'pixi.js';
 import type { Delta } from '@bellwether/adapter/core';
+import { createCues } from './cues/setup.js';
+import { resolveOptions, servedCues, type ServedCues } from './cues/options.js';
 import { connectFeed, FeedState, replayFeed, type FeedMode } from './feed.js';
 import { guardFrame } from './guard.js';
 import { inferHandoff } from './map/chatter.js';
@@ -12,8 +14,9 @@ import { pickPack } from './select.js';
 import { parseSpan } from './sim.js';
 
 const params = new URLSearchParams(location.search);
-const mode = params.get('mode') === 'map' ? 'map' : 'strip';
-const transparent = params.has('transparent');
+// `alerts` is a page with no scene at all: just the alert banners on a transparent page, for an OBS source of its own.
+const mode = params.get('mode') === 'map' ? 'map' : params.get('mode') === 'alerts' ? 'alerts' : 'strip';
+const transparent = params.has('transparent') || mode === 'alerts';
 document.body.classList.add(transparent ? 'transparent' : 'backdrop');
 if (mode === 'map') document.body.classList.add('map');
 
@@ -27,7 +30,7 @@ function deltaUrl(): string | null {
 }
 
 /** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
-async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean; bubbles?: boolean }> {
+async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean; bubbles?: boolean } & ServedCues> {
   try {
     const res = await fetch('./config.json', { cache: 'no-store' });
     if (!res.ok) return {};
@@ -37,6 +40,7 @@ async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?
       ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}),
       ...(typeof cfg.minimal === 'boolean' ? { minimal: cfg.minimal } : {}),
       ...(typeof cfg.bubbles === 'boolean' ? { bubbles: cfg.bubbles } : {}),
+      ...servedCues(cfg),
     };
   } catch {
     return {};
@@ -58,15 +62,19 @@ async function main() {
   const art = await loadArt(pack);
   const app = new Application();
   await app.init({ backgroundAlpha: 0, resizeTo: window, antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1 });
-  document.body.appendChild(app.canvas);
+  if (mode !== 'alerts') document.body.appendChild(app.canvas);
 
   const feed = new FeedState(theme.sayTtlMs);
   // Chat bubbles: `?bubbles=0` beats bellwether.toml (`bubbles = false`); B flips them for this page.
   feed.bubblesOn = params.has('bubbles') ? params.get('bubbles') !== '0' : served.bubbles !== false;
   const scene =
-    mode === 'map'
-      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
-      : new StripScene(app, theme, feed, scale, art, minimal, span);
+    mode === 'alerts'
+      ? undefined
+      : mode === 'map'
+        ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
+        : new StripScene(app, theme, feed, scale, art, minimal, span);
+  // Sounds and alert banners (`s` and `a` keys), driven by the same deltas as the scene.
+  const cues = createCues(resolveOptions({ params, served, mode, spanFollower: !!span && span.offset !== 0 }), theme, art, app.renderer);
   // Spanning monitors: one window per monitor, each showing its slice of one strip. The leftmost
   // window leads and shares where everyone is walking, so a party crossing a seam lines up.
   if (span && scene instanceof StripScene && typeof BroadcastChannel !== 'undefined') {
@@ -79,7 +87,7 @@ async function main() {
       feed.bubblesOn = !feed.bubblesOn;
       return;
     }
-    if (e.key !== 'm' && e.key !== 'M') return;
+    if ((e.key !== 'm' && e.key !== 'M') || mode === 'alerts') return;
     const next = new URLSearchParams(location.search);
     next.set('mode', mode === 'map' ? 'strip' : 'map');
     location.search = next.toString();
@@ -88,7 +96,9 @@ async function main() {
 
   const onDelta = (d: Delta) => {
     const before = d.kind === 'member' ? feed.world.parties[d.partyId] : undefined;
+    const prevWorld = feed.world;
     feed.apply(d, performance.now());
+    cues.observe(prevWorld, d, performance.now());
     // Inferred chatter: a hand-off reads as the finished member saying something.
     // A real message to this member already explains why it started; no need to guess one.
     if (d.kind === 'member' && before && !feed.addressedTo(d.partyId, d.member.paneId, performance.now())) {
@@ -109,7 +119,12 @@ async function main() {
     feed.onClose = (paneId) => handle.send?.({ type: 'close', paneId });
   }
 
-  app.ticker.add(guardFrame((ticker: { deltaMS: number }) => scene.update(ticker.deltaMS / 1000, performance.now())));
+  app.ticker.add(
+    guardFrame((ticker: { deltaMS: number }) => {
+      scene?.update(ticker.deltaMS / 1000, performance.now());
+      cues.frame(performance.now());
+    }),
+  );
 }
 
 void main();

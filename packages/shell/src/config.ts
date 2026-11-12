@@ -4,6 +4,9 @@ import type { Rect } from './bounds.js';
 
 export type Mode = 'strip' | 'map';
 
+export const ALERT_POSITIONS = ['off', 'top-left', 'top-right', 'top-center'] as const;
+export type AlertsSetting = (typeof ALERT_POSITIONS)[number];
+
 export interface ShellConfig {
   mode: Mode;
   /** Electron display id; undefined means primary. */
@@ -25,6 +28,10 @@ export interface ShellConfig {
   span?: boolean;
   /** Speech bubbles shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   bubbles?: boolean;
+  /** Sound cues on (true) or muted (false); undefined defers to bellwether.toml, then on: the desktop overlay plays sounds by default. */
+  sounds?: boolean;
+  /** Alert banner position in the map window; undefined defers to bellwether.toml, then off. The strip is a thin bar with no room for a banner. */
+  alerts?: AlertsSetting;
   /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
   mapAlwaysOnTop?: boolean;
   /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
@@ -32,6 +39,11 @@ export interface ShellConfig {
 }
 
 export const DEFAULT_SCALE = 3;
+
+/** Whether sounds play: the tray choice, else bellwether.toml's `sounds`, else on (the desktop overlay's default). */
+export function effectiveSounds(cfg: Pick<ShellConfig, 'sounds'>, served?: boolean): boolean {
+  return cfg.sounds ?? served ?? true;
+}
 
 /** Scale the strip actually uses: the menu choice, else the adapter's served `scale`, else 3. */
 export function effectiveScale(cfg: Pick<ShellConfig, 'scale'>, served?: number): number {
@@ -74,6 +86,8 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.url === 'string' && r.url.length > 0) out.url = r.url;
   if (typeof r.minimal === 'boolean') out.minimal = r.minimal;
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
+  if (typeof r.sounds === 'boolean') out.sounds = r.sounds;
+  if (typeof r.alerts === 'string' && (ALERT_POSITIONS as readonly string[]).includes(r.alerts)) out.alerts = r.alerts as AlertsSetting;
   if (r.span === true) out.span = true;
   if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
   const b = r.mapBounds as Record<string, unknown> | null | undefined;
