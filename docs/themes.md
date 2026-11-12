@@ -46,6 +46,25 @@ Parsed by `packages/renderer/src/theme.ts`. Colours are `#rrggbb`.
 | `roles.<role>` | `body`, `accent`, `hat` (`none cap hood helm point`), `prop` (`none staff lantern hammer book`). `roles.generic` is required; missing roles use it. |
 | `art` | Path to `art.json`, relative to the pack. |
 | `sayTtlMs` | How long a speech bubble stays (default 6000). |
+| `sounds` | Optional flavour of the sound cues, see below. |
+
+### sounds
+
+Every field is optional; missing or invalid ones use the default (square, C4, major, 126 bpm).
+The cues are tiny original motifs written as scale degrees, played in this key and tempo.
+
+```json
+"sounds": { "wave": "triangle", "root": "G3", "scale": "dorian", "tempo": 100 }
+```
+
+| Key | Meaning |
+|---|---|
+| `wave` | Oscillator: `square`, `triangle`, `sawtooth` or `sine`. |
+| `root` | Tonic: a note name (`C4`, `F#3`, `Bb4`; middle C is C4) or a MIDI number, 36 to 84. |
+| `scale` | `major`, `minor`, `dorian`, `lydian`, `pentatonic`, `minorPentatonic` or `wholeTone`. |
+| `tempo` | Beats per minute, 80 to 200 (clamped); keeps the all-done fanfare under 1.5 seconds. |
+
+Give your pack a combination none of the public packs use, so it is recognisable by ear.
 
 ## art.json
 

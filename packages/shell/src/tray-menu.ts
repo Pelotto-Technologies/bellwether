@@ -1,5 +1,5 @@
 import type { DisplayInfo } from './bounds.js';
-import type { Mode, ShellConfig } from './config.js';
+import type { AlertsSetting, Mode, ShellConfig } from './config.js';
 
 export type MenuAction =
   | { type: 'toggle-mode' }
@@ -9,6 +9,8 @@ export type MenuAction =
   | { type: 'reset-map' }
   | { type: 'pick-labels'; minimal: boolean | undefined }
   | { type: 'pick-bubbles'; bubbles: boolean | undefined }
+  | { type: 'pick-sounds'; sounds: boolean }
+  | { type: 'pick-alerts'; alerts: AlertsSetting | undefined }
   | { type: 'toggle-vitals' }
   | { type: 'pick-scale'; scale: number | undefined }
   | { type: 'pick-pack'; pack: string | undefined }
@@ -16,7 +18,7 @@ export type MenuAction =
   | { type: 'quit' };
 
 export type MenuItem =
-  | { kind: 'item'; label: string; checked?: boolean; enabled?: boolean; action?: MenuAction }
+  | { kind: 'item'; label: string; checked?: boolean; enabled?: boolean; action?: MenuAction; submenu?: MenuItem[] }
   | { kind: 'separator' };
 
 /** Public packs shipped in themes/; a private or custom pack in the config is added to the list. */
@@ -25,6 +27,14 @@ export const BUILTIN_PACKS: readonly { name: string; label: string }[] = [
   { name: 'aesir', label: 'Aesir' },
   { name: 'wayfarers', label: 'Wayfarers' },
   { name: 'scifi', label: 'Deep Space' },
+];
+
+/** Alert banner positions offered in the tray's Alerts submenu. */
+export const ALERT_CHOICES: readonly { alerts: AlertsSetting; label: string }[] = [
+  { alerts: 'off', label: 'Off' },
+  { alerts: 'top-left', label: 'Top left' },
+  { alerts: 'top-right', label: 'Top right' },
+  { alerts: 'top-center', label: 'Top centre' },
 ];
 
 /** Strip sizes offered in the tray; the number is the art pixel scale. */
@@ -39,7 +49,7 @@ const modeLabel = (m: Mode) => (m === 'strip' ? 'Strip' : 'Map');
 
 /** Pure description of the tray menu; main.ts turns it into an Electron Menu. */
 export function buildMenuModel(
-  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles' | 'vitals' | 'span' | 'mapAlwaysOnTop'> & { pack?: string },
+  cfg: Pick<ShellConfig, 'mode' | 'displayId' | 'session' | 'scale' | 'minimal' | 'bubbles' | 'vitals' | 'alerts' | 'span' | 'mapAlwaysOnTop'> & { pack?: string; sounds?: boolean },
   displays: readonly DisplayInfo[],
   sessions: readonly string[],
 ): MenuItem[] {
@@ -69,6 +79,16 @@ export function buildMenuModel(
     { kind: 'item', label: 'Show', checked: cfg.bubbles === true, action: { type: 'pick-bubbles', bubbles: true } },
     { kind: 'item', label: 'Hide', checked: cfg.bubbles === false, action: { type: 'pick-bubbles', bubbles: false } },
     { kind: 'separator' },
+    // `sounds` is the effective state (tray choice, else bellwether.toml, else on), so the box is ticked when cues play.
+    { kind: 'item', label: 'Sounds', checked: cfg.sounds ?? true, action: { type: 'pick-sounds', sounds: !(cfg.sounds ?? true) } },
+    {
+      kind: 'item',
+      label: 'Alerts (map window)',
+      submenu: [
+        { kind: 'item', label: 'Default (bellwether.toml)', checked: cfg.alerts === undefined, action: { type: 'pick-alerts', alerts: undefined } },
+        ...ALERT_CHOICES.map<MenuItem>((c) => ({ kind: 'item', label: c.label, checked: c.alerts === cfg.alerts, action: { type: 'pick-alerts', alerts: c.alerts } })),
+      ],
+    },
     // Shown unless switched off here or in bellwether.toml; the first click from the default hides them.
     { kind: 'item', label: 'Vitals', checked: cfg.vitals !== false, action: { type: 'toggle-vitals' } },
     { kind: 'separator' },
@@ -140,6 +160,15 @@ export function applyAction(cfg: ShellConfig, action: MenuAction): { cfg: ShellC
       if (action.bubbles === undefined) delete next.bubbles;
       else next.bubbles = action.bubbles;
       return { cfg: next, restartAdapter: false, reload: cfg.bubbles !== action.bubbles };
+    }
+    case 'pick-sounds':
+      return { cfg: { ...cfg, sounds: action.sounds }, restartAdapter: false, reload: cfg.sounds !== action.sounds };
+    case 'pick-alerts': {
+      const next = { ...cfg };
+      if (action.alerts === undefined) delete next.alerts;
+      else next.alerts = action.alerts;
+      // The strip never shows banners, so only the map window needs a reload.
+      return { cfg: next, restartAdapter: false, reload: cfg.mode === 'map' && cfg.alerts !== action.alerts };
     }
     case 'toggle-vitals':
       return { cfg: { ...cfg, vitals: cfg.vitals === false }, restartAdapter: false, reload: true };

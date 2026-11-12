@@ -7,6 +7,9 @@ import { MockSource } from './mock.js';
 import type { WorldSource } from './source.js';
 import { chooseAutoSource, type AutoDeps } from './auto.js';
 
+export const ALERT_POSITIONS = ['off', 'top-left', 'top-right', 'top-center'] as const;
+export type AlertPosition = (typeof ALERT_POSITIONS)[number];
+
 export type SourceKind = 'mock' | 'live' | 'hooks' | 'auto';
 
 export interface SourceConfig {
@@ -19,6 +22,12 @@ export interface SourceConfig {
   minimal?: boolean;
   /** Speech bubbles over agents; on by default, `bubbles = false` hides them. Carried only when false. */
   bubbles?: boolean;
+  /** Sound cues (`sounds = true|false`). Unset: the desktop overlay plays them, a browser tab or OBS source does not. */
+  sounds?: boolean;
+  /** Master volume of the sound cues, 0 to 1 (`volume = 0.3`). */
+  volume?: number;
+  /** Alert banners: `off` (default), `top-left`, `top-right` or `top-center` (`alerts = "top-right"`). */
+  alerts?: AlertPosition;
   /** Vitals (context, quota, model, quest) over agents; on by default, `vitals = false` hides them. Carried only when false. */
   vitals?: boolean;
   /** Scrub recordings at record time (`scrub = true`). */
@@ -57,6 +66,9 @@ export const DEFAULT_CONFIG: SourceConfig = { source: 'mock', herdr: {} };
  * scale = 2                  # strip pixel scale, 1 to 6 (default 3); 2 is compact
  * minimal = true             # strip shows just a status icon under the feet, no nameplate
  * bubbles = false            # hide speech bubbles (default: shown)
+ * sounds = true              # chiptune cues for done, blocked, new party (default: on in the desktop overlay only)
+ * volume = 0.3               # sound volume, 0 to 1 (default 0.3)
+ * alerts = "top-right"       # alert banners: off (default), top-left, top-right, top-center
  * vitals = false             # hide context and quota bars, model and quest (default: shown)
  * scrub = true               # hash labels and strip say text in recordings
  * actions = true             # let the overlay prompt and send keys to agents (focus is always on)
@@ -98,10 +110,13 @@ export function parseSourceConfig(text: string): SourceConfig {
   }
   if (raw.minimal !== undefined && typeof raw.minimal !== 'boolean') throw new Error('bellwether.toml: minimal must be true or false');
   if (raw.bubbles !== undefined && typeof raw.bubbles !== 'boolean') throw new Error('bellwether.toml: bubbles must be true or false');
-  if (raw.vitals !== undefined && typeof raw.vitals !== 'boolean') throw new Error('bellwether.toml: vitals must be true or false');
+  if (raw.sounds !== undefined && typeof raw.sounds !== 'boolean') throw new Error('bellwether.toml: sounds must be true or false');
+  if (raw.volume !== undefined && (typeof raw.volume !== 'number' || !(raw.volume >= 0 && raw.volume <= 1))) throw new Error('bellwether.toml: volume must be a number from 0 to 1');
+  if (raw.alerts !== undefined && !(ALERT_POSITIONS as readonly unknown[]).includes(raw.alerts)) throw new Error(`bellwether.toml: alerts must be one of ${ALERT_POSITIONS.map((p) => `"${p}"`).join(', ')}`);
   if (raw.scrub !== undefined && typeof raw.scrub !== 'boolean') throw new Error('bellwether.toml: scrub must be true or false');
   if (raw.actions !== undefined && typeof raw.actions !== 'boolean') throw new Error('bellwether.toml: actions must be true or false');
-  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), ...(raw.vitals === false ? { vitals: false } : {}), herdr, ...(typeof hk.file === 'string' ? { hooks: { file: hk.file } } : {}), ...(g.enabled === true ? { git: { enabled: true as const, ...(typeof g.interval === 'number' ? { interval: g.interval } : {}) } } : {}) };
+  if (raw.vitals !== undefined && typeof raw.vitals !== 'boolean') throw new Error('bellwether.toml: vitals must be true or false');
+  return { source, ...(raw.actions === true ? { actions: true } : {}), ...(raw.scrub === true ? { scrub: true } : {}), ...(typeof raw.pack === 'string' ? { pack: raw.pack } : {}), ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}), ...(raw.minimal === true ? { minimal: true } : {}), ...(raw.bubbles === false ? { bubbles: false } : {}), ...(raw.vitals === false ? { vitals: false } : {}), ...(typeof raw.sounds === 'boolean' ? { sounds: raw.sounds } : {}), ...(typeof raw.volume === 'number' ? { volume: raw.volume } : {}), ...(typeof raw.alerts === 'string' ? { alerts: raw.alerts as AlertPosition } : {}), herdr, ...(typeof hk.file === 'string' ? { hooks: { file: hk.file } } : {}), ...(g.enabled === true ? { git: { enabled: true as const, ...(typeof g.interval === 'number' ? { interval: g.interval } : {}) } } : {}) };
 }
 
 /** Load config from a file (missing file means defaults), then apply env overrides. */

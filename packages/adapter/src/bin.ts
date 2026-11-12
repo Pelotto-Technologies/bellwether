@@ -84,6 +84,7 @@ let clientPack: string | undefined = values.pack;
 let clientScale: number | undefined;
 let clientMinimal = false;
 let clientBubbles = true;
+let clientCues: Record<string, unknown> = {};
 let clientVitals = true;
 
 if (values.help) {
@@ -138,6 +139,7 @@ async function pickSource(): Promise<WorldSource> {
   clientScale = cfg.scale;
   clientMinimal = cfg.minimal ?? false;
   clientBubbles = cfg.bubbles ?? true;
+  clientCues = { ...(cfg.sounds !== undefined ? { sounds: cfg.sounds } : {}), ...(cfg.volume !== undefined ? { volume: cfg.volume } : {}), ...(cfg.alerts !== undefined ? { alerts: cfg.alerts } : {}) };
   clientVitals = cfg.vitals ?? true;
   scrubConfig = cfg.scrub ?? false;
   actionsConfig = cfg.actions ?? false;
@@ -160,7 +162,7 @@ async function pickSource(): Promise<WorldSource> {
 }
 
 const source = await pickSource();
-const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: { ...(clientPack ? { pack: clientPack } : {}), ...(clientScale ? { scale: clientScale } : {}), ...(clientMinimal ? { minimal: true } : {}), ...(clientBubbles ? {} : { bubbles: false }), ...(clientVitals ? {} : { vitals: false }) }, actions: values.actions || actionsConfig, log });
+const server = new DeltaServer({ port: Number(values.port ?? DEFAULT_PORT), staticDir: values.serve, clientConfig: { ...(clientPack ? { pack: clientPack } : {}), ...(clientScale ? { scale: clientScale } : {}), ...(clientMinimal ? { minimal: true } : {}), ...(clientBubbles ? {} : { bubbles: false }), ...(clientVitals ? {} : { vitals: false }), ...clientCues }, actions: values.actions || actionsConfig, log });
 server.attach(source);
 if (values.record) {
   const rec = recordTo(values.record);
