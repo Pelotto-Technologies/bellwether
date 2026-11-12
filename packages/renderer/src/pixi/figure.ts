@@ -1,5 +1,6 @@
 import type { Member, Status } from '@bellwether/adapter/core';
 import { Container, Sprite, Texture } from 'pixi.js';
+import type { AnimName } from '../art.js';
 import { chooseAnim, frameIndex, frameNames } from '../anim.js';
 import { mixHex } from '../fellowship.js';
 import { beaconAlpha } from '../sim.js';
@@ -23,6 +24,8 @@ export interface FigurePose {
   phase: number;
   /** Fellowship tint mixed into the cloak so sibling parties look different. */
   tint?: string | undefined;
+  /** Camp scene: play this frame of this animation instead of the usual choice. */
+  override?: { anim: string; index: number } | undefined;
 }
 
 /**
@@ -53,7 +56,7 @@ export class Figure {
     const sheet = this.art.sheets[m.role];
     const anim = chooseAnim({ moving: p.moving, status: m.status, talking: p.talking }, p.t, p.phase);
     const idx = frameIndex(art.character.counts[anim], art.character.fps[anim], p.t, p.phase);
-    const names = frameNames(anim, idx);
+    const names = p.override ? frameNames(p.override.anim as AnimName, p.override.index) : frameNames(anim, idx);
 
     this.base.tint = p.tint ? hexNum(mixHex('#ffffff', p.tint, BODY_WASH)) : 0xffffff;
     this.base.texture = sheet.textures[names.base] ?? Texture.EMPTY;

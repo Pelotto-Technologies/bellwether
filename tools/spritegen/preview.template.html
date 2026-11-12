@@ -88,6 +88,12 @@
   </section>
 
   <section>
+    <h2>Camp scene</h2>
+    <p>The fire, the log members sit on, one station per activity (each with its animation frames) and the effects. The builder plays the hammering pose beside the anvil. Wood and canvas in a camp pack, plating and holograms in an outpost pack.</p>
+    <div class="stage"><canvas id="camp"></canvas></div>
+  </section>
+
+  <section>
     <h2>Sheets</h2>
     <div class="sheets" id="sheets"></div>
   </section>
@@ -124,7 +130,7 @@ async function loadPack(name) {
   loaded[name] = {
     ...d, roles,
     groundImg: await loadImg(d.ground.img), tilesImg: await loadImg(d.tileset.img),
-    propsImg: await loadImg(d.props.img), uiImg: await loadImg(d.ui.img), tinted: {},
+    propsImg: await loadImg(d.props.img), uiImg: await loadImg(d.ui.img), campImg: await loadImg(d.camp.img), tinted: {},
   };
   return loaded[name];
 }
@@ -231,6 +237,7 @@ function buildSheets(P) {
   add(P.roles.architect.img, `${P.roles.architect.displayName}: colour, light mask, cloak mask`, 2);
   add(P.tileset.img, 'map/tileset.png', 2);
   add(P.props.img, 'map/props.png', 2);
+  add(P.camp.img, 'map/camp.png', 2);
   add(P.ui.img, 'ui/ui.png', 2);
   add(P.ground.img, 'sprites/ground.png', 2);
 }
@@ -411,6 +418,35 @@ function tintProp(P, name, color) {
   return (propTint[key] = c);
 }
 
+// ---------- camp ----------
+function drawCamp(P, t) {
+  const c = document.getElementById('camp');
+  const S = 3, stations = P.art.camp.stations, cellW = 44, W = Math.max((stations.length + 3) * cellW, 360), H = 130;
+  if (c.width !== W * S) { c.width = W * S; c.height = H * S; c.style.width = c.width + 'px'; c.style.height = c.height + 'px'; }
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.setTransform(S, 0, 0, S, 0, 0);
+  x.fillStyle = P.art.camp.tone === 'outpost' ? '#2a3350' : '#5a8a46';
+  x.fillRect(0, 0, W, H);
+  const cf = P.camp.frames;
+  const spr = (name, dx, dy) => { const f = cf[name].frame; x.drawImage(P.campImg, f.x, f.y, f.w, f.h, Math.round(dx - f.w / 2), Math.round(dy - f.h), f.w, f.h); };
+  x.font = '6px monospace'; x.fillStyle = '#fff';
+  const f = Math.floor(t * 6);
+  stations.forEach((id, i) => {
+    const n = Object.keys(cf).filter((k) => k.startsWith(`st_${id}_`)).length;
+    spr(`st_${id}_${f % n}`, 30 + i * cellW, 74);
+    x.fillText(id, 14 + i * cellW, 84);
+  });
+  const ix = 30 + stations.length * cellW;
+  spr(`fire_${f % 4}`, ix + 6, 74); x.fillText('fire', ix - 8, 84);
+  spr('seat', ix + cellW + 4, 74); x.fillText('seat', ix + cellW - 8, 84);
+  spr('fx_alert_' + (f % 2), 24, 112); spr('fx_question', 44, 112); [0, 1, 2].forEach((i) => spr('fx_zzz_' + i, 62 + i * 10, 112)); spr('fx_sweat', 100, 112);
+  spr('crate_0', 130, 124); spr('crate_1', 148, 124); spr('cart_loaded', 190, 124); spr('tent', 244, 124); spr('tall_0', 290, 126); spr('low_0', 316, 124); spr('low_1', 336, 124);
+  const role = 'implementer';
+  const fr = P.roles[role].frames['work_' + (f % 2)];
+  if (fr) drawChar(x, P, role, 'work_' + (f % 2), 30 - 22, 74 - 31, 1, { status: null, cloak: null });
+}
+
 // ---------- loop ----------
 let last = performance.now();
 function frame(now) {
@@ -424,6 +460,7 @@ function frame(now) {
     if (!reduced) stepStrip(dt, Math.floor((document.getElementById('strip').clientWidth || 800) / 3));
     drawStrip(P, t);
     drawMap(P, t);
+    drawCamp(P, t);
   }
   requestAnimationFrame(frame);
 }

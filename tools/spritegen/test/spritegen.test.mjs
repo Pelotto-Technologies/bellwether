@@ -59,3 +59,50 @@ for (const pack of PACKS) {
     }
   });
 }
+
+// Frames the renderer's camp scene asks for by name; a pack that loses one would crash it.
+const CAMP_FRAMES = [
+  ...[0, 1, 2, 3].flatMap((i) => [`floor_${i}`, `fire_${i}`]),
+  'tent', 'tall_0', 'tall_1', 'low_0', 'low_1', 'seat', 'fx_alert_0', 'fx_alert_1', 'fx_question', 'fx_zzz_0', 'fx_zzz_1', 'fx_zzz_2', 'fx_sweat',
+  'crate_0', 'crate_1', 'cart', 'cart_loaded',
+  ...['edit', 'read', 'shell', 'search', 'delegate', 'think'].flatMap((s) => [0, 1, 2, 3].map((i) => `st_${s}_${i}`)),
+  'st_blocked_0', 'st_blocked_1',
+];
+
+for (const pack of PACKS) {
+  test(`${pack.name}: camp art has every frame the camp scene uses, and a camp block`, () => {
+    const dir = path.join(THEMES_DIR, pack.name);
+    const atlas = JSON.parse(fs.readFileSync(path.join(dir, 'map/camp.json'), 'utf8'));
+    for (const name of CAMP_FRAMES) assert.ok(atlas.frames[name], `${pack.name} lacks ${name}`);
+    const img = decodePng(fs.readFileSync(path.join(dir, 'map/camp.png')));
+    for (const [name, f] of Object.entries(atlas.frames)) assert.ok(f.frame.x + f.frame.w <= img.w && f.frame.y + f.frame.h <= img.h, `${name} outside the image`);
+    const art = JSON.parse(fs.readFileSync(path.join(dir, 'art.json'), 'utf8'));
+    assert.ok(['camp', 'outpost'].includes(art.camp.tone));
+    assert.equal(art.camp.sky.length, 2);
+    assert.match(art.camp.glow, /^#[0-9a-f]{6}$/i);
+    assert.ok(art.character.frames.includes('work_0') && art.character.frames.includes('work_1'));
+  });
+
+  test(`${pack.name}: station animations really animate`, () => {
+    const dir = path.join(THEMES_DIR, pack.name);
+    const atlas = JSON.parse(fs.readFileSync(path.join(dir, 'map/camp.json'), 'utf8'));
+    const img = decodePng(fs.readFileSync(path.join(dir, 'map/camp.png')));
+    const pixels = (name) => {
+      const { x, y, w, h } = atlas.frames[name].frame;
+      const out = [];
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) out.push(img.rgba.slice(((y + j) * img.w + x + i) * 4, ((y + j) * img.w + x + i) * 4 + 4).join(','));
+      return out.join('|');
+    };
+    for (const [s, n] of [['edit', 4], ['read', 4], ['shell', 4], ['search', 4], ['delegate', 4], ['think', 4], ['blocked', 2]]) {
+      const set = new Set(Array.from({ length: n }, (_, i) => pixels(`st_${s}_${i}`)));
+      assert.ok(set.size >= 2, `${pack.name} st_${s} frames are all identical`);
+    }
+    assert.ok(new Set([0, 1, 2, 3].map((i) => pixels(`fire_${i}`))).size === 4, 'fire frames differ');
+  });
+}
+
+test('only the scifi pack is an outpost; the others are camps', () => {
+  const tones = Object.fromEntries(PACKS.map((p) => [p.name, p.camp?.tone ?? 'camp']));
+  assert.equal(tones.scifi, 'outpost');
+  for (const n of ['neutral', 'aesir', 'wayfarers']) assert.equal(tones[n], 'camp');
+});

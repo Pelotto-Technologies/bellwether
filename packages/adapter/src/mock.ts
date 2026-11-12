@@ -31,6 +31,18 @@ const QUESTS: Record<string, string> = {
 const MODELS = ['Opus 5.5', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 5'] as const;
 const EFFORTS = ['low', 'medium', 'high', 'high', 'xhigh'] as const;
 
+/** Tools a working mock member cycles through, so the camp scene shows every activity. Not random: the mock stays deterministic. */
+const TOOLS = ['Edit', 'Read', 'Bash', 'Grep', 'WebSearch', 'Task', 'Write', 'Glob'] as const;
+let toolSeq = 0;
+
+/** Git state for some mock parties (camp scene: crates for uncommitted files, a cart for unpushed commits). */
+const GIT: Record<string, NonNullable<Party['git']>> = {
+  'auth-refresh': { dirty: 7, ahead: 2, noRemote: false },
+  'billing-export': { dirty: 1, ahead: 0, noRemote: false },
+  'search-index': { dirty: 0, ahead: 3, noRemote: false },
+  'deploy-pipeline': { dirty: 14, ahead: 0, noRemote: true },
+};
+
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;
 
 const LINES: Partial<Record<Role, string[]>> = {
@@ -107,6 +119,7 @@ export class MockGenerator {
           const quest = QUESTS[seed.label];
           if (quest) member.quest = quest;
         }
+        if (member.status === 'working') member.tool = TOOLS[toolSeq++ % TOOLS.length];
         members[paneId] = member;
       });
       parties[id] = {
@@ -119,6 +132,7 @@ export class MockGenerator {
         status: 'unknown',
         members,
         tokens: {},
+        ...(GIT[seed.label] ? { git: GIT[seed.label] } : {}),
       };
     });
     const delta: Delta = { t, kind: 'snapshot', world: { machine: this.world.machine, parties } };
@@ -143,6 +157,8 @@ export class MockGenerator {
     } else {
       const status = weighted(this.rng, NEXT[member.status]);
       const next: Member = { ...member, status, say: undefined, lastChange: this.seq++ };
+      if (status === 'working') next.tool = TOOLS[toolSeq++ % TOOLS.length];
+      else delete next.tool;
       if (member.vitals) {
         // Working eats context; at the bottom the agent compacts and starts over high.
         const used = status === 'working' ? 3 + Math.floor(this.rng() * 7) : 0;

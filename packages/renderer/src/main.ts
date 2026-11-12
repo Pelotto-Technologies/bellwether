@@ -4,6 +4,7 @@ import { connectFeed, FeedState, replayFeed, type FeedMode } from './feed.js';
 import { guardFrame } from './guard.js';
 import { inferHandoff } from './map/chatter.js';
 import { hasMapArt, loadMapArt } from './map/assets.js';
+import { loadCampArt } from './map/campart.js';
 import { availablePacks, packData } from './packs.js';
 import { MapScene } from './pixi/map.js';
 import { loadArt } from './pixi/pack.js';
@@ -12,10 +13,12 @@ import { pickPack } from './select.js';
 import { parseSpan } from './sim.js';
 
 const params = new URLSearchParams(location.search);
-const mode = params.get('mode') === 'map' ? 'map' : 'strip';
+const modeParam = params.get('mode');
+const mode = modeParam === 'map' || modeParam === 'camp' ? 'map' : 'strip';
 const transparent = params.has('transparent');
 document.body.classList.add(transparent ? 'transparent' : 'backdrop');
 if (mode === 'map') document.body.classList.add('map');
+if (params.get('panel') === '0') document.body.classList.add('no-panel');
 
 function deltaUrl(): string | null {
   if (params.get('source') === 'mock') return null;
@@ -68,8 +71,10 @@ async function main() {
   feed.vitalsOn = params.has('vitals') ? params.get('vitals') !== '0' : served.vitals !== false;
   const scene =
     mode === 'map'
-      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art)
+      ? new MapScene(app, theme, feed, await loadMapArt(hasMapArt(packName) ? packName : 'neutral'), art, await loadCampArt(packName))
       : new StripScene(app, theme, feed, scale, art, minimal, span);
+  // `?mode=camp&party=<id, label or branch>` opens that party's camp scene straight away.
+  if (modeParam === 'camp' && scene instanceof MapScene) scene.openCamp(params.get('party') ?? '');
   // Spanning monitors: one window per monitor, each showing its slice of one strip. The leftmost
   // window leads and shares where everyone is walking, so a party crossing a seam lines up.
   if (span && scene instanceof StripScene && typeof BroadcastChannel !== 'undefined') {
