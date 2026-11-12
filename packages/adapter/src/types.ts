@@ -39,6 +39,17 @@ export interface Party {
   status: Status;
   members: Record<string, Member>;
   tokens: Record<string, string>;
+  /** Working-tree state of the party's folder. Absent when unknown or git probing is off. */
+  git?: GitState;
+}
+
+export interface GitState {
+  /** Files with uncommitted changes (staged, unstaged or untracked). */
+  dirty: number;
+  /** Commits not yet pushed to the upstream branch; 0 when there is no upstream. */
+  ahead: number;
+  /** True when the repository has no remote at all. */
+  noRemote: boolean;
 }
 
 /** One pane running an agent. */
@@ -54,6 +65,16 @@ export interface Member {
   sayTo?: string;
   /** Changes with every message, so a repeated line still raises a new bubble. */
   sayId?: string;
+  /** Remaining percentages, 0-100. Absent when unknown; never estimated. */
+  vitals?: { context?: number; quota?: number; at: number };
+  /** Display name of the model, e.g. "Opus 5.5". At most 40 characters. */
+  model?: string;
+  /** Reasoning effort, e.g. "high". At most 16 characters. */
+  effort?: string;
+  /** The agent session's human name. At most 80 characters. */
+  quest?: string;
+  /** Name of the tool currently running: set on `tool`, cleared on `tool_done` and `stop`. Hooks source only for now. */
+  tool?: string;
   lastChange: number;
 }
 

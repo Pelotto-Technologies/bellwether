@@ -1,7 +1,7 @@
 {
   "name": "@pelotto-tech/bellwether",
   "version": "0.3.3",
-  "description": "Pixel stream overlay for Herdr agent workspaces: CLI, adapter and overlay page in one package",
+  "description": "Your AI coding agents as a party of tiny pixel characters: CLI, adapter and overlay in one package (Claude Code, GitHub Copilot CLI, optional Herdr)",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {

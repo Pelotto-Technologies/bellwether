@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, chmodSync, readdirSync } 
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { AGENT_TARGETS, type AgentContext, type AgentTarget, type EventHookCommand, type ToolHookCommand } from './agents/index.js';
+import { AGENT_TARGETS, type AgentContext, type AgentTarget, type EventHookCommand, type StatusLineCommand, type ToolHookCommand } from './agents/index.js';
 import { posixPath } from './agents/paths.js';
 import { EVENT_MARKER, SAY_MARKER } from './hook/say.js';
+import { STATUSLINE_MARKER } from './hook/statusline.js';
 import { readJsonObject, writeJsonObject } from './json-file.js';
 import { HOOK_BASENAME, hookPs1, hookSh, skillMarkdown } from './skill.js';
 
@@ -72,12 +73,23 @@ export function eventHookCommand(node = process.execPath, main = fileURLToPath(n
   });
 }
 
+/** The status line command: this Node running this CLI's `hook statusline`, with the previous command in `--wrap` when there is one. */
+export function statusLineCommand(node = process.execPath, main = fileURLToPath(new URL('./main.js', import.meta.url))): StatusLineCommand {
+  return (wrap) => {
+    const tail = `${wrap ? ` --wrap ${wrap}` : ''} # ${STATUSLINE_MARKER}`;
+    return {
+      posix: `"${posixPath(node)}" "${posixPath(main)}" hook statusline${tail}`,
+      powershell: `& "${node}" "${main}" hook statusline${tail}`,
+    };
+  };
+}
+
 /**
  * Install the skill pack, the SessionStart role hook and the PreToolUse message hook for each target whose config dir
  * exists. Idempotent: an existing Bellwether entry is replaced, never duplicated.
  * Entries written by Herdr or the user are left alone.
  */
-export function install(ctx: AgentContext, targets = AGENT_TARGETS, toolHook: ToolHookCommand = sayHookCommand(), eventHook?: EventHookCommand): Outcome[] {
+export function install(ctx: AgentContext, targets = AGENT_TARGETS, toolHook: ToolHookCommand = sayHookCommand(), eventHook?: EventHookCommand, statusLine?: StatusLineCommand): Outcome[] {
   return targets.map((t) => {
     const p = pathsFor(t, ctx);
     if (!existsSync(p.configDir)) {
@@ -95,7 +107,10 @@ export function install(ctx: AgentContext, targets = AGENT_TARGETS, toolHook: To
     const withStart = t.addSessionStartHook(clean, { sh: p.hookSh, ps1: p.hookPs1 });
     const withTool = t.addToolHook(withStart, toolHook);
     // Activity events feed the Herdr-free `hooks` source. Opt-in; a plain re-install keeps what an earlier --events run wrote.
-    writeJsonObject(p.settings, eventHook ? t.addEventHooks(t.removeEventHooks(withTool), eventHook) : withTool);
+    const withEvents = eventHook ? t.addEventHooks(t.removeEventHooks(withTool), eventHook) : withTool;
+    // The status line is opt-in and only for agents that have one: remove ours first so a re-install never wraps itself.
+    const withLine = statusLine && t.addStatusLine && t.removeStatusLine ? t.addStatusLine(t.removeStatusLine(withEvents), statusLine) : withEvents;
+    writeJsonObject(p.settings, withLine);
     return { id: t.id, displayName: t.displayName, status: 'installed', paths: p };
   });
 }
@@ -109,7 +124,8 @@ export function uninstall(ctx: AgentContext, targets = AGENT_TARGETS): Outcome[]
     }
     if (existsSync(p.settings)) {
       const before = readJsonObject(p.settings);
-      const after = t.removeEventHooks(t.removeToolHook(t.removeSessionStartHook(before)));
+      const stripped = t.removeEventHooks(t.removeToolHook(t.removeSessionStartHook(before)));
+      const after = t.removeStatusLine ? t.removeStatusLine(stripped) : stripped;
       if (after !== before) writeJsonObject(p.settings, after);
     }
     rmSync(join(p.configDir, 'skills', 'bellwether'), { recursive: true, force: true });

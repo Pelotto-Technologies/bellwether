@@ -20,7 +20,7 @@ describe('source config', () => {
   });
 
   it('rejects unknown sources', () => {
-    expect(() => parseSourceConfig('source = "herdr"')).toThrow(/mock", "live" or "hooks/);
+    expect(() => parseSourceConfig('source = "herdr"')).toThrow(/mock", "live", "hooks" or "auto/);
   });
 
   it('BELLWETHER_SOURCE overrides the file', async () => {

@@ -30,17 +30,18 @@ function deltaUrl(): string | null {
 }
 
 /** The adapter serves `config.json` (from bellwether.toml); a missing file or a static host just means defaults. */
-async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean; bubbles?: boolean } & ServedCues> {
+async function servedConfig(): Promise<{ pack?: string; scale?: number; minimal?: boolean; bubbles?: boolean; vitals?: boolean } & ServedCues> {
   try {
     const res = await fetch('./config.json', { cache: 'no-store' });
     if (!res.ok) return {};
-    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown; minimal?: unknown; bubbles?: unknown };
+    const cfg = (await res.json()) as { pack?: unknown; scale?: unknown; minimal?: unknown; bubbles?: unknown; vitals?: unknown };
     return {
       ...(typeof cfg.pack === 'string' ? { pack: cfg.pack } : {}),
       ...(typeof cfg.scale === 'number' ? { scale: cfg.scale } : {}),
       ...(typeof cfg.minimal === 'boolean' ? { minimal: cfg.minimal } : {}),
       ...(typeof cfg.bubbles === 'boolean' ? { bubbles: cfg.bubbles } : {}),
       ...servedCues(cfg),
+      ...(typeof cfg.vitals === 'boolean' ? { vitals: cfg.vitals } : {}),
     };
   } catch {
     return {};
@@ -67,6 +68,8 @@ async function main() {
   const feed = new FeedState(theme.sayTtlMs);
   // Chat bubbles: `?bubbles=0` beats bellwether.toml (`bubbles = false`); B flips them for this page.
   feed.bubblesOn = params.has('bubbles') ? params.get('bubbles') !== '0' : served.bubbles !== false;
+  // Vitals: `?vitals=0` beats bellwether.toml (`vitals = false`); V flips them for this page.
+  feed.vitalsOn = params.has('vitals') ? params.get('vitals') !== '0' : served.vitals !== false;
   const scene =
     mode === 'alerts'
       ? undefined
@@ -85,6 +88,10 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'b' || e.key === 'B') {
       feed.bubblesOn = !feed.bubblesOn;
+      return;
+    }
+    if (e.key === 'v' || e.key === 'V') {
+      feed.vitalsOn = !feed.vitalsOn;
       return;
     }
     if ((e.key !== 'm' && e.key !== 'M') || mode === 'alerts') return;

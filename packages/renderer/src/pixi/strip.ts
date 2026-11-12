@@ -2,9 +2,10 @@ import { rollup, type Member, type Role, type Status } from '@bellwether/adapter
 import { Application, Container, Graphics, NineSliceSprite, Sprite, Text, Texture } from 'pixi.js';
 import { groupFellowships, mixHex, type Fellowship } from '../fellowship.js';
 import type { FeedState } from '../feed.js';
-import { assignRows, beaconAlpha, bob, bumps, hash01, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
+import { assignRows, beaconAlpha, bob, bumps, hash01, slowFactor, stepWalker, walkFrame, MAX_ROWS, ROAM_ROWS, SPEED, type SpanView, type Walker } from '../sim.js';
 import { beaconPixels, buildFrame, FRAME_NAMES, paletteFor, rasterize, SPRITE_H, SPRITE_W, type FrameName } from '../sprites.js';
-import type { Theme } from '../theme.js';
+import { vitalsLook, type Theme } from '../theme.js';
+import { barFill, hasVitals, isLow, lowestContext, withQuest } from '../vitals.js';
 import { DoubleTap } from '../doubletap.js';
 import { birthTime, prefersReducedMotion, spawnPose, type SpawnPose } from '../spawn.js';
 import { drawPuff } from './spawnfx.js';
@@ -20,6 +21,8 @@ interface MemberView {
   bubbleSkin?: NineSliceSprite;
   bubbleTail?: Sprite;
   glow: Graphics;
+  /** Context and quota bars under the feet. */
+  vit: Graphics;
   bubble: Container;
   bubbleText: Text;
   bubbleBg: Graphics;
@@ -221,10 +224,12 @@ export class StripScene {
     sprite.anchor.set(0.5, 1);
     const figure = this.art ? new Figure(this.art, this.theme) : undefined;
     const glow = new Graphics();
+    const vit = new Graphics();
+    vit.eventMode = 'none';
     const bubbleBg = new Graphics();
     const bubbleText = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: 0x1b1b24, wordWrap: true, wordWrapWidth: 180 } });
     const bubble = new Container();
-    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
+    const view: MemberView = { sprite, ...(figure ? { figure } : {}), glow, vit, bubble, bubbleText, bubbleBg, phase: hash01(paneId) * 10, born: birthTime(this.t, this.primed, this.reduced) };
     if (this.art) {
       const ui = this.art.art.ui;
       const sl = ui.bubble.slice;
@@ -245,7 +250,7 @@ export class StripScene {
     body.on('pointertap', () => {
       if (this.doubleTap.tap(paneId, performance.now())) this.feed.onFocus?.(paneId);
     });
-    party.root.addChild(body, glow);
+    party.root.addChild(vit, body, glow);
     this.bubbleLayer.addChild(bubble);
     party.members.set(paneId, view);
     return view;
@@ -282,7 +287,9 @@ export class StripScene {
     const trains: Train[] = [];
     const seg = (id: string, label: string, members: Member[], origin: (m: Member) => string, tint: string | undefined, leader: boolean): Segment => {
       const sorted = [...members].sort((a, b) => a.paneId.localeCompare(b.paneId));
-      return { id, label, status: rollup(sorted), tint, leader, members: sorted, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
+      // The nameplate carries the quest the whole party shares; a leader's plate stands for several parties and carries none.
+      const named = leader || !this.feed.vitalsOn ? label : withQuest(label, sorted);
+      return { id, label: named, status: rollup(sorted), tint, leader, members: sorted, width: 0, sayParty: new Map(sorted.map((m) => [m.paneId, origin(m)])) };
     };
     for (const f of world.fellowships) {
       const leaders = f.leaders.map((l) => l.member);
@@ -388,7 +395,9 @@ export class StripScene {
       const shared = this.adopted?.get(train.id);
       if (shared) tv.walker = shared;
       const status = statusOf.get(train.id)!;
-      tv.walker = stepWalker(tv.walker, status, lane, span, dt);
+      // Low on context slows the whole group: it walks as one, at its weakest member's pace.
+      const slow = this.feed.vitalsOn ? slowFactor(lowestContext(train.segments.flatMap((g) => g.members))) : 1;
+      tv.walker = stepWalker(tv.walker, status, lane, span, dt, slow);
       // Now and then a group changes its mind and wanders back. Only the lead window decides; the others follow it.
       if (leads && SPEED[status] > 0 && Math.random() < dt / 20) tv.walker = { ...tv.walker, dir: tv.walker.dir === 1 ? -1 : 1 };
     }
@@ -432,6 +441,7 @@ export class StripScene {
             if (mv.figure) mv.figure.destroy();
             else mv.sprite.destroy();
             mv.glow.destroy();
+            mv.vit.destroy();
             mv.bubble.destroy({ children: true });
             view.members.delete(paneId);
           }
@@ -555,6 +565,32 @@ export class StripScene {
     tv.banner.rect(fx, top, fw, fh).stroke({ color: 0x2a2118, width: s, alignment: 1 });
   }
 
+  /**
+   * Two thin bars on the ground under a member's feet: context remaining on top (the theme's
+   * `low` colour below 20%), the 5-hour quota under it. Hidden in icon-only mode, when vitals are
+   * off, and for members that report nothing: an absent number is never drawn as empty.
+   */
+  private drawVitals(mv: MemberView, m: Member, cx: number, groundY: number, charW: number): void {
+    const g = mv.vit;
+    g.clear();
+    if (this.minimal || !this.feed.vitalsOn || !hasVitals(m)) return;
+    const s = this.scale;
+    const look = vitalsLook(this.theme);
+    // Neighbours stand 0.7 characters apart, so a bar is narrower than that and never touches the next one.
+    const w = Math.max(4, Math.min(14, Math.floor(charW * 0.55)));
+    const x = Math.round(cx - (w * s) / 2);
+    const y = groundY + s;
+    g.rect(x - s, y, (w + 2) * s, 4 * s).fill({ color: hexNum(this.theme.outline), alpha: 0.85 });
+    const bar = (row: number, pct: number | undefined, color: string) => {
+      g.rect(x, y + row * s, w * s, s).fill({ color: 0x000000, alpha: 0.45 });
+      const n = barFill(pct, w);
+      if (n > 0) g.rect(x, y + row * s, n * s, s).fill(hexNum(color));
+    };
+    const v = m.vitals!;
+    bar(1, v.context, isLow(v.context) ? look.low : look.context);
+    bar(2, v.quota, look.quota);
+  }
+
   /** Sprite-sheet member: pick the animation, tint the cloak and the status light from their masks. */
   private drawArtMember(mv: MemberView, m: Member, view: PartyView, seg: Segment, sayParty: string, isBeacon: boolean, cx: number, groundY: number, moving: boolean, now: number) {
     const loaded = this.art!;
@@ -566,6 +602,7 @@ export class StripScene {
     mv.figure!.update({ member: m, partyStatus: seg.status, isBeacon, moving: moving && m.status !== 'blocked', talking: this.feed.talking(sayParty, m.paneId, now), t: this.t, phase: mv.phase, tint: seg.tint }, dir, s, cx, y);
     this.arrive(mv, mv.figure!.container, cx, groundY, seg.status);
 
+    this.drawVitals(mv, m, cx, groundY, art.character.w);
     mv.bubble.visible = !!text;
     if (text) {
       const ui = art.ui.bubble;
@@ -613,6 +650,7 @@ export class StripScene {
     }
 
     const text = this.feed.say(sayParty, m.paneId, now);
+    this.drawVitals(mv, m, cx, groundY, SPRITE_W);
     mv.bubble.visible = !!text;
     if (text) {
       if (mv.bubbleText.text !== text) {

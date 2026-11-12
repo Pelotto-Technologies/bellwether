@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { asArray, asObject, mentions, type Json, type JsonObject } from '../json-file.js';
 import { SUPPORTED_HOOK_EVENTS } from '../hook/event.js';
 import { EVENT_MARKER, SAY_MARKER } from '../hook/say.js';
+import { decodeWrap, encodeWrap, STATUSLINE_MARKER } from '../hook/statusline.js';
 import { HOOK_BASENAME } from '../skill.js';
 import { posixPath } from './paths.js';
 import type { AgentTarget } from './types.js';
@@ -59,6 +60,30 @@ export const claude: AgentTarget = {
     let out = settings;
     for (const name of Object.keys(asObject(settings.hooks))) out = removeNested(out, name, EVENT_MARKER);
     return out;
+  },
+
+  // Claude Code allows one `statusLine`: `{ type: "command", command, padding?, refreshInterval? }`.
+  // An existing one is kept alive by wrapping: its command rides in `--wrap`, and its other keys stay.
+  addStatusLine(settings, command) {
+    const existing = settings.statusLine;
+    if (existing === undefined) return { ...settings, statusLine: { type: 'command', command: command().posix } satisfies JsonObject };
+    const prev = asObject(existing);
+    if (typeof prev.command !== 'string' || prev.command === '') return settings; // not something we can wrap; leave it be
+    const wrapped: JsonObject = { ...prev, command: command(encodeWrap(prev.command)).posix };
+    return { ...settings, statusLine: wrapped };
+  },
+
+  removeStatusLine(settings) {
+    const line = asObject(settings.statusLine);
+    if (typeof line.command !== 'string' || !line.command.includes(STATUSLINE_MARKER)) return settings;
+    const token = /--wrap\s+([A-Za-z0-9_-]+)/.exec(line.command)?.[1];
+    const original = token ? decodeWrap(token) : undefined;
+    if (original) {
+      const restored: JsonObject = { ...line, command: original };
+      return { ...settings, statusLine: restored };
+    }
+    const { statusLine: _ours, ...rest } = settings;
+    return rest;
   },
 };
 

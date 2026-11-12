@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Your AI coding agents, as a party of tiny pixel characters.</b><br>
-  A desktop and stream overlay for <a href="https://herdr.dev">Herdr</a>.
+  A desktop and stream overlay for Claude Code, GitHub Copilot CLI and anything that can run a command.
 </p>
 
 <p align="center">
@@ -13,13 +13,18 @@
 
 ![Agents arriving, handing off work and getting unblocked on the strip](docs/images/strip-story.gif)
 
-You run a handful of agents in Herdr: an orchestrator, a few implementers in their own
-worktrees, a reviewer. Bellwether turns each of them into a little character walking along
-the bottom of your screen, grouped into parties by workspace. At a glance you can see who is
-working, who is done, who is stuck waiting on you, and who just told whom to do what.
+Run a few coding agents at once and it gets hard to tell which one is working, which one
+finished and which one is stuck waiting on you. Bellwether turns each agent session into a
+little character walking along the bottom of your screen, grouped into parties by working
+directory. At a glance you can see who is working, who is done, and who is blocked.
 
-It works with Claude Code, GitHub Copilot CLI and anything else Herdr recognizes, and it
-comes in four art styles.
+It works with Claude Code and GitHub Copilot CLI through their hooks, and with anything else
+that can run a command (`bellwether emit`). No other software is needed. It comes in four art
+styles.
+
+[Herdr](https://herdr.dev) is an optional power-up. When it is running, Bellwether also reads
+Herdr's workspaces, so you can click a character to focus its pane, prompt agents from the
+overlay, and see agents' messages to each other as chat bubbles.
 
 - [Quickstart](#quickstart)
 - [A tour](#a-tour): reading the strip, sizes, map mode, agents talking, fellowships
@@ -30,37 +35,48 @@ comes in four art styles.
 
 ## Quickstart
 
-You need Node 20+ and [Herdr](https://herdr.dev) running with at least one agent.
+You need Node 20+ and Claude Code or GitHub Copilot CLI. No Herdr required.
 
 ```sh
-npm install -g @pelotto-tech/bellwether
+npm i -g @pelotto-tech/bellwether
 
-bellwether install     # role tags and chat hooks for Claude Code and Copilot CLI
-bellwether overlay     # the desktop overlay, with a tray menu
+bellwether install --events   # activity hooks for Claude Code and Copilot CLI
+bellwether overlay            # the desktop overlay, with a tray menu
 ```
 
-That is the whole loop: start agents in Herdr and a party appears for each workspace. The
-first `bellwether overlay` downloads Electron into `~/.bellwether/electron` (about 100 MB,
-once). Prefer a browser tab or OBS? `bellwether run` serves the same overlay at
-<http://127.0.0.1:7341/>.
+Start (or restart) an agent session and a character appears. The first `bellwether overlay`
+downloads Electron into `~/.bellwether/electron` (about 100 MB, once). Prefer a browser tab
+or OBS? `bellwether run` serves the same overlay at <http://127.0.0.1:7341/>.
+
+Letting a coding agent do the setup? Point it at [`RECIPE.md`](RECIPE.md).
 
 Want to look before connecting anything? From a checkout, `pnpm install && pnpm mock` serves
 fake agents on the same port.
+
+### Using Herdr?
+
+Run `bellwether install` (or `install --events`, which includes it) to add role tags and
+chat hooks for your agents, then `bellwether overlay` as before. At startup Bellwether looks
+for a running Herdr and uses it when it finds one; otherwise it reads the agent events
+file. To force one, pass `--live` or `--hooks`, or set `source` in `bellwether.toml`
+(see [Configuration](#configuration)). The two are not merged: with Herdr running you see
+Herdr's agents, not the hooks-only sessions.
 
 Already installed? After upgrading, run `bellwether install` again so your agents get the
 newest hooks (chat bubbles need the one added in 0.1.11).
 
 ## Without Herdr
 
-Herdr is optional. Bellwether can draw your agents straight from their own hooks: Claude Code
-(CLI and local Code sessions in the desktop app, subagents included), GitHub Copilot CLI, and
-any other tool through a small event format. Each session is an agent, each working directory
-a party, and subagents show up as extra agents under their session while they run.
+Bellwether draws your agents straight from their own hooks: Claude Code (CLI and local Code
+sessions in the desktop app, subagents included), GitHub Copilot CLI, and any other tool
+through a small event format. Each session is an agent, each working directory a party, and
+subagents show up as extra agents under their session while they run.
 
 ```sh
 npm i -g @pelotto-tech/bellwether@latest
 bellwether install --events      # adds activity hooks to Claude Code and Copilot CLI
-bellwether overlay --hooks       # or source = "hooks" in bellwether.toml
+bellwether install --statusline  # optional, Claude Code: context and quota bars, model, quest (see Vitals)
+bellwether overlay               # uses the events file when Herdr is not running
 ```
 
 Prefer a Claude Code plugin to editing settings? Skip `--events` and use:
@@ -89,7 +105,7 @@ Or append JSON lines yourself. The format is in [`docs/EVENTS.md`](docs/EVENTS.m
 
 Event lines hold a tool name and file (never prompt text) in `~/.bellwether/events.jsonl`. They
 cover sessions on this machine only; cloud sessions are not visible, and clicking an agent to
-focus it or prompt it still needs Herdr. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
+focus it or prompt it needs Herdr. Details in [`plugins/bellwether`](plugins/bellwether/README.md).
 
 ## A tour
 
@@ -184,6 +200,24 @@ listener. Finished hand-offs between teammates are inferred too.
 
 Too chatty? Hide bubbles from the tray menu, with `bubbles = false`, `?bubbles=0`, or by
 pressing `b` in the page.
+
+### Vitals
+
+When an agent reports them, each character gets two thin bars on the ground under its feet:
+**HP** is the percent of its context window left, **stamina** is the percent of the 5-hour
+usage quota left. Below 20% HP the bar turns red and the whole group walks slower. The party
+nameplate adds the agent session's name as its quest (`atlas · auth — Fix the login flow`)
+when every member that has one shares it, and the map's detail panel lists each member's
+model, effort, both bars with their percentages, and quest.
+
+Only Claude Code provides this data today, through its status line, and only the fields it
+sends: no quota bar without a Claude.ai subscription, no effort on models that lack it. Run
+`bellwether install --statusline` to turn it on. If you already have a status line,
+Bellwether wraps it and prints its output unchanged; `bellwether uninstall` puts it back.
+Other tools can report the same numbers with `bellwether emit --ev vitals` (see
+[the event format](docs/EVENTS.md)). Nothing is estimated: an agent that does not report a
+number gets no bar for it. Icon-only labels hide vitals, as do the tray menu's **Vitals**
+checkbox, `vitals = false`, `?vitals=0`, and the `v` key in the page.
 
 ### Fellowships: orchestrators and worktrees
 
@@ -284,7 +318,7 @@ just create the workspace and tag pane 1.
 | A browser tab | `bellwether run` and open <http://127.0.0.1:7341/>. |
 
 The desktop overlay's **tray menu** has everything in one place: switch strip and map,
-Size, Labels, Chat bubbles, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
+Size, Labels, Chat bubbles, Vitals, Skin, Monitor (or Span all monitors), Herdr Session (all, or one), and Quit. Choices are
 remembered between runs.
 
 ### Keyboard
@@ -294,6 +328,7 @@ remembered between runs.
 | Ctrl+Alt+M (Cmd+Alt+M) | anywhere, desktop overlay | toggle strip and map |
 | `m` | page | toggle strip and map |
 | `b` | page | show or hide chat bubbles |
+| `v` | page | show or hide vitals (bars, model, quest) |
 | Esc | map | zoom back out |
 | double-click a member | strip, browser | focus that pane in Herdr |
 
@@ -302,11 +337,13 @@ remembered between runs.
 Put a `bellwether.toml` in the directory you run from (it is gitignored):
 
 ```toml
-source = "live"          # "live" for real Herdr, "hooks" for agent events without Herdr, "mock" for fake agents
+source = "auto"          # auto (default for run and overlay): Herdr if it answers at startup, else agent events
+                         # live: Herdr only | hooks: agent events only, no Herdr | mock: fake agents
 pack = "aesir"           # neutral | aesir | wayfarers | scifi | a private pack
 scale = 2                # strip size, 1 to 6 (default 3)
 minimal = false          # true: icon-only labels
 bubbles = true           # false hides chat bubbles
+vitals = true            # false hides context/quota bars, model and quest
 scrub = false            # true hashes repo/branch names in recordings
 
 [herdr]
@@ -318,8 +355,10 @@ sessions = "all"         # or ["default", "overlay-dev"]
 ```
 
 Flags and environment variables override it (`--pack aesir` or `BELLWETHER_PACK=aesir`,
-`--session <name>` or `--all`, `BELLWETHER_SOURCE=live` or `hooks`, `--hooks`, `--events <file>`, `--port`), and the tray menu or
-page URL overrides those:
+`--session <name>` or `--all`, `BELLWETHER_SOURCE=auto`, `live`, `hooks` or `mock`, `--live`, `--hooks`, `--events <file>`, `--port`), and the tray menu or
+page URL overrides those. `auto` decides once at startup (a one-second connect probe of the
+Herdr socket) and logs which source it picked; it does not switch later, so restart the
+overlay after starting Herdr:
 
 | URL option | Effect |
 |---|---|
@@ -328,6 +367,7 @@ page URL overrides those:
 | `?mode=map` | Start in map mode. |
 | `?minimal` | Icon-only labels (`?minimal=0` for full). |
 | `?bubbles=0` | Hide chat bubbles. |
+| `?vitals=0` | Hide vitals: bars, model and quest. |
 | `?transparent` | No backdrop or status chip, for OBS. |
 | `?source=mock` | Mock agents inside the page, no adapter. |
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
@@ -339,10 +379,12 @@ page URL overrides those:
 | `bellwether agents` | Show which coding agents are on PATH and which config dirs exist. |
 | `bellwether install [--agent claude\|copilot]` | Add the skill, role hook and message hook to each present agent. Safe to re-run. |
 | `bellwether uninstall` | Remove only what `install` wrote. |
-| `bellwether overlay [--hooks]` | Open the desktop overlay (`--hooks`: agent events, no Herdr). |
+| `bellwether overlay [--hooks]` | Open the desktop overlay (Herdr if running, else agent events; `--hooks` forces events). |
 | `bellwether install --events` | Also add activity hooks (Claude Code, Copilot CLI) for use without Herdr. |
-| `bellwether emit --ev <kind> ...` | Append one activity event from any tool. |
-| `bellwether run` | Serve the overlay from live Herdr (or `--hooks`) on port 7341. |
+| `bellwether install --statusline` | Claude Code only: report context, quota, model, effort and session name for vitals, wrapping any status line you have. |
+| `bellwether emit --ev <kind> ...` | Append one activity event from any tool (`--ev vitals --ctx N --quota N ...` for vitals). |
+| `bellwether hook statusline` | Status line body: reports vitals from the JSON on stdin, then prints the line. |
+| `bellwether run` | Serve the overlay on port 7341 (Herdr if running, else agent events; `--live`, `--hooks`, `--mock` force one). |
 | `bellwether hook event` | Plugin hook body: appends one event line from a hook payload on stdin. |
 | `bellwether orchestrate [...] [-- CMD]` | New `<folder> Orchestration` workspace with pane 1 tagged and running CMD. |
 | `bellwether record F [--scrub]` | Run live and append deltas to `F`. |

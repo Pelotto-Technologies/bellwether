@@ -2,10 +2,11 @@
 // Node-only (path defaults use os/path); the renderer never imports this.
 import os from 'node:os';
 import path from 'node:path';
+import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_QUEST } from '../sanitize.js';
 
 export const HOOK_EVENT_VERSION = 1;
 
-export const HOOK_EVENT_KINDS = ['start', 'prompt', 'tool', 'tool_done', 'wait', 'stop', 'end', 'sub_start', 'sub_stop'] as const;
+export const HOOK_EVENT_KINDS = ['start', 'prompt', 'tool', 'tool_done', 'wait', 'stop', 'end', 'sub_start', 'sub_stop', 'vitals'] as const;
 export type HookEventKind = (typeof HOOK_EVENT_KINDS)[number];
 
 /** One line of events.jsonl. Everything but `v`, `t`, `ev` and `session` is optional. */
@@ -25,6 +26,16 @@ export interface HookEvent {
   /** Short single-line text, at most 72 characters. Never prompt text. */
   detail?: string;
   role?: string;
+  /** `vitals` only: percent of the context window remaining, 0-100. */
+  ctx?: number;
+  /** `vitals` only: percent of the 5-hour usage quota remaining, 0-100. */
+  quota?: number;
+  /** `vitals` only: model display name, at most 40 characters. */
+  model?: string;
+  /** `vitals` only: reasoning effort, at most 16 characters. */
+  effort?: string;
+  /** `vitals` only: the session's human name, at most 80 characters. */
+  name?: string;
 }
 
 export const MAX_DETAIL = 72;
@@ -61,5 +72,16 @@ export function parseHookEvent(line: string): HookEvent | undefined {
   }
   const detail = str(raw.detail);
   if (detail) e.detail = detail.replace(/\s+/g, ' ').slice(0, MAX_DETAIL);
+  if (e.ev === 'vitals') {
+    // Numbers are clamped; text is stripped of control and bidi characters. Anything invalid is dropped.
+    for (const k of ['ctx', 'quota'] as const) {
+      const n = typeof raw[k] === 'number' ? cleanPercent(raw[k]) : undefined;
+      if (n !== undefined) e[k] = n;
+    }
+    for (const [k, max] of [['model', MAX_MODEL], ['effort', MAX_EFFORT], ['name', MAX_QUEST]] as const) {
+      const v = cleanText(raw[k], max);
+      if (v) e[k] = v;
+    }
+  }
   return e;
 }

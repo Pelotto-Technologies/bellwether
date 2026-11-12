@@ -125,3 +125,61 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --access public --no-git-checks ${{ github.event.repository.private == false && '--provenance' || '' }}
+
+  alpha:
+    # Prerelease to the `alpha` dist-tag, only from a manual dispatch on a branch (a dispatch on
+    # a branch runs that branch's copy of this file). Never runs on main, so it cannot collide
+    # with plan/release/npm. It commits nothing, creates no tag and no GitHub Release: the
+    # version `<next minor>-alpha.<run number>` is set in the runner's working copy only.
+    # `--tag alpha` is always passed and the version must carry a prerelease suffix, so
+    # this job cannot move the `latest` dist-tag. Skipped, not failed, while NPM_TOKEN is unset.
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - id: v
+        name: Compute alpha version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          current=$(node -p "require('./packages/cli/package.json').version")
+          if [[ ! "$current" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+            echo "packages/cli version '${current}' is not a plain x.y.z; refusing to derive an alpha." >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}.$((BASH_REMATCH[2] + 1)).0-alpha.${RUN_NUMBER}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.0-alpha\.[0-9]+$ ]]; then
+            echo "computed version '${version}' has no prerelease suffix; refusing to publish." >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Alpha version: ${version} (from ${current})"
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      # Checked before the version changes: a test requires the plugin manifests to match the
+      # committed cli version. The alpha version is set only right before publishing.
+      - run: pnpm check
+      - name: Set alpha version (working copy only)
+        working-directory: packages/cli
+        env:
+          ALPHA_VERSION: ${{ steps.v.outputs.version }}
+        run: npm pkg set version="${ALPHA_VERSION}"
+      - name: Publish to the alpha tag
+        if: ${{ env.NPM_TOKEN != '' }}
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --tag alpha --access public --no-git-checks ${{ github.event.repository.private == false && '--provenance' || '' }}

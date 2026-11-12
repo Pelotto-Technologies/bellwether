@@ -32,6 +32,8 @@ export interface ShellConfig {
   sounds?: boolean;
   /** Alert banner position in the map window; undefined defers to bellwether.toml, then off. The strip is a thin bar with no room for a banner. */
   alerts?: AlertsSetting;
+  /** Vitals (bars, model, quest) shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
+  vitals?: boolean;
   /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
   mapAlwaysOnTop?: boolean;
   /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
@@ -88,6 +90,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.bubbles === 'boolean') out.bubbles = r.bubbles;
   if (typeof r.sounds === 'boolean') out.sounds = r.sounds;
   if (typeof r.alerts === 'string' && (ALERT_POSITIONS as readonly string[]).includes(r.alerts)) out.alerts = r.alerts as AlertsSetting;
+  if (typeof r.vitals === 'boolean') out.vitals = r.vitals;
   if (r.span === true) out.span = true;
   if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
   const b = r.mapBounds as Record<string, unknown> | null | undefined;

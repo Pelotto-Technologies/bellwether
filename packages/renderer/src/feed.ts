@@ -21,6 +21,8 @@ export class FeedState {
   private bubbles = new Map<string, Bubble>();
   /** Hide every bubble (the "chat bubbles" setting). Characters still walk over to talk. */
   bubblesOn = true;
+  /** Show vitals bars, model and quest (the "vitals" setting). */
+  vitalsOn = true;
   /** Set by the page: asks the adapter to focus a pane in Herdr (double-click a member). */
   onFocus: ((paneId: string) => void) | undefined;
   /** Set by the page: asks the adapter to close a pane in Herdr (the panel's close button). */

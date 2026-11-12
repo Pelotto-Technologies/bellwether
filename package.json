@@ -1,7 +1,7 @@
 {
   "name": "bellwether",
   "private": true,
-  "description": "Pixel stream overlay for Herdr agent workspaces",
+  "description": "Your AI coding agents as a party of tiny pixel characters: a desktop and stream overlay for Claude Code, GitHub Copilot CLI and Herdr",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.28.0",
   "engines": {

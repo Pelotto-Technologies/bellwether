@@ -16,7 +16,7 @@ export function modeFromUrl(url: string): 'strip' | 'map' | undefined {
 }
 
 /** `slice` is this window's part of a strip that spans monitors; it only applies in strip mode. */
-export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal' | 'bubbles' | 'sounds' | 'alerts'>, slice?: { offset: number; total: number }): string {
+export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'scale' | 'minimal' | 'bubbles' | 'vitals' | 'sounds' | 'alerts'>, slice?: { offset: number; total: number }): string {
   const u = new URL(cfg.url);
   if (slice && cfg.mode === 'strip') u.searchParams.set('span', `${Math.round(slice.offset)},${Math.round(slice.total)}`);
   else if (u.searchParams.has('span')) u.searchParams.delete('span');
@@ -35,5 +35,7 @@ export function rendererUrl(cfg: Pick<ShellConfig, 'url' | 'mode' | 'pack' | 'sc
   // Banners need room: only the map window gets them. The strip window is a thin bar at the bottom.
   if (cfg.mode === 'map' && cfg.alerts !== undefined) u.searchParams.set('alerts', cfg.alerts);
   else if (u.searchParams.has('alerts')) u.searchParams.delete('alerts');
+  if (cfg.vitals !== undefined) u.searchParams.set('vitals', cfg.vitals ? '1' : '0');
+  else if (u.searchParams.has('vitals')) u.searchParams.delete('vitals');
   return u.toString();
 }

@@ -24,7 +24,7 @@ From a checkout against live Herdr: `pnpm build && node packages/adapter/dist/bi
 `--all` watches every running Herdr session; use `--session <name>` for one. With
 `--serve`, the page and the delta WebSocket share one port (default 7341, change with
 `--port`), so the page finds the adapter on its own origin. See `--help` for the other
-flags. `source = "live"` in `bellwether.toml` sets the default source.
+flags. `source = "live"` in `bellwether.toml` sets the default source (the default is `auto`: Herdr if it is running, else agent events; see the README).
 
 ## 2. Add the Browser Source
 
@@ -47,6 +47,7 @@ flags. `source = "live"` in `bellwether.toml` sets the default source.
 | `?ws=ws://host:port/deltas` | Connect to a specific adapter. |
 | `?minimal` | Icon-only labels: a status icon under each party instead of a nameplate. |
 | `?bubbles=0` | Hide chat bubbles. Press `b` in an interact window to toggle. |
+| `?vitals=0` | Hide vitals (bars, model, quest). Press `v` in an interact window to toggle. |
 | `?mode=map` | Start in map mode instead of the strip. The default is the strip; press `m` to toggle. Map mode is not click-through, so the strip is usually what you want in OBS. |
 
 Options combine: `http://127.0.0.1:7341/?transparent&pack=aesir&scale=4`.
