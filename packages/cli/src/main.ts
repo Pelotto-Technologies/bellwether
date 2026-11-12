@@ -7,6 +7,7 @@ import { detect, eventHookCommand, install, sayHookCommand, statusLineCommand, s
 import { readFileSync } from 'node:fs';
 import { runSayHook } from './hook/say.js';
 import { runStatusLineHook } from './hook/statusline.js';
+import { formatPack, readPackInfo } from './pack.js';
 import { appendEvent, buildEmitEvent, eventsFile, parseFlags, runEventHook } from './hook/event.js';
 
 const USAGE = `usage: bellwether <command> [--agent <id>]...
@@ -21,8 +22,10 @@ commands:
   overlay     open the desktop overlay (click-through, always on top, tray menu); uses Herdr if it is running, else agent events (--hooks forces events)
   run         serve the overlay in a browser; Herdr if running, else agent events (--live, --hooks, --mock force one; adapter flags pass through)
   emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop|vitals
-              [--session S --agent A --cwd D --role R --sub ID --sub-type T --tool T --detail TEXT]
+              [--session S --agent A --cwd D --role R --label NAME --sub ID --sub-type T --tool T --detail TEXT]
               vitals: --ev vitals [--ctx N --quota N --model M --effort E --name NAME] (N is percent remaining)
+  pack        print the active skin pack id on one line; --json adds where it came from and the packs available:
+              { "pack", "source": "shell"|"toml"|"env"|"default", "available": [...] }
   record F    run live and append deltas to F (add --scrub for a shareable file)
   replay F    serve the overlay from a recording
   orchestrate [--cwd D] [--label L] [--role R] [--session S] [--timeout MS] [-- CMD...]
@@ -102,6 +105,20 @@ function main(argv: string[]): number {
       console.error(`bellwether emit: ${(err as Error).message}`);
       return 2;
     }
+  }
+  if (cmd === 'pack') {
+    // main() is synchronous, so the file reads run behind a promise that prints and sets the exit code.
+    void readPackInfo().then(
+      (info) => {
+        console.log(formatPack(info, rest.includes('--json')));
+        if (!rest.includes('--json') && info.available.length && !info.available.includes(info.pack)) console.error(`bellwether: pack "${info.pack}" was not found among ${info.available.join(', ')}; the overlay falls back`);
+      },
+      (err: Error) => {
+        console.error(`bellwether pack: ${err.message}`);
+        process.exitCode = 2;
+      },
+    );
+    return 0;
   }
   const ctx = systemContext();
   const targets = selectTargets(rest);

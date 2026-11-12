@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Rect } from './bounds.js';
 
@@ -71,6 +72,24 @@ export const CONFIG_FILE = 'shell.json';
 
 export function configPath(userDataDir: string): string {
   return join(userDataDir, CONFIG_FILE);
+}
+
+/**
+ * Electron's `userData` folder, which holds `shell.json`: `<appData>/<app name>`, where appData is `%APPDATA%` on
+ * Windows, `~/Library/Application Support` on macOS and `$XDG_CONFIG_HOME` (else `~/.config`) elsewhere, and the
+ * app name is `productName` or `name` from the shell's package.json. For tools outside Electron (`bellwether pack`).
+ */
+export function userDataDir(appName: string, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home: string = homedir()): string {
+  const appData = platform === 'win32' ? (env.APPDATA ?? join(home, 'AppData', 'Roaming')) : platform === 'darwin' ? join(home, 'Library', 'Application Support') : (env.XDG_CONFIG_HOME ?? join(home, '.config'));
+  return join(appData, appName);
+}
+
+/** The app name Electron derives from a package.json: `productName`, else `name`. */
+export function appNameFromPackage(raw: unknown): string | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  const name = typeof r.productName === 'string' && r.productName ? r.productName : r.name;
+  return typeof name === 'string' && name ? name : undefined;
 }
 
 /** Merge untrusted JSON onto the defaults, dropping anything of the wrong type. */

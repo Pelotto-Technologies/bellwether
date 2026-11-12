@@ -12,6 +12,9 @@ import { chooseAutoSource, type AutoDeps } from './auto.js';
 export const ALERT_POSITIONS = ['off', 'top-left', 'top-right', 'top-center'] as const;
 export type AlertPosition = (typeof ALERT_POSITIONS)[number];
 
+/** A theme folder name, as `pack` and `BELLWETHER_PACK` take it. */
+export const PACK_NAME = /^[a-z0-9][a-z0-9_-]*$/i;
+
 export type SourceKind = 'mock' | 'live' | 'hooks' | 'auto';
 
 export interface SourceConfig {
@@ -120,7 +123,7 @@ export function parseSourceConfig(text: string): SourceConfig {
   if (st.enabled !== undefined && typeof st.enabled !== 'boolean') throw new Error('bellwether.toml: stats.enabled must be true or false');
   if (st.file !== undefined && (typeof st.file !== 'string' || !st.file)) throw new Error('bellwether.toml: stats.file must be a path');
   if (raw.recap !== undefined && typeof raw.recap !== 'boolean') throw new Error('bellwether.toml: recap must be true or false');
-  if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(raw.pack))) {
+  if (raw.pack !== undefined && (typeof raw.pack !== 'string' || !PACK_NAME.test(raw.pack))) {
     throw new Error('bellwether.toml: pack must be a theme folder name');
   }
   if (raw.scale !== undefined && (typeof raw.scale !== 'number' || !Number.isInteger(raw.scale) || raw.scale < 1 || raw.scale > 6)) {
@@ -158,7 +161,7 @@ export async function loadSourceConfig(file = 'bellwether.toml', env: NodeJS.Pro
     else if (es === '1' || es.toLowerCase() === 'true') cfg.stats = { ...cfg.stats, enabled: true };
     else cfg.stats = { ...cfg.stats, file: es };
   }
-  if (env.BELLWETHER_PACK && /^[a-z0-9][a-z0-9_-]*$/i.test(env.BELLWETHER_PACK)) cfg.pack = env.BELLWETHER_PACK;
+  if (env.BELLWETHER_PACK && PACK_NAME.test(env.BELLWETHER_PACK)) cfg.pack = env.BELLWETHER_PACK;
   return cfg;
 }
 

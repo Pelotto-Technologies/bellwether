@@ -376,3 +376,16 @@ describe('quest recap toggle', () => {
     expect(normalizeConfig({ recap: 'x' }).recap).toBeUndefined();
   });
 });
+
+describe('userData folder', () => {
+  it('follows Electron: appData plus the app name', async () => {
+    const { userDataDir, appNameFromPackage } = await import('../src/config.js');
+    expect(userDataDir('app', { XDG_CONFIG_HOME: '/x' }, 'linux', '/h')).toBe(join('/x', 'app'));
+    expect(userDataDir('app', {}, 'linux', '/h')).toBe(join('/h', '.config', 'app'));
+    expect(userDataDir('app', {}, 'darwin', '/h')).toBe(join('/h', 'Library', 'Application Support', 'app'));
+    expect(userDataDir('app', { APPDATA: 'R' }, 'win32', '/h')).toBe(join('R', 'app'));
+    expect(appNameFromPackage({ name: 'n', productName: 'P' })).toBe('P');
+    expect(appNameFromPackage({ name: 'n' })).toBe('n');
+    expect(appNameFromPackage(null)).toBeUndefined();
+  });
+});
