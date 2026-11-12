@@ -1,8 +1,8 @@
 // Pure mapping from Herdr protocol records to the Bellwether world model.
 import { isOrchestrationLabel, resolveRole } from '../roles.js';
-import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_QUEST } from '../sanitize.js';
+import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_NAME, MAX_QUEST } from '../sanitize.js';
 import { rollup } from '../rollup.js';
-import type { Delta, Member, Party, Status } from '../types.js';
+import { isRole, type Delta, type Member, type Party, type Role, type Status } from '../types.js';
 import type { AgentInfo, AgentStatusChanged, PaneInfo, SessionSnapshot, WorkspaceInfo } from './protocol.js';
 
 const STATUSES = new Set<Status>(['working', 'done', 'blocked', 'idle', 'unknown']);
@@ -22,19 +22,68 @@ export interface MapContext {
   branches?: ReadonlyMap<string, string>;
 }
 
+/** `hide=1` (also `true`, `yes`, `on`) removes a pane from the overlay, agent or not. */
+export function isHidden(tokens: Record<string, string>): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(tokens.hide?.trim().toLowerCase() ?? '');
+}
+
+/** The `state` token: the only statuses a runner may set. `unknown` is not one of them. Anything else is ignored. */
+export function stateToken(tokens: Record<string, string>): Exclude<Status, 'unknown'> | undefined {
+  const v = tokens.state?.trim().toLowerCase();
+  return v === 'done' || v === 'idle' || v === 'working' || v === 'blocked' ? v : undefined;
+}
+
+/** Roles that sit idle for days while their party's work goes on; a finished leaf is `done`, they are not. */
+const NEVER_SETTLED: ReadonlySet<Role> = new Set<Role>(['orchestrator', 'coordinator']);
+
+/**
+ * A worktree member whose status goes working to idle has finished its task, so it reads as `done`
+ * until it works again. Herdr marks a pane `done` only until someone looks at it, then `idle`; a run's
+ * leaf panes are never looked at one by one. Pure; `prev` is the member as last shown. Never applies to
+ * orchestrators and coordinators, to parties that are not a linked worktree, or to a first sight of a pane.
+ */
+export function settledStatus(prev: Pick<Member, 'status'> | undefined, raw: Status, role: Role, isWorktree: boolean): Status {
+  if (raw !== 'idle' || !isWorktree || !prev || NEVER_SETTLED.has(role)) return raw;
+  return prev.status === 'working' || prev.status === 'done' ? 'done' : raw;
+}
+
+/** Applies `settledStatus` to every member of `next` against how `prev` showed them, and rolls the parties up again. */
+export function settleFinished(prev: Record<string, Party>, next: Record<string, Party>): Record<string, Party> {
+  const out: Record<string, Party> = {};
+  for (const [id, party] of Object.entries(next)) {
+    let members = party.members;
+    for (const m of Object.values(party.members)) {
+      if (m.statusFromToken) continue;
+      const status = settledStatus(prev[id]?.members[m.paneId], m.status, m.role, party.isWorktree);
+      if (status !== m.status) members = { ...members, [m.paneId]: { ...m, status } };
+    }
+    out[id] = members === party.members ? party : { ...party, members, status: rollup(Object.values(members)) };
+  }
+  return out;
+}
+
 export function memberFromPane(pane: PaneInfo | AgentInfo, orchestrationRoot = false): Member | undefined {
-  if (!pane.agent) return undefined;
   const tokens = pane.tokens ?? {};
-  const name = 'name' in pane ? pane.name : undefined;
+  if (isHidden(tokens)) return undefined;
+  // A pane with no agent (a plain shell) is no party member, unless a `role` token opts it in.
+  if (!pane.agent && !isRole(tokens.role?.trim().toLowerCase())) return undefined;
+  const agentName = 'name' in pane ? pane.name : undefined;
   const seq = 'state_change_seq' in pane ? pane.state_change_seq : undefined;
   const m: Member = {
     paneId: pane.pane_id,
-    agent: pane.agent,
-    role: resolveRole({ tokens, agentName: name, title: pane.title, orchestrationRoot }),
+    agent: pane.agent || 'shell',
+    role: resolveRole({ tokens, agentName, title: pane.title, orchestrationRoot }),
     status: toStatus(pane.agent_status),
     lastChange: seq ?? pane.revision ?? 0,
   };
+  const state = stateToken(tokens);
+  if (state) {
+    m.status = state;
+    m.statusFromToken = true;
+  }
   if (pane.title) m.title = pane.title;
+  const name = cleanText(tokens.name, MAX_NAME);
+  if (name) m.name = name;
   if (tokens.say) m.say = tokens.say;
   if (tokens.say && tokens.say_id) m.sayId = tokens.say_id;
   const context = cleanPercent(tokens.ctx);
@@ -186,17 +235,19 @@ export function applyStatusChange(
   const prev = party?.members[ev.pane_id];
   // The agent left its pane (back to the shell): only a re-read can say what remains.
   if (!party || !prev || ev.agent === null) return undefined;
-  const member: Member = { ...prev, status: toStatus(ev.agent_status), lastChange: prev.lastChange + 1 };
+  // A `state` token pins the status; otherwise a working-to-idle turn in a worktree is a finished one.
+  const status = prev.statusFromToken ? prev.status : settledStatus(prev, toStatus(ev.agent_status), prev.role, party.isWorktree);
+  const member: Member = { ...prev, status, lastChange: prev.lastChange + 1 };
   if (ev.agent) member.agent = ev.agent;
   if (ev.title) member.title = ev.title;
   const members = { ...party.members, [member.paneId]: member };
-  const status = rollup(Object.values(members));
-  const next: Party = { ...party, members, status };
-  return { party: next, member, rollupChanged: status !== party.status };
+  const partyStatus = rollup(Object.values(members));
+  const next: Party = { ...party, members, status: partyStatus };
+  return { party: next, member, rollupChanged: partyStatus !== party.status };
 }
 
 function sameMember(a: Member, b: Member): boolean {
-  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
+  return a.agent === b.agent && a.role === b.role && a.status === b.status && a.title === b.title && a.name === b.name && a.say === b.say && a.sayId === b.sayId && a.sayTo === b.sayTo && sameVitals(a, b);
 }
 
 function sameVitals(a: Member, b: Member): boolean {

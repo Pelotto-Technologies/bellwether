@@ -74,6 +74,10 @@ export interface Member {
   effort?: string;
   /** The agent session's human name. At most 80 characters. */
   quest?: string;
+  /** What the party calls this member ("Ada", "review-bot"): the `name` token or an event's `label`. At most 40 characters. Shown beside the role. */
+  name?: string;
+  /** Set when a `state` token chose `status`, so Herdr's own status events do not undo it. */
+  statusFromToken?: true;
   /** Name of the tool currently running: set on `tool`, cleared on `tool_done` and `stop`. Hooks source only for now. */
   tool?: string;
   /** Level of this member's ROLE (every implementer shares the implementer level). Present when the stats decorator is on. */

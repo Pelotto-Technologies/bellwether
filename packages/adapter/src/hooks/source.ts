@@ -31,6 +31,7 @@ interface SessionState {
   agent: string;
   cwd: string;
   role?: string;
+  label?: string;
   status: Status;
   title?: string;
   say?: string;
@@ -50,6 +51,7 @@ interface SubState {
   session: string;
   sub: string;
   subType?: string;
+  label?: string;
   status: Status;
   title?: string;
   lastEvent: number;
@@ -264,6 +266,7 @@ export class HooksSource extends BaseSource {
     s.lastEvent = Math.max(s.lastEvent, e.t);
     s.agent = e.agent;
     if (e.role) s.role = e.role;
+    if (e.label && !e.sub) s.label = e.label;
     if ((e.ev === 'start' || s.cwd === '(unknown)') && e.cwd) s.cwd = e.cwd;
 
     if (e.ev === 'vitals') {
@@ -287,6 +290,7 @@ export class HooksSource extends BaseSource {
       }
       sub.lastEvent = e.t;
       if (e.subType) sub.subType = e.subType;
+      if (e.label) sub.label = e.label;
       if (e.ev === 'sub_start') {
         this.setStatus(sub, 'working', e.t);
         delete sub.doneAt;
@@ -307,6 +311,7 @@ export class HooksSource extends BaseSource {
       }
       sub.lastEvent = e.t;
       if (e.subType) sub.subType = e.subType;
+      if (e.label) sub.label = e.label;
       if (sub.status !== 'done') this.setStatus(sub, 'working', e.t);
       if (e.detail) sub.title = e.detail;
       if (e.ev === 'tool' && e.tool && DELEGATE_TOOLS.has(e.tool) && e.detail) this.say(s, e.detail);
@@ -385,6 +390,7 @@ export class HooksSource extends BaseSource {
       if (s.model) m.model = s.model;
       if (s.effort) m.effort = s.effort;
       if (s.quest) m.quest = s.quest;
+      if (s.label) m.name = s.label;
       if (s.tool) m.tool = s.tool;
       partyFor(s.cwd).members[s.id] = m;
     }
@@ -395,6 +401,7 @@ export class HooksSource extends BaseSource {
       const m: Member = { paneId: id, agent: parent.agent, role: subRole(sub.subType), status: sub.status, lastChange: sub.lastChange };
       const title = sub.title ?? sub.subType;
       if (title) m.title = title;
+      if (sub.label) m.name = sub.label;
       partyFor(parent.cwd).members[id] = m;
     }
     for (const p of Object.values(parties)) p.status = rollup(Object.values(p.members));

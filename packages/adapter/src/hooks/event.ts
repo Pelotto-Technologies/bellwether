@@ -2,7 +2,7 @@
 // Node-only (path defaults use os/path); the renderer never imports this.
 import os from 'node:os';
 import path from 'node:path';
-import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_QUEST } from '../sanitize.js';
+import { cleanPercent, cleanText, MAX_EFFORT, MAX_MODEL, MAX_NAME, MAX_QUEST } from '../sanitize.js';
 
 export const HOOK_EVENT_VERSION = 1;
 
@@ -26,6 +26,8 @@ export interface HookEvent {
   /** Short single-line text, at most 72 characters. Never prompt text. */
   detail?: string;
   role?: string;
+  /** Any event: what to call this session (or, with `sub`, this subagent), at most 40 characters. Becomes `Member.name`. */
+  label?: string;
   /** `vitals` only: percent of the context window remaining, 0-100. */
   ctx?: number;
   /** `vitals` only: percent of the 5-hour usage quota remaining, 0-100. */
@@ -70,6 +72,8 @@ export function parseHookEvent(line: string): HookEvent | undefined {
     const v = str(raw[k]);
     if (v) e[k] = v;
   }
+  const label = cleanText(raw.label, MAX_NAME);
+  if (label) e.label = label;
   const detail = str(raw.detail);
   if (detail) e.detail = detail.replace(/\s+/g, ' ').slice(0, MAX_DETAIL);
   if (e.ev === 'vitals') {

@@ -32,6 +32,8 @@ export interface NormalizedEvent {
   tool?: string;
   detail?: string;
   role?: string;
+  /** What to call this session (or subagent, with `sub`). At most 40 characters. */
+  label?: string;
   /** `vitals` only: percent of the context window remaining. */
   ctx?: number;
   /** `vitals` only: percent of the 5-hour usage quota remaining. */
@@ -74,6 +76,7 @@ export const EVENT_KINDS: readonly EventKind[] = ['start', 'prompt', 'tool', 'to
 export const MAX_MODEL = 40;
 export const MAX_EFFORT = 16;
 export const MAX_QUEST = 80;
+export const MAX_NAME = 40;
 
 /** Kept in step with packages/adapter/src/sanitize.ts: controls, line separators and bidi characters are dropped. */
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
@@ -176,6 +179,8 @@ export function passThrough(p: Obj, now: number): NormalizedEvent | undefined {
     const v = str(p[k]);
     if (v) out[k] = v;
   }
+  const label = cleanText(p.label, MAX_NAME);
+  if (label) out.label = label;
   const d = str(p.detail);
   if (d) out.detail = shorten(d);
   if (out.ev === 'vitals') applyVitals(out, p);
@@ -267,6 +272,8 @@ export function buildEmitEvent(flags: EmitArgs, env: Record<string, string | und
     const v = str(flags[flag]);
     if (v) out[key] = v;
   }
+  const label = cleanText(flags.label, MAX_NAME);
+  if (label) out.label = label;
   const detail = str(flags.detail);
   if (detail) out.detail = shorten(detail);
   if ((ev === 'sub_start' || ev === 'sub_stop') && !out.sub) throw new Error(`--sub is required for ${ev}`);

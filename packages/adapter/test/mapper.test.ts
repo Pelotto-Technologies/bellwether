@@ -58,7 +58,8 @@ describe('applyStatusChange over the recorded capture', () => {
       parties = { ...parties, [res.party.id]: res.party };
       statuses.push(`${res.member.status}/${res.party.status}/${res.rollupChanged}`);
     }
-    expect(statuses).toEqual(['working/working/true', 'idle/idle/true']);
+    // w1 is a linked worktree: the architect's working-to-idle turn reads as finished.
+    expect(statuses).toEqual(['working/working/true', 'done/done/true']);
   });
 
   it('treats claude and copilot panes the same (mixed-agents fixture)', () => {
@@ -70,8 +71,8 @@ describe('applyStatusChange over the recorded capture', () => {
       parties = { ...parties, [res.party.id]: res.party };
       seen.push(`${res.member.agent}:${res.member.status}`);
     }
-    expect(seen).toEqual(['claude:working', 'copilot:working', 'copilot:blocked', 'claude:idle', 'copilot:working', 'copilot:done']);
-    expect(parties['default/w1']!.status).toBe('idle');
+    expect(seen).toEqual(['claude:working', 'copilot:working', 'copilot:blocked', 'claude:done', 'copilot:working', 'copilot:done']);
+    expect(parties['default/w1']!.status).toBe('done');
     expect(parties['default/w2']!.status).toBe('done');
   });
 

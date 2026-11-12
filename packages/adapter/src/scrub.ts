@@ -9,8 +9,8 @@ export function hashLabel(value: string, prefix = ''): string {
 }
 
 function scrubMember(m: Member): Member {
-  // Quest names are free text a person typed, so they go like `say` does; model, effort and the numbers are not identifying.
-  const { title: _title, say: _say, quest: _quest, ...rest } = m;
+  // Quest and display names are free text a person typed, so they go like `say` does; model, effort and the numbers are not identifying.
+  const { title: _title, say: _say, quest: _quest, name: _name, ...rest } = m;
   return rest;
 }
 

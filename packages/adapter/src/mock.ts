@@ -57,6 +57,12 @@ export function mockTotals(): StatsSnapshot {
   };
 }
 
+/**
+ * A party shaped like one a runner draws: a worktree workspace whose lead sits idle, one leaf at work and one leaf
+ * finished (named, shown `done`). It is fixed: the random walk never touches it.
+ */
+const RUNNER_PARTY = 'fix-login (runner)';
+
 /** The scripted quest: the docs-site party works and finishes in the first half minute, so a level-up and a recap show early. */
 const DEMO_PARTY = 'docs-site';
 /** Step numbers (odd, so they never meet the every-sixth git drift) at which each member starts and finishes. */
@@ -161,6 +167,26 @@ export class MockGenerator {
         git: { ...MOCK_GIT[i % MOCK_GIT.length]! },
       };
     });
+    const rid = `w${PARTIES.length + 1}`;
+    const leaf = (n: number, role: Role, status: Status, extra: Partial<Member> = {}): Member => ({ paneId: `${rid}:p${n}`, agent: 'copilot', role, status, lastChange: this.seq++, ...extra });
+    parties[rid] = {
+      id: rid,
+      label: RUNNER_PARTY,
+      session: 'default',
+      repo: 'api',
+      branch: 'feat/fix-login',
+      isWorktree: true,
+      status: 'unknown',
+      members: Object.fromEntries(
+        [
+          leaf(1, 'coordinator', 'idle', { name: 'Lead' }),
+          leaf(2, 'implementer', 'working', { tool: 'Edit', name: 'Rook' }),
+          leaf(3, 'reviewer', 'done', { name: 'Quill', title: 'Review finished' }),
+        ].map((m) => [m.paneId, m]),
+      ),
+      tokens: {},
+      git: { dirty: 2, ahead: 1, noRemote: false },
+    };
     const delta: Delta = { t, kind: 'snapshot', world: { machine: this.world.machine, parties } };
     this.world = applyDelta(this.world, delta);
     return delta;
@@ -204,7 +230,7 @@ export class MockGenerator {
     const scripted = this.demo(t);
     if (scripted) return scripted;
     // While the scripted quest runs the demo party is left alone, so nothing disturbs it.
-    const parties = Object.values(this.world.parties).filter((p) => p.label !== DEMO_PARTY || this.steps > DEMO_FREE_AFTER);
+    const parties = Object.values(this.world.parties).filter((p) => p.label !== RUNNER_PARTY && (p.label !== DEMO_PARTY || this.steps > DEMO_FREE_AFTER));
     const party = pick(this.rng, parties);
     const member = pick(this.rng, Object.values(party.members));
     const roll = this.rng();

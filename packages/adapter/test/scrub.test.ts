@@ -6,7 +6,7 @@ import { parseSourceConfig } from '../src/config.js';
 import { scrubDelta, scrubFile } from '../src/scrub.js';
 import type { Delta, Member, Party } from '../src/types.js';
 
-const member: Member = { paneId: 'p1', agent: 'claude', role: 'implementer', status: 'working', title: 'secret-title', say: 'secret-say', lastChange: 5 };
+const member: Member = { paneId: 'p1', agent: 'claude', role: 'implementer', status: 'working', title: 'secret-title', say: 'secret-say', name: 'secret-name', lastChange: 5 };
 const party: Party = {
   id: 'w1', label: 'secret-label', session: 'secret-session', repo: 'secret-repo', branch: 'secret-branch',
   isWorktree: true, status: 'working', members: { p1: member }, tokens: { role: 'architect', say: 'secret-token' },

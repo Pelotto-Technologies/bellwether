@@ -4,7 +4,7 @@ import type { Action } from '../actions.js';
 import type { WorldSource } from '../source.js';
 import type { Delta, Party, World } from '../types.js';
 import { type Connector, HerdrConnection, HerdrError } from './connection.js';
-import { applyStatusChange, diffParties, foldersFromSnapshot, type MapContext, paneIds, partiesFromSnapshot } from './mapper.js';
+import { applyStatusChange, diffParties, foldersFromSnapshot, type MapContext, paneIds, partiesFromSnapshot, settleFinished } from './mapper.js';
 import { discoverSessions, resolveTarget, type SessionTarget } from './paths.js';
 import {
   AGENT_STATUS_CHANGED,
@@ -250,7 +250,7 @@ export class HerdrSessionSource extends EventEmitter implements WorldSource {
   }
 
   private applySnapshot(snap: SessionSnapshot): void {
-    const next = partiesFromSnapshot(snap, this.ctx);
+    const next = settleFinished(this.parties, partiesFromSnapshot(snap, this.ctx));
     this.folders = foldersFromSnapshot(snap, next, this.ctx);
     const t = this.now();
     if (!this.hasSnapshot) {

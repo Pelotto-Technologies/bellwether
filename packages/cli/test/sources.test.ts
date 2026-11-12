@@ -121,3 +121,12 @@ describe('install --events', () => {
     expect(read(copilotDir)).toEqual(userCopilot);
   });
 });
+
+describe('emit --label', () => {
+  it('names the session on any event, cleaned and capped, and passes through already-normalized lines', () => {
+    expect(buildEmitEvent({ ev: 'start', session: 's', label: `  Ada\n${'x'.repeat(60)}` }, {}, '/w', 1).label).toBe(`Ada ${'x'.repeat(36)}`);
+    expect(buildEmitEvent({ ev: 'sub_start', session: 's', sub: 'a', label: 'Scout' }, {}, '/w', 1).label).toBe('Scout');
+    expect(buildEmitEvent({ ev: 'tool', session: 's', label: '  ' }, {}, '/w', 1).label).toBeUndefined();
+    expect(normalizeHookPayload({ v: 1, ev: 'start', session: 's', label: 'Ada' }, { now: 1 })?.label).toBe('Ada');
+  });
+});

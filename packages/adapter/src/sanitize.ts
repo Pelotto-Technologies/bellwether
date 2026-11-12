@@ -3,6 +3,7 @@
 export const MAX_MODEL = 40;
 export const MAX_EFFORT = 16;
 export const MAX_QUEST = 80;
+export const MAX_NAME = 40;
 
 /** C0 and C1 controls, line and paragraph separators, bidi embeddings, overrides and isolates. */
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
