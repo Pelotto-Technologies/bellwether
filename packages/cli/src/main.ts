@@ -18,8 +18,8 @@ commands:
               --statusline (Claude Code only) reports context, quota, model, effort and session
               name for the overlay's vitals, wrapping any status line you already have
   uninstall   remove only what install wrote
-  overlay     open the desktop overlay (click-through, always on top, tray menu); --hooks reads agent sessions without Herdr
-  run         serve the overlay from live Herdr, or --hooks (adapter flags pass through)
+  overlay     open the desktop overlay (click-through, always on top, tray menu); uses Herdr if it is running, else agent events (--hooks forces events)
+  run         serve the overlay in a browser; Herdr if running, else agent events (--live, --hooks, --mock force one; adapter flags pass through)
   emit        append one activity event for any tool: --ev start|prompt|tool|tool_done|wait|stop|end|sub_start|sub_stop|vitals
               [--session S --agent A --cwd D --role R --sub ID --sub-type T --tool T --detail TEXT]
               vitals: --ev vitals [--ctx N --quota N --model M --effort E --name NAME] (N is percent remaining)
@@ -114,7 +114,7 @@ function main(argv: string[]): number {
       return 0;
     case 'install':
       report(install(ctx, targets, sayHookCommand(), rest.includes('--events') ? eventHookCommand() : undefined, rest.includes('--statusline') ? statusLineCommand() : undefined));
-      if (rest.includes('--events')) console.log('\nActivity hooks added. Run `bellwether overlay --hooks` to watch them (no Herdr needed).');
+      if (rest.includes('--events')) console.log('\nActivity hooks added. Run `bellwether overlay` to watch them (no Herdr needed).');
       if (rest.includes('--statusline')) {
         const skipped = targets.filter((t) => !t.addStatusLine).map((t) => t.displayName);
         console.log(`\nStatus line set: it reports context, quota, model, effort and session name (Claude Code only${skipped.length ? `; ${skipped.join(', ')} skipped` : ''}).`);

@@ -21,5 +21,6 @@ describe('overlay', () => {
   it('--hooks and --events pick the hooks source through the environment', () => {
     expect(overlayEnv(['--hooks', '--events', '/e.jsonl'], { A: '1' })).toEqual({ A: '1', BELLWETHER_SOURCE: 'hooks', BELLWETHER_EVENTS: '/e.jsonl' });
     expect(overlayEnv([], { A: '1' })).toEqual({ A: '1' });
+    expect(overlayEnv(['--live'], {}).BELLWETHER_SOURCE).toBe('live');
   });
 });

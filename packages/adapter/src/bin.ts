@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { createSource, loadSourceConfig } from './config.js';
+import { createSource, loadSourceConfig, resolveAutoConfig } from './config.js';
 import { launchOrchestrator } from './herdr/launch.js';
 import { MockSource } from './mock.js';
 import { recordTo, ReplaySource } from './recording.js';
@@ -10,12 +10,13 @@ import type { WorldSource } from './source.js';
 
 const USAGE = `bellwether-adapter: stream Herdr world deltas over WebSocket
 
-Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock):
+Source (default from bellwether.toml / BELLWETHER_SOURCE, else mock; source may be mock, live, hooks or auto):
   --live               read the live Herdr TUI socket API
   --mock               generate mock agents
   --hooks              read agent sessions from the events file the Claude Code plugin writes (no Herdr)
   --events <file>      hooks: events file (default BELLWETHER_EVENTS or ~/.bellwether/events.jsonl)
-  --prefer-live        live Herdr unless bellwether.toml or BELLWETHER_SOURCE chose hooks (used by run and overlay)
+  --auto               live Herdr if a socket answers at startup, else hooks (default for run and overlay;
+                       bellwether.toml or BELLWETHER_SOURCE naming live, hooks or auto wins). --prefer-live is an alias
   --replay <file>      replay a recorded .jsonl (loops)
   --session <name>     live: one named session      --all   live: every running session
   --socket <path>      live: explicit socket/pipe path
@@ -46,6 +47,7 @@ const { values, positionals } = parseArgs({
     mock: { type: 'boolean' },
     hooks: { type: 'boolean' },
     events: { type: 'string' },
+    auto: { type: 'boolean' },
     'prefer-live': { type: 'boolean' },
     replay: { type: 'string' },
     session: { type: 'string' },
@@ -137,7 +139,8 @@ async function pickSource(): Promise<WorldSource> {
   clientVitals = cfg.vitals ?? true;
   scrubConfig = cfg.scrub ?? false;
   actionsConfig = cfg.actions ?? false;
-  if (values['prefer-live'] && cfg.source !== 'hooks') cfg.source = 'live';
+  // run/overlay default: auto, unless the config or env already named live, hooks or auto.
+  if ((values.auto || values['prefer-live']) && cfg.source === 'mock') cfg.source = 'auto';
   if (values.live) cfg.source = 'live';
   if (values.mock) cfg.source = 'mock';
   if (values.hooks) cfg.source = 'hooks';
@@ -145,8 +148,9 @@ async function pickSource(): Promise<WorldSource> {
   if (values.session) cfg.herdr.sessions = [values.session];
   if (values.all) cfg.herdr.sessions = 'all';
   if (values.socket) cfg.herdr.socket = values.socket;
-  log(`bellwether-adapter: source=${cfg.source}`);
-  return createSource(cfg, {
+  const resolved = await resolveAutoConfig(cfg, { log });
+  if (cfg.source !== 'auto') log(`bellwether-adapter: source=${cfg.source}`);
+  return createSource(resolved, {
     log,
     mock: () => new MockSource({ seed: Number(values.seed ?? 1), intervalMs: Number(values.interval ?? 1500) }),
   });
