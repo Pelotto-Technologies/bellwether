@@ -1,4 +1,5 @@
 import { createRng, pick } from './random.js';
+import type { StatsSnapshot } from './stats.js';
 import { BaseSource } from './source.js';
 import { applyDelta, emptyWorld } from './world.js';
 import type { Delta, GitState, Member, Party, Role, Status, World } from './types.js';
@@ -44,6 +45,25 @@ const MOCK_GIT: GitState[] = [
   { dirty: 1, ahead: 0, noRemote: false },
   { dirty: 14, ahead: 0, noRemote: true },
 ];
+
+/** Fake XP per role for the mock, so its members show levels and two roles sit just below a level-up. */
+export const MOCK_XP: Partial<Record<Role, number>> = { orchestrator: 150, coordinator: 95, architect: 210, implementer: 330, reviewer: 120, researcher: 50, writer: 30, ops: 85 };
+
+/** Totals for the stats decorator when it wraps the mock. Never written to a file. */
+export function mockTotals(): StatsSnapshot {
+  return {
+    roles: Object.fromEntries(Object.entries(MOCK_XP).map(([role, xp]) => [role, { xp, tasks: Math.floor(xp / 30), workingMs: xp * 30_000, blockedMs: 0, messages: 0, tools: {} }])),
+    lifetime: { tasks: 0, quests: 0, workingMs: 0, blockedMs: 0, messages: 0 },
+  };
+}
+
+/** The scripted quest: the docs-site party works and finishes in the first half minute, so a level-up and a recap show early. */
+const DEMO_PARTY = 'docs-site';
+/** Step numbers (odd, so they never meet the every-sixth git drift) at which each member starts and finishes. */
+const DEMO_START = [3, 5, 7] as const;
+const DEMO_DONE = [9, 11, 13] as const;
+/** After the script the party rejoins the random walk. */
+const DEMO_FREE_AFTER = 24;
 
 const AGENTS = ['claude', 'claude', 'copilot', 'codex'] as const;
 
@@ -113,7 +133,7 @@ export class MockGenerator {
           paneId,
           agent: pick(this.rng, AGENTS),
           role,
-          status: pick(this.rng, ['working', 'working', 'idle', 'done'] as const),
+          status: seed.label === DEMO_PARTY ? 'idle' : pick(this.rng, ['working', 'working', 'idle', 'done'] as const),
           title: role,
           lastChange: this.seq++,
         };
@@ -162,9 +182,29 @@ export class MockGenerator {
     return delta;
   }
 
+  /** The scripted quest of the demo party at this step, if any: one member starts or finishes work. */
+  private demo(t: number): Delta | undefined {
+    const party = Object.values(this.world.parties).find((p) => p.label === DEMO_PARTY);
+    if (!party) return undefined;
+    const members = Object.values(party.members);
+    const start = DEMO_START.indexOf(this.steps as 3);
+    const done = DEMO_DONE.indexOf(this.steps as 9);
+    const m = members[start >= 0 ? start : done];
+    if (!m || (start < 0 && done < 0)) return undefined;
+    const next: Member = { ...m, status: start >= 0 ? 'working' : 'done', say: undefined, lastChange: this.seq++ };
+    if (start >= 0) next.tool = TOOLS[this.toolSeq++ % TOOLS.length];
+    else delete next.tool;
+    const delta: Delta = { t, kind: 'member', partyId: party.id, member: next };
+    this.world = applyDelta(this.world, delta);
+    return delta;
+  }
+
   step(t = 0): Delta {
     if (++this.steps % 6 === 0) return this.driftGit(t);
-    const parties = Object.values(this.world.parties);
+    const scripted = this.demo(t);
+    if (scripted) return scripted;
+    // While the scripted quest runs the demo party is left alone, so nothing disturbs it.
+    const parties = Object.values(this.world.parties).filter((p) => p.label !== DEMO_PARTY || this.steps > DEMO_FREE_AFTER);
     const party = pick(this.rng, parties);
     const member = pick(this.rng, Object.values(party.members));
     const roll = this.rng();

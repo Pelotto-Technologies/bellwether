@@ -10,6 +10,7 @@ import { barFill, hasVitals, isLow, lowestContext, withQuest } from '../vitals.j
 import { DoubleTap } from '../doubletap.js';
 import { birthTime, prefersReducedMotion, spawnPose, type SpawnPose } from '../spawn.js';
 import { drawPuff } from './spawnfx.js';
+import { LevelFx } from './levelfx.js';
 import { Figure } from './figure.js';
 import type { LoadedArt } from './pack.js';
 
@@ -127,6 +128,7 @@ export class StripScene {
   /** False until the first world arrives, so what already exists does not play an arrival. */
   private primed = false;
   private reduced = prefersReducedMotion();
+  private levelFx = new LevelFx(prefersReducedMotion());
 
   private doubleTap = new DoubleTap();
   /** One container per depth row, back rows first so they draw behind. */
@@ -155,7 +157,7 @@ export class StripScene {
       this.rowLayers.push(row);
     }
     this.layer.addChild(...[...this.rowLayers].reverse());
-    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer);
+    app.stage.addChild(this.ground, this.layer, this.fx, this.bubbleLayer, this.levelFx.layer);
     this.ground.eventMode = 'none';
     this.fx.eventMode = 'none';
   }
@@ -324,8 +326,14 @@ export class StripScene {
     return trains;
   }
 
+  /** A role levelled up: a ▲, sparkles and "LEVEL UP" over the member that earned it. */
+  levelUp(partyId: string, paneId: string): void {
+    this.levelFx.trigger(partyId, paneId, this.t);
+  }
+
   update(dt: number, now: number): void {
     this.t += dt;
+    this.levelFx.begin();
     this.fx.clear();
     const { height } = this.app.screen;
     const width = this.worldWidth();
@@ -495,6 +503,7 @@ export class StripScene {
           const sayParty = seg.sayParty.get(m.paneId)!;
           if (art) this.drawArtMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
           else this.drawMember(mv, m, view, seg, sayParty, seg.leader || m.paneId === beaconPane, mv.x, trainGround, moving, now);
+          this.levelFx.drawFor(sayParty, m.paneId, mv.x, trainGround - figH * s, s, this.t);
         });
         const x1 = x0 + own;
         extents.push({ seg, x0: tv.walker.x + off, x1: tv.walker.x + off + seg.width, fig0: x0, fig1: x1 });
@@ -560,6 +569,7 @@ export class StripScene {
       this.drawTrain(tv, train, extents, dir, trainGround, figW, figH, s);
     }
     this.adopted = undefined;
+    this.levelFx.end(this.t);
     if (trains.length) this.primed = true;
   }
 

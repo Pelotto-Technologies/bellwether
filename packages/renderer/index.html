@@ -93,6 +93,11 @@
       #camp-panel .line { opacity: .72; word-break: break-word; }
       #camp-panel li.mem.tired { border-color: rgba(255,154,138,.5); }
       #camp-hint { margin: 6px 0 0; padding-top: 5px; border-top: 2px solid var(--win-edge); opacity: .6; font-size: 11px; text-align: center; }
+      /* Level badge and thin XP bar (map detail panel and camp party panel). */
+      .lv { padding: 0 5px; font: bold 10px ui-monospace, monospace; color: #1b1b24; background: #ffd23f; border-radius: 0; box-shadow: 0 -1px 0 #ffd23f, 0 1px 0 #ffd23f, -1px 0 0 #ffd23f, 1px 0 0 #ffd23f; font-style: normal; }
+      .xpbar { height: 3px; margin: 3px 0 2px; background: rgba(255,255,255,.16); }
+      .xpbar i { display: block; height: 100%; background: #ffd23f; }
+      #camp-panel .top .lv { opacity: 1; }
       #drag-bar {
         position: fixed; top: 0; left: 0; width: calc(100% - 310px); height: 22px; display: none;
         -webkit-app-region: drag; background: rgba(12,15,24,.55); color: #9aa6c4; font: 11px ui-monospace, monospace;

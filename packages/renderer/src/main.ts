@@ -83,7 +83,7 @@ async function main() {
   // `?mode=camp&party=<id, label or branch>` opens that party's camp scene straight away.
   if (modeParam === 'camp' && scene instanceof MapScene) scene.openCamp(params.get('party') ?? '');
   // Sounds and alert banners (`s` and `a` keys), driven by the same deltas as the scene.
-  const cues = createCues(resolveOptions({ params, served, mode, spanFollower: !!span && span.offset !== 0 }), theme, art, app.renderer);
+  const cues = createCues(resolveOptions({ params, served, mode, spanFollower: !!span && span.offset !== 0, desktop: /Electron/i.test(navigator.userAgent) }), theme, art, app.renderer);
   // Spanning monitors: one window per monitor, each showing its slice of one strip. The leftmost
   // window leads and shares where everyone is walking, so a party crossing a seam lines up.
   if (span && scene instanceof StripScene && typeof BroadcastChannel !== 'undefined') {
@@ -112,6 +112,8 @@ async function main() {
     const prevWorld = feed.world;
     feed.apply(d, performance.now());
     cues.observe(prevWorld, d, performance.now());
+    // A level up: the flourish over the member that earned it, in whichever scene is showing.
+    if (d.kind === 'moment' && d.moment === 'level_up' && d.paneId) scene?.levelUp(d.partyId, d.paneId);
     // Inferred chatter: a hand-off reads as the finished member saying something.
     // A real message to this member already explains why it started; no need to guess one.
     if (d.kind === 'member' && before && !feed.addressedTo(d.partyId, d.member.paneId, performance.now())) {

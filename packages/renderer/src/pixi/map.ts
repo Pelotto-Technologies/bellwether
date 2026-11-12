@@ -10,6 +10,7 @@ import { CampScene, PANEL_W } from './camp.js';
 import type { MapArt } from '../map/assets.js';
 import { fitZoom, focusZoom, nearestParty, screenToWorld, stepCamera, type Camera } from '../map/camera.js';
 import { describeParty, type DetailRow } from '../map/detail.js';
+import { levelBadgeHtml, xpBarHtml } from '../map/level.js';
 import { agentsByRepo, campSize, campSlots, pop, townSize, townSlots } from '../map/growth.js';
 import { layoutMap, repoKey, settlementName, tileToWorld, TILE, type MapLayout } from '../map/layout.js';
 import { buildTerrain, groundTileName } from '../map/terrain.js';
@@ -21,6 +22,7 @@ import { vitalsLook, type Theme, type VitalsLook } from '../theme.js';
 import { isLow } from '../vitals.js';
 import { birthTime, prefersReducedMotion, spawnPose } from '../spawn.js';
 import { Figure } from './figure.js';
+import { LevelFx } from './levelfx.js';
 import { drawPuff } from './spawnfx.js';
 import type { LoadedArt } from './pack.js';
 
@@ -93,6 +95,7 @@ export class MapScene {
   private marksSig = '';
   /** Arrival puffs, redrawn every frame. */
   private fx = new Graphics();
+  private levelFx = new LevelFx(prefersReducedMotion());
   private reduced = prefersReducedMotion();
   /** New led camps waiting for their orchestrator to ride out and summon them. */
   private summons = new Map<string, { prefix: string; to: { x: number; y: number }; arrive: number; speed: number }>();
@@ -133,7 +136,7 @@ export class MapScene {
     private figures: LoadedArt | null = null,
     campArt: CampArt | null = null,
   ) {
-    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer, this.fx);
+    this.world.addChild(this.terrainLayer, this.marks, this.buildingLayer, this.actorLayer, this.fx, this.levelFx.layer);
     app.stage.addChild(this.world);
     if (campArt) {
       this.camp = new CampScene({ theme, feed, mapArt: art, art: campArt, figures, procTexture: (r, f, b) => this.frameTexture(r, f, b) });
@@ -358,6 +361,7 @@ export class MapScene {
     this.t += dt;
     this.dt = dt;
     this.fx.clear();
+    this.levelFx.begin();
     const fv = groupFellowships(this.feed.world, { leadAlone: true });
     this.fellowships = fv;
     const world = fv.world;
@@ -413,6 +417,13 @@ export class MapScene {
     this.drawMarks(fv.fellowships, fv.tints);
     this.updatePanel(now);
     this.updateCamp(dt, now, fv.tints);
+    this.levelFx.end(this.t);
+  }
+
+  /** A role levelled up: flourish over the member on the map, and in the camp scene when one is open. */
+  levelUp(partyId: string, paneId: string): void {
+    this.levelFx.trigger(partyId, paneId, this.t);
+    if (this.campParty === partyId) this.camp?.levelUp(partyId, paneId);
   }
 
   /** Camp view: the map hides, the scene and its party window show. Back on the map, both go away. */
@@ -740,6 +751,8 @@ export class MapScene {
       mv.bubble.scale.set(this.textScale);
       mv.bubble.position.set(mv.w.x - (mv.bg.width * this.textScale) / 2, mv.w.y - figH - mv.bg.height * this.textScale - 2);
     }
+    // Level-up flourish over the head; its size follows the text scale so it stays readable at every zoom.
+    this.levelFx.drawFor(ctx.sayParty, m.paneId, mv.w.x, mv.w.y - figH, Math.max(1, this.textScale * 1.4), this.t);
   }
 
   /** The character drawn for a pane: a camp member, or an orchestrator standing at its settlement. */
@@ -772,7 +785,7 @@ export class MapScene {
     const camp = this.layout.camps.get(party.id);
     const d = describeParty(party, settlementName(camp?.settlementKey ?? repoKey(party)), this.theme.beacon, now, this.feed.vitalsOn);
     const html = `<h2>${esc(d.title)} <span class="st ${d.status}">${d.status}</span></h2><p class="sub">${esc(d.subtitle)}</p>${this.camp ? `<button class="enter" data-enter="" title="Open the camp scene (Enter, or double-click the camp)">Enter camp</button>` : ""}<ul>${d.rows
-      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
+      .map((r) => `<li><span class="st ${r.status}">●</span> <b>${esc(r.role)}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(r.paneId)}" title="Close this pane in Herdr (ends the agent)">close</button>${xpBarHtml(r.level)}${vitalsHtml(r, vitalsLook(this.theme))}<br><span class="line">${esc(r.line)}</span></li>`)
       .join('')}</ul>`;
     const body = this.panel.querySelector('#detail-body');
     if (body && body.innerHTML !== html) body.innerHTML = html;

@@ -30,6 +30,8 @@ export interface ServedCues {
   sounds?: boolean;
   volume?: number;
   alerts?: AlertPosition;
+  /** `recap = false` in bellwether.toml hides the quest recap card. */
+  recap?: boolean;
 }
 
 export function servedCues(cfg: unknown): ServedCues {
@@ -41,6 +43,7 @@ export function servedCues(cfg: unknown): ServedCues {
     ...(typeof c.sounds === 'boolean' ? { sounds: c.sounds } : {}),
     ...(volume !== undefined ? { volume } : {}),
     ...(alerts !== undefined ? { alerts } : {}),
+    ...(typeof c.recap === 'boolean' ? { recap: c.recap } : {}),
   };
 }
 
@@ -48,6 +51,15 @@ export interface CueOptions {
   sounds: boolean;
   volume: number;
   alerts: AlertPosition;
+  /** Show the quest recap (the card, or a toast where there is no room for one). */
+  recap: boolean;
+  /** The full results card has room: false on the thin desktop strip window and on the alerts-only page, which get a one-line toast. */
+  card: boolean;
+}
+
+/** `?recap=0` beats `recap = false` in bellwether.toml; on by default. */
+export function resolveRecap(params: URLSearchParams, served: Pick<ServedCues, 'recap'>): boolean {
+  return parseSwitch(params.get('recap')) ?? served.recap ?? true;
 }
 
 export interface ResolveInput {
@@ -57,6 +69,8 @@ export interface ResolveInput {
   mode: 'strip' | 'map' | 'alerts';
   /** Another window of a strip that spans monitors: only the leftmost window makes noise. */
   spanFollower?: boolean;
+  /** The page runs inside the desktop shell (Electron); its strip window is a thin bar. */
+  desktop?: boolean;
 }
 
 /**
@@ -66,14 +80,16 @@ export interface ResolveInput {
  * The strip honours only an explicit `?alerts=`: the desktop strip window is a thin bar with no room for a banner,
  * so a `bellwether.toml` setting does not reach it.
  */
-export function resolveOptions({ params, served, mode, spanFollower }: ResolveInput): CueOptions {
+export function resolveOptions({ params, served, mode, spanFollower, desktop }: ResolveInput): CueOptions {
   const sounds = parseSwitch(params.get('sounds')) ?? served.sounds ?? false;
   const volume = parseVolume(params.get('volume')) ?? served.volume ?? DEFAULT_VOLUME;
   const fromUrl = parseAlerts(params.get('alerts'));
   const fromToml = mode === 'strip' ? undefined : served.alerts;
   let alerts = fromUrl ?? fromToml ?? (mode === 'alerts' ? 'top-right' : 'off');
   if (mode === 'alerts' && alerts === 'off' && fromUrl === undefined) alerts = 'top-right';
-  return { sounds: sounds && !spanFollower, volume, alerts };
+  // The desktop strip window is a thin bar, so the recap there is a one-line toast; a browser or OBS page has room for the card.
+  const card = mode === 'map' || (mode === 'strip' && !desktop);
+  return { sounds: sounds && !spanFollower, volume, alerts, recap: resolveRecap(params, served), card };
 }
 
 /** What the `a` key does: off becomes the remembered (or default) position, anything else turns off. */

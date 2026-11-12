@@ -37,7 +37,7 @@ describe('parsers', () => {
 
 describe('resolveOptions', () => {
   it('defaults: sounds off in a plain page, modest volume, alerts off', () => {
-    expect(resolve('')).toEqual({ sounds: false, volume: 0.3, alerts: 'off' });
+    expect(resolve('')).toEqual({ sounds: false, volume: 0.3, alerts: 'off', recap: true, card: true });
   });
 
   it('URL beats bellwether.toml beats the default', () => {

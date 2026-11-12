@@ -11,6 +11,7 @@ const CSS = `
 #toasts.top-center { left: 50%; top: 12px; margin-left: calc(min(420px, 100vw - 24px) / -2); }
 body.map #toasts { top: 34px; }
 body.map #toasts.top-right.detail-open { right: 304px; }
+body.camp-view #toasts.top-right { right: 396px; }
 body:not(.transparent) #toasts.top-left { top: 40px; }
 #toasts .toast {
   --frame: #ffd23f; --bg: #1b1b24;

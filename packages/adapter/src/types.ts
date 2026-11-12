@@ -76,7 +76,36 @@ export interface Member {
   quest?: string;
   /** Name of the tool currently running: set on `tool`, cleared on `tool_done` and `stop`. Hooks source only for now. */
   tool?: string;
+  /** Level of this member's ROLE (every implementer shares the implementer level). Present when the stats decorator is on. */
+  level?: number;
+  /** Progress inside the current level: `have` of `next` XP. Present with `level`. */
+  xp?: { have: number; next: number };
   lastChange: number;
+}
+
+/** Coarse kinds of tool use, counted for the stats and the quest recap. Mapped from tool names by `toolCategory`. */
+export const TOOL_CATEGORIES = ['edit', 'read', 'search', 'shell', 'delegate', 'plan', 'other'] as const;
+export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
+
+/** A moment worth a flourish: a role levelled up, or a party finished its run of work. */
+export type Moment = 'level_up' | 'quest_complete';
+
+/** The results screen of a finished run: counters only, never text. */
+export interface Recap {
+  /** From the first member starting work to the last one finishing. */
+  durationMs: number;
+  /** Members of the party by role. */
+  members: Partial<Record<Role, number>>;
+  /** Tasks finished (working to done) during the run. */
+  tasks: number;
+  /** Time spent waiting on a person. */
+  blockedMs: number;
+  /** Tool uses by category. */
+  tools: Partial<Record<ToolCategory, number>>;
+  /** XP earned during the run, summed over members. */
+  xp: number;
+  /** Levels gained during the run, as the level each role reached. */
+  levelUps: { role: Role; level: number }[];
 }
 
 export type Delta =
@@ -84,7 +113,8 @@ export type Delta =
   | { t: number; kind: 'member'; partyId: string; member: Member }
   | { t: number; kind: 'party'; party: Party }
   | { t: number; kind: 'removed'; partyId: string; paneId?: string }
-  | { t: number; kind: 'say'; partyId: string; paneId: string; text: string; to?: { partyId: string; paneId: string } };
+  | { t: number; kind: 'say'; partyId: string; paneId: string; text: string; to?: { partyId: string; paneId: string } }
+  | { t: number; kind: 'moment'; moment: Moment; partyId: string; paneId?: string; role?: Role; level?: number; recap?: Recap };
 
 export function isStatus(value: unknown): value is Status {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);

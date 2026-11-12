@@ -1,5 +1,6 @@
 import type { Party } from '@bellwether/adapter/core';
 import { modelLine } from '../vitals.js';
+import { levelBadge, type LevelBadge } from './level.js';
 
 /** Text for the zoomed "see the session" panel. Pure so it can be tested. */
 
@@ -15,6 +16,8 @@ export interface DetailRow {
   context?: number;
   quota?: number;
   quest?: string;
+  /** `Lv 3` and the XP bar, when the adapter reports levels. */
+  level?: LevelBadge;
 }
 
 export interface Detail {
@@ -38,6 +41,7 @@ export function describeParty(p: Party, settlement: string, beaconRole: string, 
       // The latest line we know: speech, then pane title, then how long it has been in this state.
       line: m.say ?? m.title ?? `${m.status} for ${ago(now - m.lastChange)}`,
       ...(vitals ? vitalRow(m) : {}),
+      ...(levelBadge(m) ? { level: levelBadge(m)! } : {}),
     })),
   };
 }

@@ -1,6 +1,7 @@
 import type { Role, Status } from '@bellwether/adapter/core';
 import { ago } from '../map/detail.js';
 import type { CueEvent } from './events.js';
+import { recapModel } from './recap.js';
 
 /** One alert banner. Role, party label and status only; never prompt or say text. */
 export interface Toast {
@@ -31,6 +32,10 @@ export function toastFor(e: CueEvent): Toast | undefined {
       return e.scope === 'party' && label ? { text: `New party: ${label}`, status: 'working', ...(e.role ? { role: e.role } : {}) } : undefined;
     case 'allDone':
       return { text: 'All quests complete', status: 'done' };
+    case 'levelUp':
+      return e.level !== undefined ? { text: `LEVEL UP · ${role} reached Lv ${e.level}`, status: 'done', ...(e.role ? { role: e.role } : {}) } : undefined;
+    case 'questComplete':
+      return e.recap ? { text: recapModel(e.recap, label).compact, status: 'done' } : undefined;
     case 'message':
       return undefined;
   }

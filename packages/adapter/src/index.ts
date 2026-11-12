@@ -8,3 +8,4 @@ export * from './hooks/index.js';
 export * from './sanitize.js';
 export * from './auto.js';
 export * from './git.js';
+export * from './stats-store.js';

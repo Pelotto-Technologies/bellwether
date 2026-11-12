@@ -49,6 +49,9 @@ export function scrubDelta(d: Delta): Delta {
       return { ...d, text: '' };
     case 'removed':
       return d;
+    case 'moment':
+      // Ids, role, level and counters only: nothing to hash or drop.
+      return d;
   }
 }
 

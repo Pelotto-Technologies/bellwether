@@ -6,6 +6,8 @@ import { EventCore } from './events.js';
 import { makeFaceProvider } from './face.js';
 import { type AlertPosition, type CueOptions, toggleAlerts } from './options.js';
 import { SoundPlayer } from './player.js';
+import { RecapCard } from './recap-dom.js';
+import { recapModel } from './recap.js';
 import { toastFor } from './toasts.js';
 import { ToastView } from './toast-dom.js';
 
@@ -16,6 +18,7 @@ export interface Cues {
   frame(now: number): void;
   readonly sounds: SoundPlayer;
   readonly alerts: ToastView;
+  readonly recap: RecapCard;
 }
 
 /**
@@ -26,7 +29,9 @@ export function createCues(opts: CueOptions, theme: Theme, art: LoadedArt | null
   const core = new EventCore();
   const sounds = new SoundPlayer(theme.sounds, { volume: opts.volume, enabled: opts.sounds });
   sounds.unlockOnGesture();
-  const alerts = new ToastView(theme, makeFaceProvider(theme, art, renderer));
+  const faces = makeFaceProvider(theme, art, renderer);
+  const alerts = new ToastView(theme, faces);
+  const recap = new RecapCard(theme, faces);
   let position: AlertPosition = opts.alerts;
   let lastPosition: AlertPosition | undefined = position === 'off' ? undefined : position;
   alerts.setPosition(position);
@@ -47,15 +52,27 @@ export function createCues(opts: CueOptions, theme: Theme, art: LoadedArt | null
   return {
     sounds,
     alerts,
+    recap,
     observe(prev, delta, now) {
       const events = core.process(prev, delta, now);
       if (!events.length) return;
       sounds.handle(events, now);
       for (const e of events) {
+        if (e.kind === 'questComplete') {
+          // The card where there is room for it, else the one-line banner; `recap = false` shows neither.
+          if (!opts.recap || !e.recap) continue;
+          if (opts.card) {
+            recap.show(recapModel(e.recap, e.label), now);
+            continue;
+          }
+        }
         const t = toastFor(e);
         if (t) alerts.push(t);
       }
     },
-    frame: (now) => alerts.frame(now),
+    frame: (now) => {
+      alerts.frame(now);
+      recap.frame(now);
+    },
   };
 }

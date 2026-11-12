@@ -105,7 +105,7 @@ describe('tray menu', () => {
   it('lists monitors and sessions with the active ones checked', () => {
     const m = buildMenuModel({ mode: 'strip', displayId: 2, session: 'a' }, [primary, second], ['a', 'b']);
     const checked = m.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []));
-    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
+    expect(checked).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Quest recap', 'Default (bellwether.toml)', '2: Side (2560x1440)', 'a']);
     expect(labels(m)).toContain('Switch to Map');
     expect(labels(m)).toContain('Quit Bellwether');
   });
@@ -114,7 +114,7 @@ describe('tray menu', () => {
     expect(labels(m)).toContain('gone');
     expect(labels(m)).toContain('Switch to Strip');
     const d = buildMenuModel({ mode: 'strip' }, [primary, second], []);
-    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
+    expect(d.flatMap((i) => (i.kind === 'item' && i.checked ? [i.label] : []))).toEqual(['Default (bellwether.toml)', 'Default (bellwether.toml)', 'Default (bellwether.toml)', 'Sounds', 'Vitals', 'Quest recap', 'Default (bellwether.toml)', '1: Main (1920x1080) primary', 'All sessions']);
   });
   it('offers skins and applies the choice to the renderer URL', () => {
     const m = buildMenuModel({ mode: 'strip', pack: 'aesir' }, [primary], []);
@@ -356,5 +356,23 @@ describe('vitals toggle', () => {
     expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('vitals');
     expect(normalizeConfig({ vitals: false }).vitals).toBe(false);
     expect(normalizeConfig({ vitals: 'x' }).vitals).toBeUndefined();
+  });
+});
+
+describe('quest recap toggle', () => {
+  it('is a checkbox, on unless switched off, persisted and passed to the renderer', () => {
+    const item = (cfg: Parameters<typeof buildMenuModel>[0]) => buildMenuModel(cfg, [], []).find((i) => i.kind === 'item' && i.label === 'Quest recap');
+    expect(item(DEFAULT_CONFIG)).toMatchObject({ checked: true, action: { type: 'toggle-recap' } });
+    const off = applyAction(DEFAULT_CONFIG, { type: 'toggle-recap' });
+    expect(off.cfg.recap).toBe(false);
+    expect(off.reload).toBe(true);
+    expect(item(off.cfg)).toMatchObject({ checked: false });
+    expect(rendererUrl(off.cfg)).toContain('recap=0');
+    const on = applyAction(off.cfg, { type: 'toggle-recap' });
+    expect(on.cfg.recap).toBe(true);
+    expect(rendererUrl(on.cfg)).toContain('recap=1');
+    expect(rendererUrl(DEFAULT_CONFIG)).not.toContain('recap');
+    expect(normalizeConfig({ recap: false }).recap).toBe(false);
+    expect(normalizeConfig({ recap: 'x' }).recap).toBeUndefined();
   });
 });

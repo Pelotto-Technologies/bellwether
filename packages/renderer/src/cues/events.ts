@@ -1,4 +1,4 @@
-import { applyDelta, type Delta, type Party, type Role, type World } from '@bellwether/adapter/core';
+import { applyDelta, type Delta, type Party, type Recap, type Role, type World } from '@bellwether/adapter/core';
 import type { CueKind } from './schedule.js';
 
 /**
@@ -18,6 +18,10 @@ export interface CueEvent {
   durationMs?: number;
   /** For `spawn`: a whole party or one more member in a known party. */
   scope?: 'party' | 'member';
+  /** For `levelUp`: the level the role reached. */
+  level?: number;
+  /** For `questComplete`: the results of the run. Counters only. */
+  recap?: Recap;
 }
 
 export interface EventCoreOptions {
@@ -28,7 +32,7 @@ export interface EventCoreOptions {
 }
 
 const DEFAULT_QUIET_MS = 1500;
-const DEFAULT_FLAP_MS: Record<CueKind, number> = { done: 10_000, blocked: 10_000, spawn: 5000, message: 1200, allDone: 10_000 };
+const DEFAULT_FLAP_MS: Record<CueKind, number> = { done: 10_000, blocked: 10_000, spawn: 5000, message: 1200, allDone: 10_000, levelUp: 3000, questComplete: 10_000 };
 
 /** Fewer than two agents finishing is just a `done`, not a celebration. */
 const ALL_DONE_MIN_MEMBERS = 2;
@@ -72,6 +76,14 @@ export class EventCore {
       return [];
     }
 
+    if (delta.kind === 'moment') {
+      // Moments come from the adapter's stats decorator; they are already debounced there.
+      const label = prev.parties[delta.partyId]?.label;
+      const base = { at: delta.t, partyId: delta.partyId, ...(delta.paneId ? { paneId: delta.paneId } : {}), ...(delta.role ? { role: delta.role } : {}), ...(label ? { label } : {}) };
+      if (delta.moment === 'level_up' && delta.level !== undefined) events.push({ kind: 'levelUp', ...base, level: delta.level });
+      else if (delta.moment === 'quest_complete' && delta.recap) events.push({ kind: 'questComplete', ...base, recap: delta.recap });
+      return events.filter((e) => this.admit(e, now));
+    }
     if (delta.kind === 'say') {
       const from = prev.parties[delta.partyId]?.members[delta.paneId];
       if (from && delta.to) events.push({ kind: 'message', at: delta.t, partyId: delta.partyId, paneId: delta.paneId, role: from.role, label: prev.parties[delta.partyId]!.label });

@@ -14,6 +14,7 @@ import { birthTime, prefersReducedMotion, spawnPose } from '../spawn.js';
 import { memberBox, placeBubble, TAIL, type Rect } from '../map/bubble.js';
 import type { Theme } from '../theme.js';
 import { Figure } from './figure.js';
+import { LevelFx } from './levelfx.js';
 import type { LoadedArt } from './pack.js';
 import { drawPuff } from './spawnfx.js';
 
@@ -59,6 +60,7 @@ export class CampScene {
   private ground = new Container();
   private stage = new Container();
   private overlay = new Container();
+  private levelFx = new LevelFx(prefersReducedMotion());
   private lights = new Container();
   private fx = new Graphics();
   private vignette = new Graphics();
@@ -85,7 +87,7 @@ export class CampScene {
 
   constructor(private deps: CampDeps) {
     this.stage.sortableChildren = true;
-    this.root.addChild(this.skyG, this.ground, this.lights, this.stage, this.fx, this.overlay, this.vignette, this.fade);
+    this.root.addChild(this.skyG, this.ground, this.lights, this.stage, this.fx, this.overlay, this.levelFx.layer, this.vignette, this.fade);
     this.root.visible = false;
   }
 
@@ -147,6 +149,7 @@ export class CampScene {
 
   update(dt: number, now: number, party: Party, tint: string | undefined, areaW: number, areaH: number): void {
     this.t += dt;
+    this.levelFx.begin();
     this.fit(areaW, areaH);
     const { w, h } = this.size;
     const members = Object.values(party.members).sort((a, b) => a.paneId.localeCompare(b.paneId));
@@ -214,6 +217,7 @@ export class CampScene {
       this.stepMember(v, st, m, party, tint, m.paneId === beaconPane, now);
     }
     this.primed = true;
+    this.levelFx.end(this.t);
     this.drawGit(party);
 
     // A soft fade in when the camp opens.
@@ -252,6 +256,10 @@ export class CampScene {
     bubble.addChild(bg, text);
     this.overlay.addChild(bubble);
     return { ...(figure ? { figure } : {}), ...(sprite ? { sprite } : {}), prop, seat, mark, zzz: zs, sweat: sw, bubble, bg, text, phase: hash01(paneId) * 10, born: 0, act: '', actSince: this.t };
+  }
+
+  levelUp(partyId: string, paneId: string): void {
+    this.levelFx.trigger(partyId, paneId, this.t);
   }
 
   private destroyView(v: MView): void {
@@ -373,6 +381,7 @@ export class CampScene {
       }
       v.bubble.position.set(pl.x, pl.tailDown ? pl.y : pl.y + TAIL);
     }
+    this.levelFx.drawFor(party.id, m.paneId, x, headY, 1, this.t);
   }
 
   private rebuild(sig: string, party: Party, members: Member[]): void {

@@ -8,7 +8,7 @@ export interface GateOptions {
   minGapMs?: Partial<Record<CueKind, number>>;
 }
 
-const DEFAULT_GAP_MS: Record<CueKind, number> = { done: 150, blocked: 150, spawn: 300, message: 400, allDone: 1500 };
+const DEFAULT_GAP_MS: Record<CueKind, number> = { done: 150, blocked: 150, spawn: 300, message: 400, allDone: 1500, levelUp: 1200, questComplete: 1500 };
 
 /** The all-done fanfare already says "done": drop the plain done that arrived with it. */
 export function soundsFor(events: readonly CueEvent[]): CueKind[] {

@@ -34,6 +34,8 @@ export interface ShellConfig {
   alerts?: AlertsSetting;
   /** Vitals (bars, model, quest) shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
   vitals?: boolean;
+  /** Quest recap shown (true) or hidden (false); undefined defers to bellwether.toml, then shown. */
+  recap?: boolean;
   /** Keep the map window above other windows. Default false: the map is a normal window you can drag and bury. */
   mapAlwaysOnTop?: boolean;
   /** Where the user last dropped the map window; undefined centres it on the chosen monitor. */
@@ -92,6 +94,7 @@ export function normalizeConfig(raw: unknown): ShellConfig {
   if (typeof r.sounds === 'boolean') out.sounds = r.sounds;
   if (typeof r.alerts === 'string' && (ALERT_POSITIONS as readonly string[]).includes(r.alerts)) out.alerts = r.alerts as AlertsSetting;
   if (typeof r.vitals === 'boolean') out.vitals = r.vitals;
+  if (typeof r.recap === 'boolean') out.recap = r.recap;
   if (r.span === true) out.span = true;
   if (typeof r.mapAlwaysOnTop === 'boolean') out.mapAlwaysOnTop = r.mapAlwaysOnTop;
   const b = r.mapBounds as Record<string, unknown> | null | undefined;

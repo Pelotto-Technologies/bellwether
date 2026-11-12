@@ -1,6 +1,6 @@
 import { SCALES, type SoundStyle, type Wave } from './style.js';
 
-export type CueKind = 'done' | 'blocked' | 'spawn' | 'message' | 'allDone';
+export type CueKind = 'done' | 'blocked' | 'spawn' | 'message' | 'allDone' | 'levelUp' | 'questComplete';
 
 /** A tiny original motif: scale degrees (0 is the root; degrees past the scale climb an octave) with lengths in beats. */
 export interface Motif {
@@ -21,6 +21,10 @@ export const MOTIFS: Record<CueKind, Motif> = {
   message: { degrees: [7], beats: [0.25], gain: 0.22 },
   // A longer rise to a held top note.
   allDone: { degrees: [0, 2, 4, 7, 9], beats: [0.25, 0.25, 0.25, 0.25, 1], gain: 1 },
+  // A quick run up the scale to a held top note: a role levelled up.
+  levelUp: { degrees: [0, 2, 4, 7, 11], beats: [0.2, 0.2, 0.2, 0.2, 1], gain: 0.95 },
+  // A short fanfare: a stutter on the root, a lift, and a long held top. A party finished its quest.
+  questComplete: { degrees: [0, 0, 4, 7, 11], beats: [0.2, 0.2, 0.3, 0.3, 1], gain: 1 },
 };
 
 export interface Note {

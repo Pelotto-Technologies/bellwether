@@ -3,6 +3,7 @@ import type { VitalsLook } from '../theme.js';
 import { barFill, isLow, modelLine } from '../vitals.js';
 import { activityLabel, activityOf, isTired, type Activity } from './activity.js';
 import { ago } from './detail.js';
+import { levelBadge, levelBadgeHtml, type LevelBadge, xpBarHtml } from './level.js';
 import { gitSummary } from '../gitline.js';
 
 /** The party breakdown window beside the camp scene: a pure HTML builder, so it can be tested. */
@@ -20,6 +21,8 @@ export interface CampRow {
   model?: string;
   context?: number;
   quota?: number;
+  /** `Lv 3` and the XP bar, when the adapter reports levels. */
+  level?: LevelBadge;
   /** The latest line: speech, then pane title, then how long it has been in this state. */
   line: string;
 }
@@ -65,6 +68,7 @@ export function campPanel(p: Party, settlement: string, beaconRole: string, now:
         ...(model ? { model } : {}),
         ...(vitals && m.vitals?.context !== undefined ? { context: m.vitals.context } : {}),
         ...(vitals && m.vitals?.quota !== undefined ? { quota: m.vitals.quota } : {}),
+        ...(levelBadge(m) ? { level: levelBadge(m)! } : {}),
         line: m.say ?? m.title ?? `${m.status} for ${ago(now - m.lastChange)}`,
       };
     }),
@@ -93,9 +97,9 @@ export function campPanelHtml(m: CampPanel, look: VitalsLook, faces: Record<stri
   const rows = m.rows
     .map((r) => {
       const face = faces[r.role];
-      return `<li class="mem ${r.status}${r.tired ? ' tired' : ''}" data-pane="${esc(r.paneId)}"><span class="face">${face ? `<img src="${face}" alt="">` : ''}</span><div class="body"><div class="top"><b>${esc(r.role)}</b> <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(
+      return `<li class="mem ${r.status}${r.tired ? ' tired' : ''}" data-pane="${esc(r.paneId)}"><span class="face">${face ? `<img src="${face}" alt="">` : ''}</span><div class="body"><div class="top"><b>${esc(r.role)}</b> ${levelBadgeHtml(r.level)} <i>${esc(r.agent)}</i><button class="kill" data-close="${esc(
         r.paneId,
-      )}" title="Close this pane in Herdr (ends the agent)">close</button></div>${r.model ? `<div class="model">${esc(r.model)}</div>` : ''}${bar('HP', r.context, look.context, look.low)}${bar('SP', r.quota, look.quota, look.low)}<div class="act"><span class="st ${r.status}">&#9632;</span> ${esc(r.doing)}${
+      )}" title="Close this pane in Herdr (ends the agent)">close</button></div>${r.model ? `<div class="model">${esc(r.model)}</div>` : ''}${xpBarHtml(r.level)}${bar('HP', r.context, look.context, look.low)}${bar('SP', r.quota, look.quota, look.low)}<div class="act"><span class="st ${r.status}">&#9632;</span> ${esc(r.doing)}${
         r.tired ? ' <em>tired</em>' : ''
       }</div><div class="line">${esc(r.line)}</div></div></li>`;
     })

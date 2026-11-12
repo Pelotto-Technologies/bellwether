@@ -1,4 +1,4 @@
-import { applyDelta, emptyWorld, MockSource, type Delta, type World } from '@bellwether/adapter/core';
+import { applyDelta, emptyWorld, MockSource, mockTotals, StatsSource, type Delta, type World } from '@bellwether/adapter/core';
 
 /** Longest line a bubble shows, so neighbouring bubbles stay readable. */
 const MAX_LINE = 48;
@@ -96,7 +96,8 @@ export function connectFeed(
   const handle: FeedHandle = { mode: { kind: 'mock', reason: 'requested' }, stop: () => {} };
 
   const startMock = (reason: string) => {
-    const mock = new MockSource({ seed: 1, intervalMs: 1500 });
+    // The same fake levels and scripted quest as `pnpm mock`, so the page shows them without an adapter.
+    const mock = new StatsSource(new MockSource({ seed: 1, intervalMs: 1500 }), { totals: mockTotals() });
     mock.on('delta', onDelta);
     void mock.start();
     handle.mode = { kind: 'mock', reason };
