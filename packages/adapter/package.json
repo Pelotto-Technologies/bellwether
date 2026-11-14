@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "smol-toml": "^1.9.1",
-    "ws": "^8.18.0"
+    "ws": "^8.22.2"
   },
   "devDependencies": {
     "@types/ws": "^8.5.13",
